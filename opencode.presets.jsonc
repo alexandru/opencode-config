@@ -1,0 +1,209 @@
+{
+  "p-mix-go": {
+    "model": "gpt-5.6-sol",
+    "agent": {
+      "plan": {
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium"
+      },
+      "ask": {
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium"
+      },
+      "build": {
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium"
+      },
+      "general": {
+        "model": "opencode-go/deepseek-v4-pro",
+        "variant": "max"
+      },
+      "explore": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max"
+      },
+      "scout": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max"
+      }
+    }
+  },
+  "p-mix-dp": {
+    "model": "gpt-5.6-sol",
+    "agent": {
+      "plan": {
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium"
+      },
+      "ask": {
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium"
+      },
+      "build": {
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium"
+      },
+      "general": {
+        "model": "deepseek/deepseek-v4-pro",
+        "variant": "max"
+      },
+      "explore": {
+        "model": "deepseek/deepseek-v4-flash",
+        "variant": "max"
+      },
+      "scout": {
+        "model": "deepseek/deepseek-v4-flash",
+        "variant": "max"
+      }
+    }
+  },
+  // ----------------------------------------------------------------------------------
+  "p-openai": {
+    "model": "openai/gpt-5.6-sol",
+    "agent": {
+      "plan": {
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium"
+      },
+      "ask": {
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium"
+      },
+      "build": {
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium"
+      },
+      "general": {
+        "model": "openai/gpt-5.6-luna",
+        "variant": "medium"
+      },
+      "explore": {
+        "model": "openai/gpt-5.6-luna",
+        "variant": "medium"
+      },
+      "scout": {
+        "model": "openai/gpt-5.6-luna",
+        "variant": "medium"
+      }
+    }
+  },
+  // ----------------------------------------------------------------------------------
+  "p-go": {
+    "model": "opencode-go/minimax-m3",
+    "agent": {
+      "plan": {
+        "model": "opencode-go/glm-5.2",
+        "variant": "max"
+      },
+      "ask": {
+        "model": "opencode-go/glm-5.2",
+        "variant": "max"
+      },
+      "build": {
+        "model": "opencode-go/minimax-m3",
+        "variant": "thinking"
+      },
+      "general": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max"
+      },
+      "explore": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max"
+      },
+      "scout": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max"
+      }
+    }
+  },
+  // ----------------------------------------------------------------------------------
+  "p-deepseek": {
+    "model": "deepseek/deepseek-v4-pro",
+    "agent": {
+      "plan": {
+        "model": "deepseek/deepseek-v4-pro",
+        "variant": "max"
+      },
+      "ask": {
+        "model": "deepseek/deepseek-v4-pro",
+        "variant": "max"
+      },
+      "build": {
+        "model": "deepseek/deepseek-v4-pro",
+        "variant": "max"
+      },
+      "general": {
+        "model": "deepseek/deepseek-v4-flash",
+        "variant": "max"
+      },
+      "explore": {
+        "model": "deepseek/deepseek-v4-flash",
+        "variant": "max"
+      },
+      "scout": {
+        "model": "deepseek/deepseek-v4-flash",
+        "variant": "max"
+      }
+    }
+  },
+  // ----------------------------------------------------------------------------------
+  "p-kimi": {
+    "model": "kimi-for-coding/k2p7",
+    "agent": {
+      "plan": {
+        "model": "kimi-for-coding/k2p7"
+      },
+      "ask": {
+        "model": "kimi-for-coding/k2p7"
+      },
+      "build": {
+        "model": "kimi-for-coding/k2p7"
+      },
+      "general": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max"
+      },
+      "explore": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max"
+      },
+      "scout": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max"
+      }
+    }
+  },
+  // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  // ----------------------------------------------------------------------------------
+  "w-common": {
+    "common": true
+  },
+  // ----------------------------------------------------------------------------------
+  "w-copilot": {
+    "extends": "w-common",
+    "model": "github-copilot/claude-haiku-4.5",
+    "agent": {
+      "plan": {
+        "model": "github-copilot/claude-sonnet-4.5",
+        "variant": "high"
+      },
+      "ask": {
+        "model": "github-copilot/claude-sonnet-4.5",
+        "variant": "high"
+      },
+      "build": {
+        "model": "github-copilot/claude-haiku-4.5"
+      },
+      "general": {
+        "model": "github-copilot/claude-haiku-4.5"
+      },
+      "explore": {
+        "model": "github-copilot/claude-haiku-4.5"
+      },
+      "scout": {
+        "model": "github-copilot/claude-haiku-4.5"
+      }
+    }
+  }
+}

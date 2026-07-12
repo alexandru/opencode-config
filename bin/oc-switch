@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Resolve symlinks to get the real script location
+SCRIPT="$0"
+while [ -L "$SCRIPT" ]; do
+  DIR="$(cd -P "$(dirname "$SCRIPT")" && pwd)"
+  SCRIPT="$(readlink "$SCRIPT")"
+  [[ $SCRIPT != /* ]] && SCRIPT="$DIR/$SCRIPT"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT")" && pwd)"
+
+# Change to the repository root (parent of bin/)
+cd "$SCRIPT_DIR/.." || exit 1
+
+# Run npm install if node_modules doesn't exist or package.json is newer
+if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
+  npm install --silent --no-progress 2>&1 | grep -E "(ERR|error)" || true
+fi
+
+# Execute the Node.js script
+exec node "$SCRIPT_DIR/oc-switch.js" "$@"

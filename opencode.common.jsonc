@@ -1,0 +1,34 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": true,
+  "default_agent": "build",
+  "lsp": {
+    "kotlin-lsp": {
+      "command": ["kotlin-lsp"],
+      "extensions": [".kt"],
+    },
+  },
+  "mcp": {
+    "intellij-idea": {
+      "type": "remote",
+      "url": "http://localhost:64342/sse",
+      "enabled": false,
+    },
+    "chrome-devtools": {
+      "type": "local",
+      "command": ["npx", "-y", "chrome-devtools-mcp@latest"],
+      "enabled": false,
+    },
+  },
+  "permission": {
+    "external_directory": {
+      "*": "deny",
+      "/tmp/**": "allow",
+      "/private/tmp/**": "allow",
+    },
+  },
+  "plugin": [
+    "./plugins/opencode-codex-identity-plugin.ts"
+  ],
+  "disabled_providers": ["opencode"]
+}
