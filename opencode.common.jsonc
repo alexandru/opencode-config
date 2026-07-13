@@ -4,31 +4,46 @@
   "default_agent": "build",
   "lsp": {
     "kotlin-lsp": {
-      "command": ["kotlin-lsp"],
-      "extensions": [".kt"],
-    },
+      "command": [
+        "kotlin-lsp"
+      ],
+      "extensions": [
+        ".kt"
+      ]
+    }
   },
   "mcp": {
     "intellij-idea": {
       "type": "remote",
       "url": "http://localhost:64342/sse",
-      "enabled": false,
+      "enabled": false
+    },
+    "metals": {
+      "type": "remote",
+      "url": "http://localhost:54640/sse",
+      "enabled": false
     },
     "chrome-devtools": {
       "type": "local",
-      "command": ["npx", "-y", "chrome-devtools-mcp@latest"],
-      "enabled": false,
-    },
+      "command": [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ],
+      "enabled": false
+    }
   },
   "permission": {
     "external_directory": {
       "*": "deny",
       "/tmp/**": "allow",
       "/private/tmp/**": "allow",
-    },
+    }
   },
   "plugin": [
     "./plugins/opencode-codex-identity-plugin.ts"
   ],
-  "disabled_providers": ["opencode"]
+  "disabled_providers": [
+    "opencode"
+  ]
 }

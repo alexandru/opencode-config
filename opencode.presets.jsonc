@@ -15,7 +15,7 @@
         "variant": "medium"
       },
       "general": {
-        "model": "opencode-go/deepseek-v4-pro",
+        "model": "opencode-go/deepseek-v4-flash",
         "variant": "max"
       },
       "explore": {
@@ -29,20 +29,10 @@
     }
   },
   "p-mix-dp": {
-    "model": "gpt-5.6-sol",
+    "extends": [
+      "p-mix-go"
+    ],
     "agent": {
-      "plan": {
-        "model": "openai/gpt-5.6-sol",
-        "variant": "medium"
-      },
-      "ask": {
-        "model": "openai/gpt-5.6-sol",
-        "variant": "medium"
-      },
-      "build": {
-        "model": "openai/gpt-5.6-sol",
-        "variant": "medium"
-      },
       "general": {
         "model": "deepseek/deepseek-v4-pro",
         "variant": "max"
@@ -175,13 +165,38 @@
     }
   },
   // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  // Presets meant for usage inside of a Docker container
   // ----------------------------------------------------------------------------------
   "w-common": {
-    "common": true
+    "common": true,
+    "mcp": {
+      "intellij-idea": {
+        "url": "http://host.docker.internal:64342/sse",
+        "headers": {
+          "Host": "localhost:54640"
+        }
+      },
+      "metals": {
+        "url": "http://host.docker.internal:54640/sse",
+        "headers": {
+          "Host": "localhost:54640"
+        }
+      },
+      "chrome-devtools": {
+        "command": [
+          "npx",
+          "-y",
+          "chrome-devtools-mcp@latest",
+          "--browser-url=http://host.docker.internal:9222"
+        ]
+      }
+    }
   },
   // ----------------------------------------------------------------------------------
   "w-copilot": {
-    "extends": "w-common",
+    "extends": [
+      "w-common"
+    ],
     "model": "github-copilot/claude-haiku-4.5",
     "agent": {
       "plan": {
@@ -205,5 +220,17 @@
         "model": "github-copilot/claude-haiku-4.5"
       }
     }
+  },
+  "w-openai": {
+    "extends": [
+      "w-common",
+      "p-openai"
+    ]
+  },
+  "w-mix-go": {
+    "extends": [
+      "w-common",
+      "p-mix-go"
+    ]
   }
 }

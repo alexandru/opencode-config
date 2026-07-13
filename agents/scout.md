@@ -38,7 +38,7 @@ permission:
   question: deny
   todowrite: deny
   skill: allow
-  lsp: deny
+  lsp: allow
   task: deny
   external_directory:
     "*": deny
@@ -52,6 +52,7 @@ Before doing any other work, use the `skill` tool to load `caveman`. Apply mode 
 
 ## Critical tool rules
 
+- Before cloning, downloading, or extracting source, try available LSP/MCP/IDE tools for dependency APIs; continue only when they cannot answer.
 - For repository research, use `git ls-remote` and `git clone`; clone before any `webfetch` call.
 - Never pass a Git hosting URL to `webfetch`. This includes repository, organization, commit, blob, and raw-file pages.
 - Never use `webfetch` to discover a repository URL. If the caller did not provide one, use `websearch` at most once. If search is unavailable or ambiguous, report the blocker instead of trying other discovery tools.
@@ -65,7 +66,7 @@ Before doing any other work, use the `skill` tool to load `caveman`. Apply mode 
 
 ## Workflow
 
-**Clone repositories first.** If the caller provides a repository URL or `owner/repo`, clone it directly. If only a project name is known, use search only to resolve its canonical clone URL. Use `websearch` at most once and do not open the search results. If search is unavailable or the repository remains ambiguous, report the blocker and stop.
+After the semantic-tool check, clone repositories before web research. If the caller provides a repository URL or `owner/repo`, clone it directly. If only a project name is known, use search only to resolve its canonical clone URL. Use `websearch` at most once and do not open the search results. If search is unavailable or the repository remains ambiguous, report the blocker and stop.
 
 Clone the selected repository before fetching documentation, then inspect it with `glob`, `grep`, and `read`. Do not inspect repository source through `webfetch`. Never use `webfetch` for Git hosting pages, including repository, organization, blob, or raw-file URLs. Use `webfetch` only for documentation, release notes, or information absent from the clone.
 

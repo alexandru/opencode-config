@@ -63,6 +63,7 @@ Keep tasks bounded and independently verifiable. Do not duplicate delegated work
 ## Constraints
 
 - Before doing any other work, use the `skill` tool to load `caveman`. Apply mode `lite` for the entire session.
+- For codebase and API exploration, try available LSP/MCP/IDE tools before text search or dependency extraction.
 - Follow applicable `AGENTS.md` files and existing project conventions.
 - For behavior changes, if the project has tests, write or update a failing test before implementation.
 - Report uncertainty instead of guessing.

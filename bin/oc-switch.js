@@ -109,20 +109,28 @@ function resolvePreset(presets, presetName, seen = []) {
   }
 
   const preset = presets[presetName];
-  const parentName = preset.extends;
-  if (!parentName) {
+  const parentNames = preset.extends;
+  if (parentNames === undefined) {
     return stripPresetMetadata(preset);
   }
 
-  if (typeof parentName !== "string") {
+  if (
+    !Array.isArray(parentNames) ||
+    parentNames.some((parentName) => typeof parentName !== "string")
+  ) {
     console.error(
-      `Error: Preset '${presetName}' has invalid 'extends'; expected a preset name string.`
+      `Error: Preset '${presetName}' has invalid 'extends'; expected an array of preset names.`
     );
     process.exit(1);
   }
 
-  const parent = resolvePreset(presets, parentName, seen.concat(presetName));
-  return stripPresetMetadata(deepMerge(parent, preset));
+  const nextSeen = seen.concat(presetName);
+  const inherited = parentNames.reduce(
+    (merged, parentName) =>
+      deepMerge(merged, resolvePreset(presets, parentName, nextSeen)),
+    {}
+  );
+  return stripPresetMetadata(deepMerge(inherited, preset));
 }
 
 /**

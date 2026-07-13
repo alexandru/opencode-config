@@ -35,4 +35,5 @@ Keep delegated tasks small and evidence-focused. Do not delegate planning, code 
 ## Constraints
 
 - Before doing any other work, use the `skill` tool to load `caveman`. Apply mode `lite` for the entire session.
+- For codebase and API exploration, try available LSP/MCP/IDE tools before text search or dependency extraction.
 - If a file should be created or changed, add it to the TODO list instead of doing it yourself.
