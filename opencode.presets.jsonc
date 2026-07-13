@@ -200,24 +200,28 @@
     "model": "github-copilot/claude-haiku-4.5",
     "agent": {
       "plan": {
-        "model": "github-copilot/claude-sonnet-4.5",
+        "model": "github-copilot/claude-opus-4.5",
         "variant": "high"
       },
       "ask": {
-        "model": "github-copilot/claude-sonnet-4.5",
+        "model": "github-copilot/claude-opus-4.5",
         "variant": "high"
       },
       "build": {
-        "model": "github-copilot/claude-haiku-4.5"
+        "model": "github-copilot/claude-opus-4.5",
+        "variant": "high"
       },
       "general": {
-        "model": "github-copilot/claude-haiku-4.5"
+        "model": "github-copilot/gpt-5.3-codex",
+        "variant": "medium"
       },
       "explore": {
-        "model": "github-copilot/claude-haiku-4.5"
+        "model": "github-copilot/claude-haiku-4.5",
+        "variant": "high"
       },
       "scout": {
-        "model": "github-copilot/claude-haiku-4.5"
+        "model": "github-copilot/claude-haiku-4.5",
+        "variant": "high"
       }
     }
   },
