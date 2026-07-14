@@ -2,6 +2,32 @@
 description: "Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. \"src/components/**/*.tsx\"), search code for keywords (eg. \"API endpoints\"), or answer questions about the codebase (eg. \"how do API endpoints work?\"). When calling this agent, specify the desired thoroughness level: \"quick\" for basic searches, \"medium\" for moderate exploration, or \"very thorough\" for comprehensive analysis across multiple locations and naming conventions."
 mode: subagent
 permission:
+  bash:
+    "*": deny
+    "git status*": allow
+    "git branch --show-current": allow
+    "git branch --list*": allow
+    "git log*": allow
+    "git diff*": allow
+    "git show*": allow
+    "git ls-files*": allow
+    "git blame*": allow
+    "git grep*": allow
+    "git rev-parse*": allow
+    "git rev-list*": allow
+    "git describe*": allow
+    "git merge-base*": allow
+    "git name-rev*": allow
+    "git shortlog*": allow
+    "git for-each-ref*": allow
+    "git cat-file*": allow
+    "git tag": allow
+    "git tag --list*": allow
+    "git remote -v": allow
+    "git remote get-url*": allow
+    "git worktree list*": allow
+    "git stash list*": allow
+    "git submodule status*": allow
   skill: allow
 ---
 

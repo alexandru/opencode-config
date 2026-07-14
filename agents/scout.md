@@ -13,17 +13,29 @@ permission:
     "git ls-remote *": allow
     "git clone * /tmp/opencode-scout.*/*": allow
     "git -C /tmp/opencode-scout.*/* status*": allow
+    "git -C /tmp/opencode-scout.*/* branch --show-current": allow
+    "git -C /tmp/opencode-scout.*/* branch --list*": allow
     "git -C /tmp/opencode-scout.*/* log*": allow
     "git -C /tmp/opencode-scout.*/* show*": allow
     "git -C /tmp/opencode-scout.*/* diff*": allow
-    "git -C /tmp/opencode-scout.*/* branch*": allow
-    "git -C /tmp/opencode-scout.*/* tag*": allow
     "git -C /tmp/opencode-scout.*/* rev-parse*": allow
+    "git -C /tmp/opencode-scout.*/* rev-list*": allow
     "git -C /tmp/opencode-scout.*/* describe*": allow
-    "git -C /tmp/opencode-scout.*/* remote*": allow
+    "git -C /tmp/opencode-scout.*/* merge-base*": allow
+    "git -C /tmp/opencode-scout.*/* name-rev*": allow
+    "git -C /tmp/opencode-scout.*/* shortlog*": allow
+    "git -C /tmp/opencode-scout.*/* for-each-ref*": allow
+    "git -C /tmp/opencode-scout.*/* cat-file*": allow
+    "git -C /tmp/opencode-scout.*/* tag": allow
+    "git -C /tmp/opencode-scout.*/* tag --list*": allow
+    "git -C /tmp/opencode-scout.*/* remote -v": allow
+    "git -C /tmp/opencode-scout.*/* remote get-url*": allow
     "git -C /tmp/opencode-scout.*/* ls-files*": allow
     "git -C /tmp/opencode-scout.*/* grep*": allow
     "git -C /tmp/opencode-scout.*/* blame*": allow
+    "git -C /tmp/opencode-scout.*/* worktree list*": allow
+    "git -C /tmp/opencode-scout.*/* stash list*": allow
+    "git -C /tmp/opencode-scout.*/* submodule status*": allow
     "git -C /tmp/opencode-scout.*/* fetch*": allow
     "git -C /tmp/opencode-scout.*/* checkout*": allow
     "unzip * -d /tmp/opencode-scout.*/*": allow
