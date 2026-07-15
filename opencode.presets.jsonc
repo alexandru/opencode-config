@@ -1,168 +1,134 @@
 {
-  "p-mix-go": {
-    "model": "gpt-5.6-sol",
-    "agent": {
-      "plan": {
-        "model": "openai/gpt-5.6-sol",
-        "variant": "medium"
-      },
-      "ask": {
-        "model": "openai/gpt-5.6-sol",
-        "variant": "medium"
-      },
-      "build": {
-        "model": "openai/gpt-5.6-sol",
-        "variant": "medium"
-      },
-      "general": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max"
-      },
-      "explore": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max"
-      },
-      "scout": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max"
-      }
-    }
-  },
-  "p-mix-dp": {
-    "extends": [
-      "p-mix-go"
-    ],
-    "agent": {
-      "general": {
-        "model": "deepseek/deepseek-v4-pro",
-        "variant": "max"
-      },
-      "explore": {
-        "model": "deepseek/deepseek-v4-flash",
-        "variant": "max"
-      },
-      "scout": {
-        "model": "deepseek/deepseek-v4-flash",
-        "variant": "max"
-      }
-    }
-  },
   // ----------------------------------------------------------------------------------
+  // Pure OpenAI / ChatGPT
   "p-openai": {
     "model": "openai/gpt-5.6-sol",
     "agent": {
       "plan": {
         "model": "openai/gpt-5.6-sol",
-        "variant": "medium"
+        "variant": "medium",
       },
       "ask": {
         "model": "openai/gpt-5.6-sol",
-        "variant": "medium"
+        "variant": "medium",
       },
       "build": {
         "model": "openai/gpt-5.6-sol",
-        "variant": "medium"
+        "variant": "medium",
       },
       "general": {
         "model": "openai/gpt-5.6-luna",
-        "variant": "medium"
+        "variant": "high",
       },
       "explore": {
         "model": "openai/gpt-5.6-luna",
-        "variant": "medium"
+        "variant": "medium",
       },
       "scout": {
         "model": "openai/gpt-5.6-luna",
-        "variant": "medium"
-      }
-    }
+        "variant": "medium",
+      },
+    },
   },
   // ----------------------------------------------------------------------------------
+  // OpenAI + OpenCode Go
+  "p-mix-go": {
+    "extends": ["p-openai"],
+    "agent": {
+      "general": {
+        "model": "opencode-go/deepseek-v4-pro",
+        "variant": "max",
+      },
+      "explore": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max",
+      },
+      "scout": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max",
+      },
+    },
+  },
+  // ----------------------------------------------------------------------------------
+  // OpenAI + DeepSeek
+  "p-mix-dp": {
+    "extends": ["p-mix-go"],
+    "agent": {
+      "general": {
+        "model": "deepseek/deepseek-v4-pro",
+        "variant": "max",
+      },
+      "explore": {
+        "model": "deepseek/deepseek-v4-flash",
+        "variant": "max",
+      },
+      "scout": {
+        "model": "deepseek/deepseek-v4-flash",
+        "variant": "max",
+      },
+    },
+  },
+  // ----------------------------------------------------------------------------------
+  // Pure OpenCode Go
   "p-go": {
     "model": "opencode-go/minimax-m3",
     "agent": {
       "plan": {
         "model": "opencode-go/glm-5.2",
-        "variant": "max"
+        "variant": "max",
       },
       "ask": {
         "model": "opencode-go/glm-5.2",
-        "variant": "max"
+        "variant": "max",
       },
       "build": {
-        "model": "opencode-go/minimax-m3",
-        "variant": "thinking"
+        "model": "opencode-go/deepseek-v4-pro",
+        "variant": "max",
       },
       "general": {
         "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max"
+        "variant": "max",
       },
       "explore": {
         "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max"
+        "variant": "max",
       },
       "scout": {
         "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max"
-      }
-    }
+        "variant": "max",
+      },
+    },
   },
   // ----------------------------------------------------------------------------------
+  // Pure DeepSeek
   "p-deepseek": {
     "model": "deepseek/deepseek-v4-pro",
     "agent": {
       "plan": {
         "model": "deepseek/deepseek-v4-pro",
-        "variant": "max"
+        "variant": "max",
       },
       "ask": {
         "model": "deepseek/deepseek-v4-pro",
-        "variant": "max"
+        "variant": "max",
       },
       "build": {
         "model": "deepseek/deepseek-v4-pro",
-        "variant": "max"
+        "variant": "max",
       },
       "general": {
         "model": "deepseek/deepseek-v4-flash",
-        "variant": "max"
+        "variant": "max",
       },
       "explore": {
         "model": "deepseek/deepseek-v4-flash",
-        "variant": "max"
+        "variant": "max",
       },
       "scout": {
         "model": "deepseek/deepseek-v4-flash",
-        "variant": "max"
-      }
-    }
-  },
-  // ----------------------------------------------------------------------------------
-  "p-kimi": {
-    "model": "kimi-for-coding/k2p7",
-    "agent": {
-      "plan": {
-        "model": "kimi-for-coding/k2p7"
+        "variant": "max",
       },
-      "ask": {
-        "model": "kimi-for-coding/k2p7"
-      },
-      "build": {
-        "model": "kimi-for-coding/k2p7"
-      },
-      "general": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max"
-      },
-      "explore": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max"
-      },
-      "scout": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max"
-      }
-    }
+    },
   },
   // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Presets meant for usage inside of a Docker container
@@ -173,68 +139,61 @@
       "intellij-idea": {
         "url": "http://host.docker.internal:64342/sse",
         "headers": {
-          "Host": "localhost:54640"
-        }
+          "Host": "localhost:54640",
+        },
       },
       "metals": {
         "url": "http://host.docker.internal:54640/sse",
         "headers": {
-          "Host": "localhost:54640"
-        }
+          "Host": "localhost:54640",
+        },
       },
       "chrome-devtools": {
         "command": [
           "npx",
           "-y",
           "chrome-devtools-mcp@latest",
-          "--browser-url=http://host.docker.internal:9222"
-        ]
-      }
-    }
+          "--browser-url=http://host.docker.internal:9222",
+        ],
+      },
+    },
   },
   // ----------------------------------------------------------------------------------
+  // GitHub Copilot
   "w-copilot": {
-    "extends": [
-      "w-common"
-    ],
+    "extends": ["w-common"],
     "model": "github-copilot/claude-haiku-4.5",
     "agent": {
       "plan": {
         "model": "github-copilot/claude-opus-4.5",
-        "variant": "high"
+        "variant": "high",
       },
       "ask": {
         "model": "github-copilot/claude-opus-4.5",
-        "variant": "high"
+        "variant": "high",
       },
       "build": {
-        "model": "github-copilot/claude-opus-4.5",
-        "variant": "high"
+        "model": "github-copilot/gpt-5.3-codex",
+        "variant": "high",
       },
       "general": {
         "model": "github-copilot/gpt-5.3-codex",
-        "variant": "medium"
+        "variant": "medium",
       },
       "explore": {
         "model": "github-copilot/claude-haiku-4.5",
-        "variant": "high"
+        "variant": "high",
       },
       "scout": {
         "model": "github-copilot/claude-haiku-4.5",
-        "variant": "high"
-      }
-    }
+        "variant": "high",
+      },
+    },
   },
   "w-openai": {
-    "extends": [
-      "w-common",
-      "p-openai"
-    ]
+    "extends": ["w-common", "p-openai"],
   },
   "w-mix-go": {
-    "extends": [
-      "w-common",
-      "p-mix-go"
-    ]
-  }
+    "extends": ["w-common", "p-mix-go"],
+  },
 }

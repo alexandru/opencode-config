@@ -37,15 +37,11 @@ Present a concise but actionable implementation plan:
 
 Prefer shorter plans. If the work has more than 8 steps, split it into phases.
 
-4. Write todos
+4. Save the plan and write todos
 
-Call `todowrite` to register pending work for the implementing agent. The first TODO must be to write the plan to a descriptive markdown file in `./plans/` before implementing anything else.
+Write the plan directly to a descriptive markdown file at `./.plans/<descriptive-kebab-case-name>.md`.
 
-Suggested first TODO format:
-
-- `Write this plan to ./plans/<descriptive-kebab-case-name>.md before implementation`
-
-That markdown plan should include:
+The markdown plan must include:
 
 - **Overview**: what needs to be done and why.
 - **Current Context**: relevant existing files, behavior, dependencies, and constraints.
@@ -55,8 +51,6 @@ That markdown plan should include:
 - **Risks & Mitigations**: potential issues and how to address them.
 - **Success Criteria**: how to know the task is complete.
 - **Open Questions**: any remaining decisions or unknowns.
-
-Then add the implementation steps as pending todos. Keep todos actionable and specific. If there are more than 8 steps, group them by phase.
 
 5. Hand off
 

@@ -3,8 +3,12 @@ description: Read-only analysis agent — owns analysis and judgment; delegates 
 mode: primary
 temperature: 0.2
 permission:
-  edit: deny
-  write: deny
+  edit:
+    "*": deny
+    "./.plans/**": allow
+  write:
+    "*": deny
+    "./.plans/**": allow
   bash:
     "*": deny
     "git status*": allow

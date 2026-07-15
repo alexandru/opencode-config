@@ -43,6 +43,62 @@
   "plugin": [
     "./plugins/opencode-codex-identity-plugin.ts"
   ],
+  "provider": {
+    "openai": {
+      "models": {
+        "gpt-5.6-sol": {
+          "limit": {
+            "context": 272000,
+            "output": 128000,
+          },
+        },
+        "gpt-5.6-luna": {
+          "limit": {
+            "context": 272000,
+            "output": 128000,
+          },
+        },
+        "gpt-5.6-terra": {
+          "limit": {
+            "context": 272000,
+            "output": 128000,
+          },
+        },
+      },
+    },
+    "deepseek": {
+      "models": {
+        "deepseek-v4-pro": {
+          "limit": {
+            "context": 272000,
+            "output": 128000,
+          },
+        },
+        "deepseek-v4-flash": {
+          "limit": {
+            "context": 272000,
+            "output": 128000,
+          },
+        },
+      },
+    },
+    "opencode-go": {
+      "models": {
+        "deepseek-v4-pro": {
+          "limit": {
+            "context": 272000,
+            "output": 128000,
+          },
+        },
+        "deepseek-v4-flash": {
+          "limit": {
+            "context": 272000,
+            "output": 128000,
+          },
+        },
+      },
+    },
+  },
   "disabled_providers": [
     "opencode"
   ]
