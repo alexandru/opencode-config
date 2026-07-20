@@ -31,8 +31,11 @@ permission:
     "git -C /tmp/opencode-scout.*/* remote -v": allow
     "git -C /tmp/opencode-scout.*/* remote get-url*": allow
     "git -C /tmp/opencode-scout.*/* ls-files*": allow
+    "git -C /tmp/opencode-scout.*/* ls-tree*": allow
     "git -C /tmp/opencode-scout.*/* grep*": allow
     "git -C /tmp/opencode-scout.*/* blame*": allow
+    "git -C /tmp/opencode-scout.*/* check-ignore*": allow
+    "git -C /tmp/opencode-scout.*/* check-attr*": allow
     "git -C /tmp/opencode-scout.*/* worktree list*": allow
     "git -C /tmp/opencode-scout.*/* stash list*": allow
     "git -C /tmp/opencode-scout.*/* submodule status*": allow
@@ -40,8 +43,49 @@ permission:
     "git -C /tmp/opencode-scout.*/* checkout*": allow
     "unzip * -d /tmp/opencode-scout.*/*": allow
     "tar * -C /tmp/opencode-scout.*/*": allow
+    "file *": allow
+    "stat *": allow
+    "readlink *": allow
+    "realpath *": allow
+    "wc *": allow
+    "sha256sum *": allow
+    "sha512sum *": allow
+    "md5sum *": allow
+    "cmp *": allow
+    "od *": allow
+    "hexdump *": allow
+    "strings *": allow
+    "readelf *": allow
+    "objdump *": allow
+    "nm *": allow
+    "c++filt *": allow
+    "javap": allow
+    "javap *": allow
+    "jdeps *": allow
+    "jar tf *": allow
+    "jar --list *": allow
+    "jmod list *": allow
+    "jimage info *": allow
+    "jimage list *": allow
+    "jimage verify *": allow
+    "unzip -l *": allow
+    "unzip -p *": allow
+    "zipinfo *": allow
+    "tar -tf *": allow
+    "ar t *": allow
+    "ar p *": allow
     "mvn -q -Dmaven.repo.local=/tmp/opencode-scout.*/* dependency:get -Dartifact=* -Dtransitive=false": allow
     "rm -rf /tmp/opencode-scout.*": allow
+    "file *-C*": deny
+    "file *--compile*": deny
+    "javap *-J*": deny
+    "jdeps *-J*": deny
+    "jdeps *-dotoutput*": deny
+    "jdeps *--dot-output*": deny
+    "jdeps *--generate-module-info*": deny
+    "jar *-J*": deny
+    "tar *--checkpoint-action*": deny
+    "tar *--to-command*": deny
   read: allow
   grep: allow
   glob: allow

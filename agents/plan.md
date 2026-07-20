@@ -9,6 +9,9 @@ permission:
   write:
     "*": deny
     "./.plans/**": allow
+  apply_patch:
+    "*": deny
+    "./.plans/**": allow
   bash:
     "*": deny
     "git status*": allow
@@ -18,8 +21,11 @@ permission:
     "git diff*": allow
     "git show*": allow
     "git ls-files*": allow
+    "git ls-tree*": allow
     "git blame*": allow
     "git grep*": allow
+    "git check-ignore*": allow
+    "git check-attr*": allow
     "git rev-parse*": allow
     "git rev-list*": allow
     "git describe*": allow
