@@ -12,7 +12,6 @@ permission:
   grep: allow
   glob: allow
   webfetch: allow
-  websearch: allow
   question: allow
   skill: allow
   lsp: allow

@@ -39,7 +39,6 @@ permission:
   grep: allow
   glob: allow
   webfetch: allow
-  websearch: allow
   question: allow
   todowrite: allow
   skill: allow
