@@ -20,7 +20,7 @@
     },
     "metals": {
       "type": "remote",
-      "url": "http://localhost:54640/sse",
+      "url": "http://localhost:54640/mcp",
       "enabled": false
     },
     "chrome-devtools": {

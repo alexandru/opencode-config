@@ -143,7 +143,7 @@
         },
       },
       "metals": {
-        "url": "http://host.docker.internal:54640/sse",
+        "url": "http://host.docker.internal:54640/mcp",
         "headers": {
           "Host": "localhost:54640",
         },
