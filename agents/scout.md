@@ -12,6 +12,7 @@ permission:
     "mkdir -p /tmp/opencode-scout.*/*": allow
     "git ls-remote *": allow
     "git clone * /tmp/opencode-scout.*/*": allow
+    "git -C /tmp/opencode-scout.* clone *": allow
     "git -C /tmp/opencode-scout.*/* status*": allow
     "git -C /tmp/opencode-scout.*/* branch --show-current": allow
     "git -C /tmp/opencode-scout.*/* branch --list*": allow
