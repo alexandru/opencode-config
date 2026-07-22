@@ -7,7 +7,7 @@ permission:
   write: deny
   apply_patch: deny
   bash:
-    "*": deny
+    "*": ask
     "mktemp -d /tmp/opencode-scout.XXXXXX": allow
     "mkdir -p /tmp/opencode-scout.*/*": allow
     "git ls-remote *": allow
@@ -75,7 +75,9 @@ permission:
     "tar -tf *": allow
     "ar t *": allow
     "ar p *": allow
-    "mvn -q -Dmaven.repo.local=/tmp/opencode-scout.*/* dependency:get -Dartifact=* -Dtransitive=false": allow
+    "mvn *": allow
+    "sbt *": allow
+    "gradle *": allow
     "rm -rf /tmp/opencode-scout.*": allow
     "file *-C*": deny
     "file *--compile*": deny
