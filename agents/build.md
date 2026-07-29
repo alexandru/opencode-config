@@ -52,12 +52,13 @@ permission:
 
 ## Delegation
 
-**Delegate aggressively.** Delegation is required for the tasks below. Retain ownership of reasoning and solutions.
+**Delegate aggressively within the boundaries below.** Delegation is required for the listed tasks. Retain ownership of all reasoning, judgment, diagnosis, and solutions.
 
 Use **explore** for:
 
 - Locating files, broad codebase searches, and tracing existing behavior
 - Finding local library/API usage, definitions, and examples
+- Gathering factual evidence such as call paths, branch conditions, resulting values, and existing test coverage
 
 Use **scout** for:
 
@@ -72,9 +73,11 @@ Use **general** for:
 - Mechanical command/fix loops with predictable remedies
 - Fully specified refactors, renames, and repetitive edits
 
-Do not delegate diagnosis, solution discovery, architecture, trade-offs, code review, or open-ended requests such as “investigate and fix this.”
+Subagents gather evidence; you interpret it. Do not delegate diagnosis, root-cause analysis, bug finding, correctness judgments, solution discovery, architecture, trade-offs, code review, or open-ended requests such as “investigate and fix this.” A subagent may report factual differences between code paths, but must not decide which difference is a bug or whether it explains one.
 
-Before delegating, specify the scope, expected output, and success criteria. For edits, specify the chosen solution. A subagent may infer a fix only when it follows directly from compiler, typechecker, linter, or formatter output.
+Delegation prompts must be self-contained because subagents do not inherit the parent conversation. Include all concrete inputs needed for the evidence request; never use undefined references such as “the bug” or “the issue.” Specify the scope, factual expected output, and independently verifiable success criteria. Do not ask for an “inconsistency explaining the bug,” a root cause, an intended behavior, or a recommendation.
+
+If observed and expected behavior are not established, ask the user rather than guessing. You may still delegate a neutral trace of current behavior, then perform the comparison and diagnosis yourself. For edits, specify the chosen solution. A subagent may infer a fix only when it follows directly from compiler, typechecker, linter, or formatter output.
 
 For command/fix loops, instruct **general** to iterate until green. It must stop and return evidence if a fix changes behavior, public APIs, or design, or requires choosing between alternatives.
 
