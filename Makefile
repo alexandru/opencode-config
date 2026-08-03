@@ -3,3 +3,11 @@ update-skills:
 		simplify
 	npx skills add https://github.com/JuliusBrussee/caveman/ -y --skill \
 		caveman
+	npx skills add https://github.com/mattpocock/skills -y --skill \
+		codebase-design \
+		diagnosing-bugs \
+		domain-modeling \
+		grill-me \
+		handoff \
+		resolving-merge-conflicts \
+		tdd
