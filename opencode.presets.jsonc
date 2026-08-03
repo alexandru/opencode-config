@@ -31,21 +31,21 @@
     },
   },
   // ----------------------------------------------------------------------------------
-  // OpenAI + OpenCode Go
+  // OpenAI + DeepSeek (TensorX)
   "p-mix-go": {
     "extends": ["p-openai"],
     "agent": {
       "general": {
-        "model": "opencode-go/deepseek-v4-flash",
+        "model": "tensorx/deepseek/deepseek-v4-flash-0731",
         "variant": "max",
       },
       "explore": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max",
+        "model": "tensorx/deepseek/deepseek-v4-flash-0731",
+        "variant": "high",
       },
       "scout": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max",
+        "model": "tensorx/deepseek/deepseek-v4-flash-0731",
+        "variant": "high",
       },
     },
   },
@@ -60,42 +60,11 @@
       },
       "explore": {
         "model": "deepseek/deepseek-v4-flash",
-        "variant": "max",
+        "variant": "high",
       },
       "scout": {
         "model": "deepseek/deepseek-v4-flash",
-        "variant": "max",
-      },
-    },
-  },
-  // ----------------------------------------------------------------------------------
-  // Pure OpenCode Go
-  "p-go": {
-    "model": "opencode-go/minimax-m3",
-    "agent": {
-      "plan": {
-        "model": "opencode-go/glm-5.2",
-        "variant": "max",
-      },
-      "ask": {
-        "model": "opencode-go/glm-5.2",
-        "variant": "max",
-      },
-      "build": {
-        "model": "opencode-go/deepseek-v4-pro",
-        "variant": "max",
-      },
-      "general": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max",
-      },
-      "explore": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max",
-      },
-      "scout": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max",
+        "variant": "high",
       },
     },
   },

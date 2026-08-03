@@ -8,6 +8,7 @@ update-skills:
 		diagnosing-bugs \
 		domain-modeling \
 		grill-me \
+		grilling \
 		handoff \
 		resolving-merge-conflicts \
 		tdd
