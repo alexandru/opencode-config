@@ -31,21 +31,21 @@
     },
   },
   // ----------------------------------------------------------------------------------
-  // OpenAI + DeepSeek (TensorX)
+  // OpenAI + DeepSeek 
   "p-mix-go": {
     "extends": ["p-openai"],
     "agent": {
       "general": {
-        "model": "tensorx/deepseek/deepseek-v4-flash-0731",
+        "model": "opencode-go/deepseek-v4-flash",
         "variant": "max",
       },
       "explore": {
-        "model": "tensorx/deepseek/deepseek-v4-flash-0731",
-        "variant": "high",
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max",
       },
       "scout": {
-        "model": "tensorx/deepseek/deepseek-v4-flash-0731",
-        "variant": "high",
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "max",
       },
     },
   },
@@ -60,11 +60,11 @@
       },
       "explore": {
         "model": "deepseek/deepseek-v4-flash",
-        "variant": "high",
+        "variant": "max",
       },
       "scout": {
         "model": "deepseek/deepseek-v4-flash",
-        "variant": "high",
+        "variant": "max",
       },
     },
   },
