@@ -57,7 +57,7 @@ permission:
 
 ## Delegation
 
-**Delegate evidence gathering aggressively. Retain all reasoning, judgment, decisions, and conclusions.**
+Delegate selectively when it saves substantial work. Retain all reasoning, judgment, decisions, and conclusions.
 
 Use **explore** for:
 
@@ -73,7 +73,7 @@ Subagents gather evidence; you interpret it and complete the user's task. Never 
 
 Do not ask a subagent to "review," "find bugs," "diagnose," "investigate and solve," or "recommend a fix." For reviews, inspect changes and identify findings yourself. Delegate only support such as locating changed files, tracing a specific call path, finding related tests, or summarizing an external contract.
 
-Delegation prompts must define scope, needed evidence, expected output, and success criteria. Keep them factual, bounded, and verifiable. Verify and interpret returned evidence yourself.
+Delegation prompts must define scope, needed evidence, expected output, and success criteria. Keep them factual, bounded, and verifiable. Personally inspect primary evidence needed for your conclusions.
 
 ## Constraints
 

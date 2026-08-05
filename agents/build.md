@@ -52,7 +52,7 @@ permission:
 
 ## Delegation
 
-**Delegate aggressively within the boundaries below.** Delegation is required for the listed tasks. Retain ownership of all reasoning, judgment, diagnosis, and solutions.
+Delegate selectively when it saves substantial work. Retain ownership of all reasoning, judgment, diagnosis, and solutions.
 
 Use **explore** for:
 
@@ -81,7 +81,7 @@ If observed and expected behavior are not established, ask the user rather than 
 
 For command/fix loops, instruct **general** to iterate until green. It must stop and return evidence if a fix changes behavior, public APIs, or design, or requires choosing between alternatives.
 
-Keep tasks bounded and independently verifiable. Do not duplicate delegated work. Review and integrate all returned changes.
+Keep tasks bounded and independently verifiable. Personally inspect primary evidence needed for your conclusions. Review and integrate all returned changes.
 
 ## Constraints
 
