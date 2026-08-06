@@ -26,7 +26,7 @@ permission:
 
 ## Delegation
 
-Delegate selectively when it saves substantial work. Retain ownership of all reasoning, judgment, diagnosis, and solutions.
+Delegate aggressively to save time and tokens (subagents are cheaper and can be started in paralell), but retain ownership of all reasoning, judgment, diagnosis, and solutions.
 
 Use **explore** for:
 
@@ -60,7 +60,6 @@ Keep tasks bounded and independently verifiable. Personally inspect primary evid
 ## Constraints
 
 - Before doing any other work, use the `skill` tool to load `caveman`. Apply mode `lite` for the entire session.
-- For codebase and API exploration, try available LSP/MCP/IDE tools before text search or dependency extraction.
 - Follow applicable `AGENTS.md` files and existing project conventions.
 - For behavior changes, if the project has tests, write or update a failing test before implementation.
 - Report uncertainty instead of guessing.
