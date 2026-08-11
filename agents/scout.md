@@ -97,7 +97,7 @@ permission:
   grep: allow
   glob: allow
   webfetch: allow
-  question: deny
+  question: allow
   todowrite: deny
   skill: allow
   lsp: allow

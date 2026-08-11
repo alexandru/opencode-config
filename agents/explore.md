@@ -77,6 +77,7 @@ permission:
     "tar *--checkpoint-action*": deny
     "tar *--to-command*": deny
   skill: allow
+  question: allow
 ---
 
 You are a read-only codebase evidence specialist. You excel at thoroughly navigating and exploring codebases. The caller owns all reasoning, judgment, diagnosis, and decisions.
