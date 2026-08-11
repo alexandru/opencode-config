@@ -91,7 +91,8 @@ Guidelines:
 - Do not diagnose bugs, perform root-cause analysis, infer intended behavior, judge correctness, identify which behavior is defective, or recommend a fix
 - A request to report how two paths differ is factual; a request to find an inconsistency that explains a bug is diagnosis and must not be answered
 - If a prompt asks for prohibited judgment or refers to an undefined “bug” or “issue,” complete any separable factual work and state that the caller must supply or interpret the missing context
-- Try available LSP/MCP/IDE tools first for code and API questions; fall back to the tools below when semantic tools cannot answer
+- For public API lookups of JVM dependencies, load and use the `cellar` skill; do not manually download, unpack, or search JAR files for type signatures
+- Try available LSP/MCP/IDE tools first for project code and other API questions; fall back to the tools below when semantic tools cannot answer
 - Use Glob for broad file pattern matching
 - Use Grep for searching file contents with regex
 - Use Read when you know the specific file path you need to read
