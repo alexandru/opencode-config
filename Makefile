@@ -12,3 +12,4 @@ update-skills:
 		handoff \
 		resolving-merge-conflicts \
 		tdd
+	npx skills add https://github.com/VirtusLab/cellar/ -y 

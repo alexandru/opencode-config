@@ -7,17 +7,23 @@
       "skillPath": "skills/caveman/SKILL.md",
       "computedHash": "59e1fe0d3eeb4189ee5c467efde567672e5cacb41f157c477a6152ca907d44ea"
     },
+    "cellar": {
+      "source": "VirtusLab/cellar",
+      "sourceType": "github",
+      "skillPath": "skills/cellar/SKILL.md",
+      "computedHash": "119d7f37d5ca614b9e68b45e4f1278791629338bf9194e8a6cdd210aedb668b1"
+    },
     "codebase-design": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/codebase-design/SKILL.md",
-      "computedHash": "6d9d51d8caa01633fd00cf87089c5618c982321f942ac69f62565dc001c6b22f"
+      "computedHash": "e6394592ecf4b5aa5bc93f95a20d0a56314788bde2e1221f87296d3becb734a2"
     },
     "diagnosing-bugs": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/diagnosing-bugs/SKILL.md",
-      "computedHash": "fd6c99466b7ba43be624e6e66ed6d7af2796ded7218f24c83820823977819e22"
+      "computedHash": "c86c725ad271ba57d7e9ffd86122b898438314ef9c20ec1dbe03f3e8f149c3b2"
     },
     "domain-modeling": {
       "source": "mattpocock/skills",
@@ -35,7 +41,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/productivity/grilling/SKILL.md",
-      "computedHash": "368d3dd7251247c69f3656d93dc83c8f1577792eacac2111f1e7981db2ece49b"
+      "computedHash": "4ebdd12fe61ff3abf20cff6683740e2b9b3739454be0a3f4a928a1c4d07d6b34"
     },
     "handoff": {
       "source": "mattpocock/skills",
@@ -59,7 +65,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/tdd/SKILL.md",
-      "computedHash": "81eca2a5b53a63f481c0849be7a663a8cd43d5cf53f32b644ec0a2f50cf91aa2"
+      "computedHash": "614ac2e45fb0ec02f6ce422d26bd9aa4e33aa4867323f5a3a5c0c20b96f78ff4"
     }
   }
 }

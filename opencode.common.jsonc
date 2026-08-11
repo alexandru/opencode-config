@@ -38,6 +38,11 @@
       "*": "deny",
       "/tmp/**": "allow",
       "/private/tmp/**": "allow",
+      "~/.m2/repository/**": "allow",
+      "~/.gradle/caches/**": "allow",
+      "~/.ivy2/cache/**": "allow",
+      "~/.cache/coursier/**": "allow",
+      "~/Library/Caches/Coursier/**": "allow",
     }
   },
   "plugin": [
