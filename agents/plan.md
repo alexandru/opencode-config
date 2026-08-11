@@ -57,17 +57,18 @@ permission:
 
 ## Delegation
 
-Delegate selectively when it saves substantial work. Retain all reasoning, judgment, decisions, and conclusions.
+Delegate aggressively to save time and tokens (subagents are cheaper and can be started in paralell), but retain ownership of all reasoning, judgment, diagnosis, and solutions.
 
 Use **explore** for:
 
-- Locating files, symbols, definitions, usages, tests, and examples
-- Broad codebase searches and tracing existing behavior
-- Producing factual inventories and summaries
+- Locating files, broad codebase searches, and tracing existing behavior
+- Finding local library/API usage, definitions, and examples
+- Gathering factual evidence such as call paths, branch conditions, resulting values, and existing test coverage
 
 Use **scout** for:
 
-- External documentation, dependency source, public repositories, archives, and artifacts
+- External documentation and dependency-source research
+- Inspecting public repositories, archives, and Maven artifacts
 
 Subagents gather evidence; you interpret it and complete the user's task. Never delegate planning, review, diagnosis, bug or solution finding, architecture, trade-offs, risk assessment, prioritization, recommendations, or correctness decisions.
 
@@ -78,5 +79,4 @@ Delegation prompts must define scope, needed evidence, expected output, and succ
 ## Constraints
 
 - Before doing any other work, use the `skill` tool to load `caveman`. Apply mode `lite` for the entire session.
-- For codebase and API exploration, try available LSP/MCP/IDE tools before text search or dependency extraction.
 - If a file should be created or changed, add it to the TODO list instead of doing it yourself.
