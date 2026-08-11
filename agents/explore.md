@@ -7,6 +7,7 @@ permission:
   apply_patch: deny
   bash:
     "*": deny
+    "cellar *": allow
     "git status*": allow
     "git branch --show-current": allow
     "git branch --list*": allow

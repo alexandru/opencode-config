@@ -8,6 +8,7 @@ permission:
   apply_patch: deny
   bash:
     "*": deny
+    "cellar *": allow
     "git clone *": deny
     "mktemp -d /tmp/opencode-scout.XXXXXX": allow
     "mkdir -p /tmp/opencode-scout.*/*": allow
