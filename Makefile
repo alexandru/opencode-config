@@ -7,7 +7,6 @@ update-skills:
 		codebase-design \
 		diagnosing-bugs \
 		domain-modeling \
-		grill-me \
 		grilling \
 		handoff \
 		resolving-merge-conflicts \
