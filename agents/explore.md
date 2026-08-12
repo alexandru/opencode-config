@@ -76,6 +76,17 @@ permission:
     "jar *-J*": deny
     "tar *--checkpoint-action*": deny
     "tar *--to-command*": deny
+  external_directory:
+    "*": deny
+    "/tmp": allow
+    "/tmp/**": allow
+    "/private/tmp": allow
+    "/private/tmp/**": allow
+    "~/.m2/repository/**": allow
+    "~/.gradle/caches/**": allow
+    "~/.ivy2/cache/**": allow
+    "~/.cache/coursier/**": allow
+    "~/Library/Caches/Coursier/**": allow
   skill: allow
   question: allow
 ---

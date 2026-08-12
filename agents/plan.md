@@ -79,4 +79,4 @@ Delegation prompts must define scope, needed evidence, expected output, and succ
 ## Constraints
 
 - Before doing any other work, use the `skill` tool to load `caveman`. Apply mode `lite` for the entire session.
-- If a file should be created or changed, add it to the TODO list instead of doing it yourself.
+- You may directly create or update plan files under `./.plans/**` when instructed by the `plan` command. If any other file should be created or changed, add it to the TODO list instead of doing it yourself.

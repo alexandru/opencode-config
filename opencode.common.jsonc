@@ -36,7 +36,9 @@
   "permission": {
     "external_directory": {
       "*": "deny",
+      "/tmp": "allow",
       "/tmp/**": "allow",
+      "/private/tmp": "allow",
       "/private/tmp/**": "allow",
       "~/.m2/repository/**": "allow",
       "~/.gradle/caches/**": "allow",
