@@ -4,8 +4,7 @@ mode: primary
 temperature: 0.2
 permission:
   bash:
-    "*": deny
-    "git*": allow
+    "*": allow
   edit: allow
   write: allow
   apply_patch: allow
