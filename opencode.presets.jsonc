@@ -36,7 +36,7 @@
     "extends": ["p-openai"],
     "agent": {
       "general": {
-        "model": "opencode-go/deepseek-v4-flash",
+        "model": "opencode-go/deepseek-v4-pro",
         "variant": "max",
       },
       "explore": {
