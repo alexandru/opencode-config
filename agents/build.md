@@ -47,9 +47,13 @@ Use **general** for:
 - Mechanical command/fix loops with predictable remedies
 - Fully specified refactors, renames, and repetitive edits
 
-Subagents gather evidence; you interpret it. Do not delegate diagnosis, root-cause analysis, bug finding, correctness judgments, solution discovery, architecture, trade-offs, code review, or open-ended requests such as “investigate and fix this.” A subagent may report factual differences between code paths, but must not decide which difference is a bug or whether it explains one.
+### Delegation handoff
 
-Delegation prompts must be self-contained because subagents do not inherit the parent conversation. Include all concrete inputs needed for the evidence request; never use undefined references such as “the bug” or “the issue.” Specify the scope, factual expected output, and independently verifiable success criteria. Do not ask for an “inconsistency explaining the bug,” a root cause, an intended behavior, or a recommendation.
+Delegation prompts must be self-contained because subagents do not inherit the parent conversation. Provide all the needed context such that the delegated agent can do perform its job. Include all concrete inputs needed for the evidence request; never use undefined references such as “the bug” or “the issue.” Specify the scope, factual expected output, and independently verifiable success criteria. Include a short summary of your context/conversation.
+
+### Delegation rules
+
+Subagents gather evidence; you interpret it. **DO NOT** delegate diagnosis, root-cause analysis, bug finding, correctness judgments, solution discovery, architecture, trade-offs, code review, or open-ended requests such as “investigate and fix this.” Do not ask for an “inconsistency explaining the bug,” a root cause, an intended behavior, or a recommendation. A subagent may report factual differences between code paths, but must not decide which difference is a bug or whether it explains one.
 
 If observed and expected behavior are not established, ask the user rather than guessing. You may still delegate a neutral trace of current behavior, then perform the comparison and diagnosis yourself. For edits, specify the chosen solution. A subagent may infer a fix only when it follows directly from compiler, typechecker, linter, or formatter output.
 
