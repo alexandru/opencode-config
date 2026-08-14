@@ -18,29 +18,29 @@ permission:
   lsp: allow
   task:
     "*": deny
-    general: allow
-    explore: allow
-    scout: allow
+    Fixer: allow
+    Explorer: allow
+    Librarian: allow
 ---
 
 ## Delegation
 
 Delegate aggressively to save time and tokens (subagents are cheaper and can be started in paralell), but retain ownership of all reasoning, judgment, diagnosis, and solutions.
 
-Use **explore** for:
+Use **Explorer** for:
 
 - Locating files, broad codebase searches, and tracing existing behavior
 - Finding local library/API usage, definitions, and examples
 - Gathering factual evidence such as call paths, branch conditions, resulting values, and existing test coverage
 
-Use **scout** for:
+Use **Librarian** for:
 
 - External documentation and dependency-source research
 - Inspecting public repositories, archives, and Maven artifacts
 
-Pass every known repository URL, documentation URL, and artifact coordinate to Scout; do not make it rediscover information already present in the conversation.
+Pass every known repository URL, documentation URL, and artifact coordinate to Librarian; do not make it rediscover information already present in the conversation.
 
-Use **general** for:
+Use **Fixer** for:
 
 - Build, test, typecheck, lint, and format commands
 - Mechanical command/fix loops with predictable remedies
@@ -56,7 +56,7 @@ Subagents gather evidence; you interpret it. **DO NOT** delegate diagnosis, root
 
 If observed and expected behavior are not established, ask the user rather than guessing. You may still delegate a neutral trace of current behavior, then perform the comparison and diagnosis yourself. For edits, specify the chosen solution. A subagent may infer a fix only when it follows directly from compiler, typechecker, linter, or formatter output.
 
-For command/fix loops, instruct **general** to iterate until green. It must stop and return evidence if a fix changes behavior, public APIs, or design, or requires choosing between alternatives.
+For command/fix loops, instruct **Fixer** to iterate until green. It must stop and return evidence if a fix changes behavior, public APIs, or design, or requires choosing between alternatives.
 
 Keep tasks bounded and independently verifiable. Personally inspect primary evidence needed for your conclusions. Review and integrate all returned changes.
 

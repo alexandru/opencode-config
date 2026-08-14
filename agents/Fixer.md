@@ -7,6 +7,10 @@ permission:
   plan_enter: deny
   plan_exit: deny
   skill: allow
+  task:
+    "*": deny
+    Explorer: allow
+    Librarian: allow
 ---
 
 Before doing any other work, use the `skill` tool to load `caveman`. Apply mode `lite` for the entire session.

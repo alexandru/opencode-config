@@ -53,4 +53,4 @@ Input: $ARGUMENTS
    If you have file writing permission for `./.plans/`, then write the plan to the file.
    Otherwise, end with:
 
-> **Ready to execute?** Switch to **Build** or assign to the appropriate agent to save the plan.
+> **Ready to execute?** Switch to **Builder** or assign to the appropriate agent to save the plan.

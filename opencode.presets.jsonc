@@ -4,27 +4,23 @@
   "p-openai": {
     "model": "openai/gpt-5.6-sol",
     "agent": {
-      "plan": {
+      "Planner": {
         "model": "openai/gpt-5.6-sol",
         "variant": "medium",
       },
-      "ask": {
+      "Builder": {
         "model": "openai/gpt-5.6-sol",
         "variant": "medium",
       },
-      "build": {
-        "model": "openai/gpt-5.6-sol",
-        "variant": "medium",
-      },
-      "general": {
+      "Fixer": {
         "model": "openai/gpt-5.6-luna",
         "variant": "high",
       },
-      "explore": {
+      "Explorer": {
         "model": "openai/gpt-5.6-luna",
         "variant": "medium",
       },
-      "scout": {
+      "Librarian": {
         "model": "openai/gpt-5.6-luna",
         "variant": "medium",
       },
@@ -35,15 +31,15 @@
   "p-mix-go": {
     "extends": ["p-openai"],
     "agent": {
-      "general": {
+      "Fixer": {
         "model": "opencode-go/deepseek-v4-flash",
         "variant": "max",
       },
-      "explore": {
+      "Explorer": {
         "model": "opencode-go/deepseek-v4-flash",
         "variant": "max",
       },
-      "scout": {
+      "Librarian": {
         "model": "opencode-go/deepseek-v4-flash",
         "variant": "max",
       },
@@ -54,15 +50,15 @@
   "p-mix-dp": {
     "extends": ["p-mix-go"],
     "agent": {
-      "general": {
+      "Fixer": {
         "model": "deepseek/deepseek-v4-flash",
         "variant": "max",
       },
-      "explore": {
+      "Explorer": {
         "model": "deepseek/deepseek-v4-flash",
         "variant": "max",
       },
-      "scout": {
+      "Librarian": {
         "model": "deepseek/deepseek-v4-flash",
         "variant": "max",
       },
@@ -73,27 +69,23 @@
   "p-deepseek": {
     "model": "deepseek/deepseek-v4-pro",
     "agent": {
-      "plan": {
+      "Planner": {
         "model": "deepseek/deepseek-v4-pro",
         "variant": "max",
       },
-      "ask": {
+      "Builder": {
         "model": "deepseek/deepseek-v4-pro",
         "variant": "max",
       },
-      "build": {
-        "model": "deepseek/deepseek-v4-pro",
-        "variant": "max",
-      },
-      "general": {
+      "Fixer": {
         "model": "deepseek/deepseek-v4-flash",
         "variant": "max",
       },
-      "explore": {
+      "Explorer": {
         "model": "deepseek/deepseek-v4-flash",
         "variant": "max",
       },
-      "scout": {
+      "Librarian": {
         "model": "deepseek/deepseek-v4-flash",
         "variant": "max",
       },
@@ -133,27 +125,23 @@
     "extends": ["w-common"],
     "model": "github-copilot/claude-haiku-4.5",
     "agent": {
-      "plan": {
+      "Planner": {
         "model": "github-copilot/claude-opus-4.5",
         "variant": "high",
       },
-      "ask": {
-        "model": "github-copilot/claude-opus-4.5",
-        "variant": "high",
-      },
-      "build": {
+      "Builder": {
         "model": "github-copilot/gpt-5.3-codex",
         "variant": "high",
       },
-      "general": {
+      "Fixer": {
         "model": "github-copilot/gpt-5.3-codex",
         "variant": "medium",
       },
-      "explore": {
+      "Explorer": {
         "model": "github-copilot/claude-haiku-4.5",
         "variant": "high",
       },
-      "scout": {
+      "Librarian": {
         "model": "github-copilot/claude-haiku-4.5",
         "variant": "high",
       },
