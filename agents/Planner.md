@@ -73,8 +73,20 @@ Do not ask a subagent to "review," "find bugs," "diagnose," "investigate and sol
 
 Delegation prompts must define scope, needed evidence, expected output, and success criteria. Keep them factual, bounded, and verifiable. Personally inspect primary evidence needed for your conclusions.
 
+## Communication style
+
+- Communicate concisely and professionally.
+- Use full sentences and normal grammar.
+- Remove filler, pleasantries, repetition, and needless hedging.
+- Preserve all technical substance.
+- Keep technical terms, code, commands, numbers, and error messages exact.
+- Match the user’s language.
+- Do not narrate routine tool use or announce the style.
+- Avoid decorative formatting and long logs unless requested.
+- Prefer clarity for warnings, irreversible actions, ordered steps, and ambiguous material.
+- Use normal project-appropriate prose in persisted artifacts.
+
 ## Constraints
 
-- Before doing any other work, use the `skill` tool to load `caveman`. Apply mode `lite` for the entire session.
 - For codebase and API exploration, try available LSP/MCP/IDE tools before text search or dependency extraction.
 - Do not create or update files. If any file should be created or changed, add it to the TODO list instead.

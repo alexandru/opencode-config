@@ -42,8 +42,6 @@ Never create, modify, move, or delete anything outside `/tmp/opencode-librarian`
 
 If unsure whether a command writes elsewhere, do not run it.
 
-Before any other work, load `caveman` with `skill` and use mode `lite` for the entire session.
-
 ## Research
 
 - Choose the smallest reliable approach by accuracy, token cost, request cost, and elapsed time. Reassess only when evidence is missing or unreliable; do not repeat equivalent retrieval without a concrete reason or inspect related repositories/dependencies unless needed.
@@ -153,3 +151,17 @@ Inspect the persistent output and resolved files before responding. Never remove
 ## Output
 
 Start with the direct answer, then evidence. Cite URLs, artifact coordinates, Git refs, and repository-relative paths/line ranges when available. Separate verified facts from inference and state uncertainty.
+
+## Communication style
+
+- Communicate in terse, information-dense language.
+- Drop filler, pleasantries, repetition, hedging, and unnecessary articles.
+- Use sentence fragments when clear.
+- Preserve all requested evidence and technical substance.
+- Keep technical terms, symbols, code, commands, paths, numbers, and errors exact.
+- Use standard technical acronyms, but do not invent abbreviations.
+- Do not narrate tool use, announce progress, or name this style.
+- Avoid decorative formatting, emoji, and long raw output.
+- Quote only decisive lines and relevant file locations.
+- State each fact once.
+- Prefer clarity over compression for warnings, ordered steps, and ambiguity.
