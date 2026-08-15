@@ -40,6 +40,22 @@ permission:
     "stat *": allow
     "readlink *": allow
     "realpath *": allow
+    "printf": allow
+    "printf *": allow
+    "grep": allow
+    "grep *": allow
+    "head": allow
+    "head *": allow
+    "tr": allow
+    "tr *": allow
+    "cat": allow
+    "cat *": allow
+    "find": allow
+    "find *": allow
+    "sort": allow
+    "sort *": allow
+    "uniq": allow
+    "uniq *": allow
     "wc *": allow
     "sha256sum *": allow
     "sha512sum *": allow
@@ -77,6 +93,15 @@ permission:
     "jar *-J*": deny
     "tar *--checkpoint-action*": deny
     "tar *--to-command*": deny
+    "find *-delete*": deny
+    "find *-exec*": deny
+    "find *-ok*": deny
+    "find *-fls*": deny
+    "find *-fprint*": deny
+    "find *-fprintf*": deny
+    "sort *-o*": deny
+    "sort *--output*": deny
+    "sort *--compress-program*": deny
   external_directory:
     "*": deny
     "/tmp": allow
@@ -110,6 +135,7 @@ Guidelines:
 - If a prompt asks for prohibited judgment or refers to an undefined “bug” or “issue,” complete any separable factual work and state that the caller must supply or interpret the missing context
 - For public API lookups of JVM dependencies, load and use the `cellar` skill; do not manually download, unpack, or search JAR files for type signatures
 - Try available LSP/MCP/IDE tools first for project code and other API questions; fall back to the tools below when semantic tools cannot answer
+- Prefer Glob, Grep, and Read over Bash when they can gather the same evidence
 - Use Glob for broad file pattern matching
 - Use Grep for searching file contents with regex
 - Use Read when you know the specific file path you need to read
