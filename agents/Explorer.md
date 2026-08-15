@@ -46,6 +46,8 @@ permission:
     "grep *": allow
     "head": allow
     "head *": allow
+    "tail": allow
+    "tail *": allow
     "tr": allow
     "tr *": allow
     "cat": allow
