@@ -2,6 +2,10 @@
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": true,
   "default_agent": "Builder",
+  "subagent_depth": 2,
+  "experimental": {
+    "subagent_depth": 2,
+  },
   "agent": {
     "ask": { "disable": true },
     "plan": { "disable": true },

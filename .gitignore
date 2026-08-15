@@ -3,3 +3,4 @@ package-lock.json
 bun.lock
 opencode.json*
 plans/
+service.json

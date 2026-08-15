@@ -24,6 +24,10 @@
         "model": "openai/gpt-5.6-luna",
         "variant": "medium",
       },
+      "SafeShell": {
+        "model": "openai/gpt-5.3-codex-spark",
+        "variant": "medium",
+      },
     },
   },
   // ----------------------------------------------------------------------------------
@@ -43,51 +47,40 @@
         "model": "opencode-go/deepseek-v4-flash",
         "variant": "max",
       },
-    },
-  },
-  // ----------------------------------------------------------------------------------
-  // OpenAI + DeepSeek
-  "p-mix-dp": {
-    "extends": ["p-mix-go"],
-    "agent": {
-      "Junior": {
-        "model": "deepseek/deepseek-v4-flash",
-        "variant": "max",
-      },
-      "Explorer": {
-        "model": "deepseek/deepseek-v4-flash",
-        "variant": "max",
-      },
-      "Librarian": {
-        "model": "deepseek/deepseek-v4-flash",
-        "variant": "max",
+      "SafeShell": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "low",
       },
     },
   },
   // ----------------------------------------------------------------------------------
   // Pure DeepSeek
   "p-deepseek": {
-    "model": "deepseek/deepseek-v4-pro",
+    "model": "opencode-go/deepseek-v4-pro",
     "agent": {
       "Planner": {
-        "model": "deepseek/deepseek-v4-pro",
+        "model": "opencode-go/deepseek-v4-pro",
         "variant": "max",
       },
       "Builder": {
-        "model": "deepseek/deepseek-v4-pro",
+        "model": "opencode-go/deepseek-v4-pro",
         "variant": "max",
       },
       "Junior": {
-        "model": "deepseek/deepseek-v4-flash",
+        "model": "opencode-go/deepseek-v4-flash",
         "variant": "max",
       },
       "Explorer": {
-        "model": "deepseek/deepseek-v4-flash",
-        "variant": "max",
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "high",
       },
       "Librarian": {
-        "model": "deepseek/deepseek-v4-flash",
-        "variant": "max",
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "high",
+      },
+      "SafeShell": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "low",
       },
     },
   },
@@ -123,27 +116,27 @@
   // GitHub Copilot
   "w-copilot": {
     "extends": ["w-common"],
-    "model": "github-copilot/claude-haiku-4.5",
+    "model": "github-copilot/gpt-5.3-codex",
     "agent": {
       "Planner": {
-        "model": "github-copilot/claude-opus-4.5",
-        "variant": "high",
-      },
-      "Builder": {
-        "model": "github-copilot/gpt-5.3-codex",
-        "variant": "high",
-      },
-      "Junior": {
         "model": "github-copilot/gpt-5.3-codex",
         "variant": "medium",
       },
+      "Builder": {
+        "model": "github-copilot/gpt-5.3-codex",
+        "variant": "medium",
+      },
+      "Junior": {
+        "model": "github-copilot/claude-haiku-4.5",
+      },
       "Explorer": {
         "model": "github-copilot/claude-haiku-4.5",
-        "variant": "high",
+      },
+      "SafeShell": {
+        "model": "github-copilot/claude-haiku-4.5",
       },
       "Librarian": {
         "model": "github-copilot/claude-haiku-4.5",
-        "variant": "high",
       },
     },
   },
