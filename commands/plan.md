@@ -16,7 +16,7 @@ Input: $ARGUMENTS
 
    - Read the user's request and any referenced files carefully.
    - Inspect relevant existing code, tests, configuration, documentation, and conventions before asking questions.
-   - Ask targeted questions only to resolve material uncertainty about success criteria, constraints, scope boundaries, technical preferences, or assumptions — use the `grilling` procedure (vendored `/grill-me` skill) for unresolved material decisions.
+   - Ask targeted questions only to resolve material uncertainty about success criteria, constraints, scope boundaries, technical preferences, or assumptions — use the vendored `grilling` skill.
    - Proceed without questions when available context makes the request sufficiently clear.
 
 2. **Present the plan**
@@ -35,7 +35,7 @@ Input: $ARGUMENTS
 
 3. **Save the plan**
 
-    Add a TODO item to write the plan to a descriptive markdown file at `./.plans/<descriptive-kebab-case-name>.md`.
+   Add a TODO item to write the plan to a descriptive markdown file at `./specs/<descriptive-kebab-case-name>/plan.md`.
 
    The markdown plan must include:
 
@@ -50,7 +50,7 @@ Input: $ARGUMENTS
 
 4. **Hand off**
 
-   If you have file writing permission for `./.plans/`, then write the plan to the file.
+   If you have file writing permission for `./specs/`, then write the plan to the file.
    Otherwise, end with:
 
 > **Ready to execute?** Switch to **Builder** or assign to the appropriate agent to save the plan.

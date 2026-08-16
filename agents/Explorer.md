@@ -44,6 +44,8 @@ permission:
     "printf *": allow
     "grep": allow
     "grep *": allow
+    "rg": allow
+    "rg *": allow
     "head": allow
     "head *": allow
     "tail": allow
@@ -58,6 +60,7 @@ permission:
     "sort *": allow
     "uniq": allow
     "uniq *": allow
+    "wc": allow
     "wc *": allow
     "sha256sum *": allow
     "sha512sum *": allow
@@ -104,6 +107,8 @@ permission:
     "sort *-o*": deny
     "sort *--output*": deny
     "sort *--compress-program*": deny
+    "rg *--pre *": deny
+    "rg *--pre=*": deny
   external_directory:
     "*": deny
     "/tmp": allow
