@@ -40,7 +40,6 @@ Sub-agents:
 - `Junior`: bounded execution and shell-assisted exploration.
 - `Explorer`: read-only codebase evidence gathering.
 - `Librarian`: read-only external documentation and dependency-source research.
-- `SafeShell`: validates and executes one exact read-only shell expression.
 
 ## Defined commands
 
