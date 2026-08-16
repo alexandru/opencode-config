@@ -3,14 +3,13 @@ description: Implementation agent — owns solution design and substantive code 
 mode: primary
 temperature: 0.2
 permission:
-  bash:
-    "*": allow
+  bash: deny
   edit: allow
   write: allow
   apply_patch: allow
   read: allow
-  grep: allow
-  glob: allow
+  grep: deny
+  glob: deny
   webfetch: allow
   question: allow
   todowrite: allow
