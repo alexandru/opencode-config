@@ -1,5 +1,5 @@
 ---
-description: Create an implementation plan and todo list
+description: Create and save an implementation plan
 ---
 
 Create an implementation plan for:
@@ -35,7 +35,7 @@ Input: $ARGUMENTS
 
 3. **Save the plan**
 
-   Add a TODO item to write the plan to a descriptive markdown file at `./specs/<descriptive-kebab-case-name>/plan.md`.
+   Write the plan to a descriptive markdown file at `./specs/<descriptive-kebab-case-name>/plan.md`.
 
    The markdown plan must include:
 
@@ -50,7 +50,14 @@ Input: $ARGUMENTS
 
 4. **Hand off**
 
-   If you have file writing permission for `./specs/`, then write the plan to the file.
-   Otherwise, end with:
+   After writing the plan, stop and end with:
 
-> **Ready to execute?** Switch to **Builder** or assign to the appropriate agent to save the plan.
+> **Ready to execute?** Review the plan, then tell me when you want me to continue with implementation.
+
+## Restrictions
+
+During planning, until the handoff:
+
+- Operate in read-only mode except for creating or updating the plan file specified in step 3.
+- Do not make any other changes to project files or workspace state.
+- Delegate only to read-only specialist agents: **Explorer**, **Librarian**, and **SafeShell**.

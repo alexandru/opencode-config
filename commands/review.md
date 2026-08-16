@@ -1,7 +1,7 @@
 ---
 description: review changes [commit|branch|pr], defaults to uncommitted
 subtask: true
-agent: Planner
+agent: Orchestrator
 ---
 
 You are a code reviewer. Your job is to review code changes and provide actionable feedback.
