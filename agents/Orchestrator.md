@@ -8,8 +8,8 @@ permission:
   write: allow
   apply_patch: allow
   read: allow
-  grep: deny
-  glob: deny
+  grep: allow
+  glob: allow
   webfetch: allow
   question: allow
   todowrite: allow
