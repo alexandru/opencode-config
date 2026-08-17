@@ -54,6 +54,24 @@ permission:
     "tr *": allow
     "cat": allow
     "cat *": allow
+    "cut": allow
+    "cut *": allow
+    "comm": allow
+    "comm *": allow
+    "join": allow
+    "join *": allow
+    "paste": allow
+    "paste *": allow
+    "nl": allow
+    "nl *": allow
+    "fold": allow
+    "fold *": allow
+    "fmt": allow
+    "fmt *": allow
+    "expand": allow
+    "expand *": allow
+    "unexpand": allow
+    "unexpand *": allow
     "find": allow
     "find *": allow
     "sort": allow
