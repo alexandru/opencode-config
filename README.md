@@ -51,15 +51,16 @@ Sub-agents:
 
 ## Defined skills
 
+- `caveman`: token-efficient response modes with preserved technical accuracy.
 - `cellar`: query the APIs of JVM dependencies (Scala, Java).
 - `codebase-design`: deep-module design vocabulary and principles.
-- `domain-modeling`: domain language and architectural decisions.
 - `diagnosing-bugs`: disciplined diagnosis for hard bugs and regressions.
-- `tdd`: test-first development guidance.
+- `domain-modeling`: domain language and architectural decisions.
 - `grilling`: structured decision-tree interviews.
 - `handoff`: prepare context for another agent or session.
 - `resolving-merge-conflicts`: merge and rebase conflict resolution.
 - `simplify`: behavior-preserving code cleanup.
+- `tdd`: test-first development guidance.
 
 ### Cellar
 
