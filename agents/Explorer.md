@@ -40,6 +40,7 @@ permission:
     "stat *": allow
     "readlink *": allow
     "realpath *": allow
+    "true": allow
     "printf": allow
     "printf *": allow
     "grep": allow
