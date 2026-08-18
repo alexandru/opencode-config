@@ -25,17 +25,17 @@
     }
   },
   "mcp": {
-    "intellij-idea": {
+    "mcp-intellij-idea": {
       "type": "remote",
       "url": "http://localhost:64342/sse",
       "enabled": false
     },
-    "metals": {
+    "mcp-metals": {
       "type": "remote",
       "url": "http://localhost:54640/mcp",
       "enabled": false
     },
-    "chrome-devtools": {
+    "mcp-chrome-devtools": {
       "type": "local",
       "command": [
         "npx",

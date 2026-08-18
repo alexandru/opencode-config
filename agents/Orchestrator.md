@@ -15,6 +15,7 @@ permission:
   todowrite: allow
   skill: allow
   lsp: allow
+  "mcp-*": deny
   task:
     "*": deny
     Junior: allow

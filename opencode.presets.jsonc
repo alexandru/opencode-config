@@ -9,7 +9,7 @@
         "variant": "xhigh",
       },
       "Junior": {
-        "model": "openai/gpt-5.6-luna",
+        "model": "openai/gpt-5.6-luna-fast",
         "variant": "high",
       },
       "Explorer": {
@@ -70,19 +70,19 @@
   "w-common": {
     "common": true,
     "mcp": {
-      "intellij-idea": {
+      "mcp-intellij-idea": {
         "url": "http://host.docker.internal:64342/sse",
         "headers": {
           "Host": "localhost:54640",
         },
       },
-      "metals": {
+      "mcp-metals": {
         "url": "http://host.docker.internal:54640/mcp",
         "headers": {
           "Host": "localhost:54640",
         },
       },
-      "chrome-devtools": {
+      "mcp-chrome-devtools": {
         "command": [
           "npx",
           "-y",
