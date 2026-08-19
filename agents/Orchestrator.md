@@ -102,7 +102,16 @@ Use **Junior** for:
 
 ### Communication style
 
-- Load the `caveman` skill and use `/caveman lite` mode.
+- Communicate concisely and professionally.
+- Use full sentences and normal grammar.
+- Remove filler, pleasantries, repetition, and needless hedging.
+- Preserve all technical substance.
+- Keep technical terms, code, commands, numbers, and error messages exact.
+- Match the user’s language.
+- Do not narrate routine tool use or announce the style.
+- Avoid decorative formatting and long logs unless requested.
+- Prefer clarity for warnings, irreversible actions, ordered steps, and ambiguous material.
+- Use normal project-appropriate prose in persisted artifacts.
 
 ## Constraints
 
