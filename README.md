@@ -13,15 +13,8 @@ git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
 **2)** Choose a model preset before first use and whenever you want to switch profiles:
 
 ```sh
+# Example
 ./bin/oc-switch p-openai
-# or
-./bin/oc-switch p-mix-go
-./bin/oc-switch p-deepseek
-
-# Docker-oriented profiles
-./bin/oc-switch w-copilot
-./bin/oc-switch w-openai
-./bin/oc-switch w-mix-go
 ```
 
 **WARN:** must run `oc-switch` at least once, otherwise `opencode.jsonc` is missing. The switcher generates `opencode.jsonc` from:
@@ -33,7 +26,7 @@ git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
 
 Main agents:
 
-- `Orchestrator`: implements changes; delegates evidence, research, and checks.
+- `Orchestrator` (default agent): implements changes; delegates evidence, research, and checks.
 
 Sub-agents:
 
@@ -47,22 +40,39 @@ Commands use currently selected primary agent and do not override it.
 
 - `/plan`: prepare a detailed implementation plan and save it as a Markdown specification file.
 - `/grill-me`: stress-test a plan or decision.
+- `/grill-with-docs`: sharpen a plan or design while creating domain documentation.
 - `/handoff`: prepare context for another agent or session.
+- `/implement`: implement work from a specification or set of tickets.
+- `/improve-codebase-architecture`: find and work through codebase architecture improvements.
 - `/review`: review uncommitted changes, a commit, a branch, or a pull request.
+- `/setup-matt-pocock-skills`: configure the repository for Matt Pocock's engineering skills.
 - `/simplify`: simplify code without changing its behavior.
+- `/to-spec`: turn the current conversation into a published specification.
+- `/to-tickets`: break a plan or specification into tracer-bullet tickets.
 
 ## Defined skills
 
-- `caveman`: token-efficient response modes with preserved technical accuracy.
-- `cellar`: query the APIs of JVM dependencies (Scala, Java).
-- `codebase-design`: deep-module design vocabulary and principles.
-- `diagnosing-bugs`: disciplined diagnosis for hard bugs and regressions.
-- `domain-modeling`: domain language and architectural decisions.
-- `grilling`: structured decision-tree interviews.
-- `handoff`: prepare context for another agent or session.
-- `resolving-merge-conflicts`: merge and rebase conflict resolution.
-- `simplify`: behavior-preserving code cleanup.
-- `tdd`: test-first development guidance.
+- [alexandru/skills](https://github.com/alexandru/skills/)
+  - `simplify`: behavior-preserving code cleanup.
+- [mattpocock/skills](https://github.com/mattpocock/skills/tree/v1.2.3)
+  - `codebase-design`: deep-module design vocabulary and principles.
+  - `code-review`: review changes against repository standards and the originating specification.
+  - `diagnosing-bugs`: disciplined diagnosis for hard bugs and regressions.
+  - `domain-modeling`: domain language and architectural decisions.
+  - `grill-with-docs`: sharpen a plan or design while creating domain documentation.
+  - `grilling`: structured decision-tree interviews.
+  - `handoff`: prepare context for another agent or session.
+  - `implement`: implement work from a specification or set of tickets.
+  - `improve-codebase-architecture`: find and work through codebase architecture improvements.
+  - `resolving-merge-conflicts`: merge and rebase conflict resolution.
+  - `setup-matt-pocock-skills`: configure a repository for the engineering skills.
+  - `tdd`: test-first development guidance.
+  - `to-spec`: turn the current conversation into a published specification.
+  - `to-tickets`: break a plan or specification into tracer-bullet tickets.
+- [VirtusLab/cellar](https://github.com/VirtusLab/cellar/)
+  - `cellar`: query the APIs of JVM dependencies (Scala, Java).
+- [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
+  - `caveman`: token-efficient response modes with preserved technical accuracy.
 
 ### Cellar
 
