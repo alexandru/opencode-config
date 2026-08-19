@@ -15,7 +15,7 @@ permission:
   todowrite: allow
   skill: allow
   lsp: allow
-  "mcp-*": deny
+  "mcp*": deny
   task:
     "*": deny
     Junior: allow
@@ -48,6 +48,11 @@ Use **Junior** for:
 - Mechanical command/fix loops with predictable remedies
 - Fully specified refactors, renames, and repetitive edits
 - Codebase exploration requiring shell tools unavailable to Explorer
+
+### Planning
+
+- Plan delegation to optimize quality, elapsed time, and cost.
+- When tasks for the same subagent must run sequentially and require no intervening Orchestrator decision, combine them into one self-contained delegation instead of making separate calls.
 
 ### Delegation handoff
 
@@ -86,13 +91,6 @@ Use **Junior** for:
 - Keep tasks bounded and independently verifiable.
 - Personally inspect primary evidence needed for your conclusions.
 - Review and integrate all returned changes.
-
-**Session Reuse:**
-
-- Smartly reuse an available specialist session - context reuse saves time and tokens.
-- When too much unrelated, and really needed, start a fresh session with the specialist.
-- If multiple remembered sessions fit, prefer the most recently used matching session.
-- Prefer re-uses over creating new sessions all the time.
 
 ## User engagement
 

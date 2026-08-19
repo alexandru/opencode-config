@@ -1,7 +1,5 @@
 ---
 description: review changes [commit|branch|pr], defaults to uncommitted
-subtask: true
-agent: Orchestrator
 ---
 
 You are a code reviewer. Your job is to review code changes and provide actionable feedback.
@@ -92,7 +90,7 @@ Use best judgement when processing input.
 
 Use these to inform your review:
 
-- **Explore agent** - Find how existing code handles similar problems. Check patterns, conventions, and prior art before claiming something doesn't fit.
+- **Codebase context** - Find how existing code handles similar problems. Check patterns, conventions, and prior art before claiming something doesn't fit.
 - **Exa Code Context** - Verify correct usage of libraries/APIs before flagging something as wrong.
 - **Web Search** - Research best practices if you're unsure about a pattern.
 

@@ -32,7 +32,7 @@
     },
     "mcp-metals": {
       "type": "remote",
-      "url": "http://localhost:54640/mcp",
+      "url": "http://localhost:8083/mcp",
       "enabled": false
     },
     "mcp-chrome-devtools": {

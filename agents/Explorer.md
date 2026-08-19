@@ -141,6 +141,7 @@ permission:
     "~/Library/Caches/Coursier/**": allow
   skill: allow
   question: allow
+  "mcp*": allow
   task:
     "*": deny
 ---

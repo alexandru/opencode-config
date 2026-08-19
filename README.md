@@ -34,6 +34,7 @@ git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
 Main agents:
 
 - `Orchestrator`: implements changes; delegates evidence, research, and checks.
+- `Solo`: independently performs reasoning, research, changes, and verification without delegation.
 
 Sub-agents:
 
@@ -42,6 +43,8 @@ Sub-agents:
 - `Librarian`: read-only external documentation and dependency-source research.
 
 ## Defined commands
+
+Commands use currently selected primary agent and do not override it; selecting Solo lets `/review` run as Solo.
 
 - `/plan`: prepare a detailed implementation plan and save it as a Markdown specification file.
 - `/grill-me`: stress-test a plan or decision.

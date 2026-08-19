@@ -15,6 +15,7 @@ permission:
   todowrite: deny
   skill: allow
   lsp: allow
+  "mcp*": allow
   task:
     "*": deny
   external_directory:

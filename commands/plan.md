@@ -60,4 +60,3 @@ During planning, until the handoff:
 
 - Operate in read-only mode except for creating or updating the plan file specified in step 3.
 - Do not make any other changes to project files or workspace state.
-- Delegate only to read-only specialist agents: **Explorer** and **Librarian**.
