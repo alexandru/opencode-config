@@ -14,7 +14,7 @@ permission:
   question: allow
   todowrite: allow
   skill: allow
-  lsp: allow
+  lsp: deny
   "mcp*": deny
   task:
     "*": deny

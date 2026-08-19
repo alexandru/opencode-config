@@ -1,7 +1,4 @@
 {
-  "scripts": {
-    "test": "node --test"
-  },
   "dependencies": {
     "@opencode-ai/plugin": "1.15.10",
     "comment-json": "^4.2.5"
