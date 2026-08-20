@@ -8,14 +8,14 @@ permission:
   write: allow
   apply_patch: allow
   read: allow
-  grep: allow
-  glob: allow
+  grep: deny
+  glob: deny
   webfetch: allow
   question: allow
   todowrite: allow
   skill: allow
-  lsp: allow
-  "mcp*": allow
+  lsp: deny
+  "mcp*": deny
   task:
     "*": deny
     Junior: allow
