@@ -10,7 +10,17 @@ git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
 
 `Orchestrator` is configured as the default agent in `opencode.common.jsonc`.
 
-**2)** Choose a model preset before first use and whenever you want to switch profiles:
+**2)** Install the shared third-party skills globally:
+
+```sh
+cd ~/.config/opencode
+make install-skills
+```
+
+The skills are installed under `~/.agents/skills`, where OpenCode, Copilot CLI,
+and Codex can share them.
+
+**3)** Choose a model preset before first use and whenever you want to switch profiles:
 
 ```sh
 # Example
@@ -50,7 +60,7 @@ Commands use currently selected primary agent and do not override it.
 - `/to-spec`: turn the current conversation into a published specification.
 - `/to-tickets`: break a plan or specification into tracer-bullet tickets.
 
-## Defined skills
+## Shared skills
 
 - [alexandru/skills](https://github.com/alexandru/skills/)
   - `simplify`: behavior-preserving code cleanup.
@@ -100,8 +110,10 @@ cellar --version
 cellar telemetry disable
 ```
 
-## Updating Skills
+## Updating shared skills
 
-```
+```sh
 make update-skills
 ```
+
+This reinstalls the configured global skill roster from its upstream sources.

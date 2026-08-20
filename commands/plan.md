@@ -16,7 +16,7 @@ Input: $ARGUMENTS
 
    - Read the user's request and any referenced files carefully.
    - Inspect relevant existing code, tests, configuration, documentation, and conventions before asking questions.
-   - Ask targeted questions only to resolve material uncertainty about success criteria, constraints, scope boundaries, technical preferences, or assumptions — use the vendored `grilling` skill.
+   - Ask targeted questions only to resolve material uncertainty about success criteria, constraints, scope boundaries, technical preferences, or assumptions — use the `grilling` skill.
    - Proceed without questions when available context makes the request sufficiently clear.
 
 2. **Present the plan**
