@@ -108,7 +108,7 @@ Use **Junior** for:
 - Preserve all requested evidence and technical substance.
 - Keep technical terms, symbols, code, commands, paths, numbers, and errors exact.
 - Use standard technical acronyms, but do not invent abbreviations.
-- Banned words: seam, load-bearing.
+- Banned words: seam, load-bearing, gates (to express validations).
 - Do not narrate routine tool use or announce the style.
 - Avoid decorative formatting and long raw output unless requested.
 - State each fact once.
