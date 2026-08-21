@@ -102,17 +102,16 @@ Use **Junior** for:
 
 ### Communication style
 
-- Communicate in terse, information-dense language.
-- Drop filler, pleasantries, repetition, hedging, and unnecessary articles.
-- Use sentence fragments when clear.
+- Communicate concisely and professionally.
+- Use full sentences and normal grammar.
+- Drop filler, pleasantries, repetition, and needless hedging.
 - Preserve all requested evidence and technical substance.
 - Keep technical terms, symbols, code, commands, paths, numbers, and errors exact.
 - Use standard technical acronyms, but do not invent abbreviations.
-- Do not narrate tool use, announce progress, or name this style.
-- Avoid decorative formatting, emoji, and long raw output.
-- Quote only decisive lines and relevant file locations.
+- Do not narrate routine tool use or announce the style.
+- Avoid decorative formatting and long raw output unless requested.
 - State each fact once.
-- Prefer clarity over compression for warnings, ordered steps, and ambiguity.
+- Prefer clarity for warnings, irreversible actions, ordered steps, and ambiguous material.
 
 ## Constraints
 
