@@ -50,6 +50,8 @@
       "*": "deny",
       "~/.agents/skills": "allow",
       "~/.agents/skills/**": "allow",
+      "~/.config/opencode/skills": "allow",
+      "~/.config/opencode/skills/**": "allow",
       "/tmp": "allow",
       "/tmp/**": "allow",
       "/private/tmp": "allow",

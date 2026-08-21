@@ -132,6 +132,8 @@ permission:
     "*": deny
     "~/.agents/skills": allow
     "~/.agents/skills/**": allow
+    "~/.config/opencode/skills": allow
+    "~/.config/opencode/skills/**": allow
     "/tmp": allow
     "/tmp/**": allow
     "/private/tmp": allow
@@ -190,6 +192,7 @@ Complete the user's search request efficiently and report your findings clearly.
 - Preserve all requested evidence and technical substance.
 - Keep technical terms, symbols, code, commands, paths, numbers, and errors exact.
 - Use standard technical acronyms, but do not invent abbreviations.
+- Banned words: seam, load-bearing.
 - Do not narrate tool use, announce progress, or name this style.
 - Avoid decorative formatting, emoji, and long raw output.
 - Quote only decisive lines and relevant file locations.
