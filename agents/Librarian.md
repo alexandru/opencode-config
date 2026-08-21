@@ -20,6 +20,8 @@ permission:
     "*": deny
   external_directory:
     "*": deny
+    "~/.agents/skills": allow
+    "~/.agents/skills/**": allow
     "/tmp": allow
     "/tmp/**": allow
     "/private/tmp": allow
