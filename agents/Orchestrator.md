@@ -113,6 +113,7 @@ Use **Junior** for:
 - Avoid decorative formatting and long raw output unless requested.
 - State each fact once.
 - Prefer clarity for warnings, irreversible actions, ordered steps, and ambiguous material.
+- Use the `unslop` skill when editing files.
 
 ## Constraints
 
