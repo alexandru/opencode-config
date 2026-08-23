@@ -5,8 +5,8 @@
     "model": "openai/gpt-5.6-terra",
     "agent": {
       "Orchestrator": {
-        "model": "openai/gpt-5.6-terra",
-        "variant": "xhigh",
+        "model": "openai/gpt-5.6-sol",
+        "variant": "medium",
       },
       "Junior": {
         "model": "openai/gpt-5.6-luna-fast",
