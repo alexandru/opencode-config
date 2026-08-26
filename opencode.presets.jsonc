@@ -14,11 +14,11 @@
       },
       "Explorer": {
         "model": "openai/gpt-5.6-luna-fast",
-        "variant": "medium",
+        "variant": "high",
       },
       "Librarian": {
         "model": "openai/gpt-5.6-luna-fast",
-        "variant": "medium",
+        "variant": "high",
       },
     },
   },

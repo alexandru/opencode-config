@@ -66,6 +66,7 @@
   "plugin": [
     "./plugins/opencode-codex-identity-plugin.ts"
   ],
+  /*
   "provider": {
     "openai": {
       "models": {
@@ -122,6 +123,7 @@
       },
     },
   },
+  */
   "disabled_providers": [
     "opencode"
   ]
