@@ -64,10 +64,10 @@ Commands use currently selected primary agent and do not override it.
 ## Shared skills
 
 - [alexandru/skills](https://github.com/alexandru/skills/)
+  - `code-review`: review changed code for bugs, structural problems, performance issues, and unintended behavior.
   - `simplify`: behavior-preserving code cleanup.
 - [mattpocock/skills](https://github.com/mattpocock/skills/tree/v1.2.3)
   - `codebase-design`: deep-module design vocabulary and principles.
-  - `code-review`: review changes against repository standards and the originating specification.
   - `diagnosing-bugs`: disciplined diagnosis for hard bugs and regressions.
   - `domain-modeling`: domain language and architectural decisions.
   - `grill-with-docs`: sharpen a plan or design while creating domain documentation.
