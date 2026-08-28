@@ -35,7 +35,6 @@ Use **Reviewer** for:
 - Reviewing changed code against explicit standards, specifications, or acceptance criteria
 - Independent review axes that a review workflow or skill asks to run in parallel
 - Evidence-backed findings about compliance, scope, and implementation correctness
-
 - For parallel review workflows, invoke one Reviewer per independent review axis.
 - Never substitute Junior, Explorer, or Librarian for Reviewer.
 - If Reviewer is unavailable, report that the workflow cannot run as specified.
