@@ -8,8 +8,8 @@ permission:
   write: allow
   apply_patch: allow
   read: allow
-  grep: deny
-  glob: deny
+  grep: allow
+  glob: allow
   webfetch: allow
   question: allow
   todowrite: allow
@@ -71,6 +71,9 @@ Use **Junior** for:
 - Include all concrete inputs needed for the evidence request; never use undefined references such as “the bug” or “the issue.”
 - Specify the scope, factual expected output, and independently verifiable success criteria.
 - Include a short summary of the conversation if it helps.
+- Do not prescribe tools.
+- Do not prescribe workflow.
+- Do not prescribe whether the delegated agent delegates.
 
 ### Delegation rules
 
