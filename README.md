@@ -55,7 +55,6 @@ Commands use currently selected primary agent and do not override it.
 - `/handoff`: prepare context for another agent or session.
 - `/implement`: implement work from a specification or set of tickets.
 - `/improve-codebase-architecture`: find and work through codebase architecture improvements.
-- `/review`: review uncommitted changes, a commit, a branch, or a pull request.
 - `/setup-matt-pocock-skills`: configure the repository for Matt Pocock's engineering skills.
 - `/simplify`: simplify code without changing its behavior.
 - `/to-spec`: turn the current conversation into a published specification.

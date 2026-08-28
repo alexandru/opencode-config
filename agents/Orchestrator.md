@@ -54,10 +54,9 @@ Pass every known repository URL, documentation URL, artifact coordinate, version
 
 Use **Junior** for:
 
-- All command execution, including Git inspection, build, test, typecheck, lint, and format commands
-- Mechanical command/fix loops with predictable remedies
+- Building, testing, typechecking, linting, and formatting commands
+- Mechanical edits/fixes, including fix loops with predictable remedies
 - Fully specified refactors, renames, and repetitive edits
-- Codebase exploration requiring shell tools unavailable to Explorer
 
 ### Planning
 
