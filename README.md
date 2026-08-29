@@ -38,6 +38,36 @@ and Codex can share them.
 - `opencode.presets.jsonc`
 </details>
 
+<details>
+<summary>STEP 4 (optional) — Install Cellar (tooling)</summary>
+
+[Cellar](https://github.com/VirtusLab/cellar) is useful for JVM dependency API lookup, and this repo's [Makefile](./Makefile) also installs its associated skill.
+
+Install [Coursier](https://get-coursier.io/docs/cli-installation) first:
+
+```sh
+## MacOS
+brew install coursier/formulas/coursier
+cs setup
+
+## Linux x86-64 (aka AMD64)
+curl -fL "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz" | gzip -d > cs
+
+## Linux ARM64
+curl -fL "https://github.com/VirtusLab/coursier-m1/releases/latest/download/cs-aarch64-pc-linux.gz" | gzip -d > cs
+```
+
+Then install Cellar via Coursier:
+
+```sh
+cs install --contrib cellar
+cellar --version
+
+# Disable telemetry
+cellar telemetry disable
+```
+</details>
+
 ## Defined agents
 
 Main agents:
@@ -90,32 +120,6 @@ Commands use currently selected primary agent and do not override it.
   - `caveman`: token-efficient response modes with preserved technical accuracy.
 - [cursor/plugins](https://github.com/cursor/plugins/tree/main/pstack/skills/unslop)
   - `unslop`: remove AI writing patterns and add a human voice.
-
-### Cellar
-
-Install [Coursier](https://get-coursier.io/docs/cli-installation) first:
-
-```sh
-## MacOS
-brew install coursier/formulas/coursier
-cs setup
-
-## Linux x86-64 (aka AMD64)
-curl -fL "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz" | gzip -d > cs
-
-## Linux ARM64
-curl -fL "https://github.com/VirtusLab/coursier-m1/releases/latest/download/cs-aarch64-pc-linux.gz" | gzip -d > cs
-```
-
-Install [Cellar](https://github.com/VirtusLab/cellar) for JVM dependency API lookup:
-
-```sh
-cs install --contrib cellar
-cellar --version
-
-# Disable telemetry
-cellar telemetry disable
-```
 
 ## Updating shared skills
 
