@@ -7,13 +7,17 @@ Part of [alexandru/agents-config](https://github.com/alexandru/agents-config).
 <details>
 <summary>STEP 1 — Clone the repository</summary>
 
+### Clone the repository
+
 ```sh
 git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
 ```
 </details>
 
 <details>
-<summary>STEP 2 — Install the shared third-party skills globally</summary>
+<summary>STEP 2 — Install the shared skills globally</summary>
+
+### Install the shared skills globally
 
 ```sh
 cd ~/.config/opencode
@@ -26,6 +30,8 @@ and Codex can share them.
 
 <details>
 <summary>STEP 3 — Choose a configuration preset</summary>
+
+### Choose a configuration preset
 
 The [oc-switch](./bin/oc-switch.js) utility allows is for quickly switching between multiple setting presents (e.g., multiple sets of models assigned to your agents).
 
@@ -44,7 +50,9 @@ The switcher generates `opencode.jsonc` (OpenCode's configuration file) from:
 </details>
 
 <details>
-<summary>STEP 4 — (optional) Install Cellar</summary>
+<summary>STEP 4 — Install Cellar (optional)</summary>
+
+### Install Cellar (optional)
 
 [Cellar](https://github.com/VirtusLab/cellar) is useful for JVM dependency API lookup, and this repo's [Makefile](./Makefile) also installs its associated skill.
 
