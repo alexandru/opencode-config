@@ -1,5 +1,7 @@
 # My OpenCode configuration
 
+Part of [alexandru/agents-config](https://github.com/alexandru/agents-config).
+
 ## Installation
 
 **1)** Clone the repository into OpenCode's global configuration directory:

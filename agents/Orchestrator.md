@@ -85,6 +85,13 @@ The following applies for specialist agents (i.e., Explorer, Librarian, Junior):
 - Do not ask for an “inconsistency explaining the bug,” a root cause, an intended behavior, or a recommendation.
 - A specialist agent may report factual differences between code paths, but must not decide which difference is a bug or whether it explains one.
 
+**Specialist priorities:**
+
+- Use the least powerful and most token/cost efficient tool available for a job.
+- MUST NOT use Explorer if all you want is to read a small file.
+- MUST NOT use Librarian for tasks that can be handled by Explorer.
+- MUST NOT use Junior for tasks that can be handled by Explorer or Librarian.
+
 **Unknown behavior:**
 
 - If observed and expected behavior are not established, ask the user rather than guessing.
