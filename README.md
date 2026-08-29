@@ -85,7 +85,7 @@ cellar telemetry disable
 
 Main agents:
 
-- [Orchestrator](./agents/Orchestrator.md) (default agent): implements changes; delegates evidence, research, and checks.
+- [Orchestrator](./agents/Orchestrator.md) (default agent): designs and implements changes; delegates evidence, research, and checks.
 
 Sub-agents:
 
