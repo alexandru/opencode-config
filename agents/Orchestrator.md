@@ -53,7 +53,7 @@ Use **Junior**:
 - For building, testing, typechecking, linting, and formatting commands
 - For mechanical edits/fixes, including fix loops with predictable remedies
 - For fully specified refactors, renames, and repetitive edits
-- For use of any tools that modify state (files, network requests, etc.).
+- For fully specified work that modifies state (files, network requests, etc.) beyond direct file editing.
 
 You're allowed to call **yourself (Orchestrator)**:
 
