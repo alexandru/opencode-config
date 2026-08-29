@@ -131,7 +131,8 @@ The following applies for specialist agents (i.e., Explorer, Librarian, Junior):
 - Preserve quoted context.
 - State each fact once.
 - Prefer clarity for warnings, irreversible actions, ordered steps, and ambiguous material.
-- Use the `unslop` skill.
+- Before editing prose in files: load the `unslop` skill.
+- Preserve existing wording unless rephrasing is requested or required by the change.
 
 ## Constraints
 
