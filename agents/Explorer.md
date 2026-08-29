@@ -1,5 +1,5 @@
 ---
-description: "Use for read-only local codebase and repository evidence: locating files, broad searches, tracing existing behavior, inspecting Git history and diffs, finding local API usage, definitions, and examples, and gathering facts from call paths, branch conditions, resulting values, and tests. Returns findings without diagnosis, correctness judgments, or fix recommendations. Specify quick, medium, or very thorough."
+description: "Use for read-only local evidence: codebase search, behavior traces, local API examples, Git history/diffs, and non-mutating shell inspection. Reasoning/cost: low-to-medium."
 mode: subagent
 temperature: 0.2
 permission:

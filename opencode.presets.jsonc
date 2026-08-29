@@ -96,20 +96,23 @@
   // GitHub Copilot
   "w-copilot": {
     "extends": ["w-common"],
-    "model": "github-copilot/gpt-5.3-codex",
+    "model": "github-copilot/grok-4.6",
     "agent": {
       "Orchestrator": {
-        "model": "github-copilot/gpt-5.3-codex",
+        "model": "github-copilot/grok-4.6",
         "variant": "medium",
       },
       "Junior": {
-        "model": "github-copilot/claude-haiku-4.5",
+        "model": "github-copilot/gemini-3.7-flash",
+        "variant": "high",
       },
       "Explorer": {
-        "model": "github-copilot/claude-haiku-4.5",
+        "model": "github-copilot/mai-code-1.1-flash",
+        "variant": "high",
       },
       "Librarian": {
-        "model": "github-copilot/claude-haiku-4.5",
+        "model": "github-copilot/mai-code-1.1-flash",
+        "variant": "high",
       },
     },
   },
