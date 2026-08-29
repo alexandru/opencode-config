@@ -4,15 +4,18 @@ Part of [alexandru/agents-config](https://github.com/alexandru/agents-config).
 
 ## Installation
 
-**1)** Clone the repository into OpenCode's global configuration directory:
+<details>
+<summary>STEP 1 — Clone the repository</summary>
 
 ```sh
 git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
 ```
 
 `Orchestrator` is configured as the default agent in `opencode.common.jsonc`.
+</details>
 
-**2)** Install the shared third-party skills globally:
+<details>
+<summary>STEP 2 — Install the shared third-party skills globally</summary>
 
 ```sh
 cd ~/.config/opencode
@@ -21,8 +24,10 @@ make install-skills
 
 The skills are installed under `~/.agents/skills`, where OpenCode, Copilot CLI,
 and Codex can share them.
+</details>
 
-**3)** Choose a model preset before first use and whenever you want to switch profiles:
+<details>
+<summary>STEP 3 — Choose a model preset</summary>
 
 ```sh
 # Example
@@ -33,6 +38,7 @@ and Codex can share them.
 
 - `opencode.common.jsonc`
 - `opencode.presets.jsonc`
+</details>
 
 ## Defined agents
 
