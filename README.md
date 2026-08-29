@@ -10,8 +10,6 @@ Part of [alexandru/agents-config](https://github.com/alexandru/agents-config).
 ```sh
 git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
 ```
-
-`Orchestrator` is configured as the default agent in `opencode.common.jsonc`.
 </details>
 
 <details>
