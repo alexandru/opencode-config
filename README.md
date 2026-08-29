@@ -36,12 +36,12 @@ and Codex can share them.
 
 Main agents:
 
-- `Orchestrator` (default agent): implementation agent — owns reasoning, judgment, diagnosis, solutions, substantive changes, and integration; delegates evidence gathering, external research, verification, and state-changing work.
+- `Orchestrator` (default agent): owns solution design and substantive code changes; delegates review, searches, verification, and mechanical work.
 
 Sub-agents:
 
-- `Junior`: focused executor for builds, tests, typechecking, linting, formatting, mechanical edits, specified refactors, and delegated state-changing tool use.
-- `Explorer`: fast, read-only codebase evidence gathering.
+- `Junior`: bounded execution and shell-assisted exploration.
+- `Explorer`: read-only codebase evidence gathering.
 - `Librarian`: read-only external documentation and dependency-source research.
 
 ## Defined commands
