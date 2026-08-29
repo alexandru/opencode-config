@@ -46,7 +46,7 @@ Main agents:
 
 Sub-agents:
 
-- `Junior`: bounded execution and shell-assisted exploration.
+- `Junior`: bounded execution, mechanical work.
 - `Explorer`: read-only codebase evidence gathering.
 - `Librarian`: read-only external documentation and dependency-source research.
 
