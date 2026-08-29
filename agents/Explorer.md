@@ -1,5 +1,5 @@
 ---
-description: "Fast read-only agent specialized in finding codebase evidence: files, symbols, usages, call paths, behavior, and tests. Returns factual findings for the caller to interpret; does not diagnose bugs, infer intended behavior, judge correctness, or recommend fixes. When calling this agent, specify the desired thoroughness level: \"quick\" for basic searches, \"medium\" for moderate exploration, or \"very thorough\" for comprehensive analysis across multiple locations and naming conventions."
+description: "Use for read-only local codebase and repository evidence: locating files, broad searches, tracing existing behavior, inspecting Git history and diffs, finding local API usage, definitions, and examples, and gathering facts from call paths, branch conditions, resulting values, and tests. Returns findings without diagnosis, correctness judgments, or fix recommendations. Specify quick, medium, or very thorough."
 mode: subagent
 temperature: 0.2
 permission:

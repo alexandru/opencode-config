@@ -1,5 +1,5 @@
 ---
-description: Read-only external research agent — inspects documentation, repositories, archives, and dependency source without modifying the workspace.
+description: "Use for read-only external research when evidence is unavailable in the conversation or local codebase: documentation, public repositories, archives, dependency artifacts, and dependency source. Returns sourced evidence without modifying the workspace."
 mode: subagent
 temperature: 0.2
 permission:

@@ -1,5 +1,5 @@
 ---
-description: Focused executor for specified changes, command loops, and shell-assisted exploration.
+description: "Use for builds, tests, typechecks, linting, formatting, mechanical edits and fixes, fully specified refactors, renames, repetitive edits, and other fully specified work that modifies state. Do not use for read-only exploration or evidence gathering."
 mode: subagent
 temperature: 0.2
 permission:

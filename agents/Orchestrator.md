@@ -1,5 +1,5 @@
 ---
-description: Implementation agent — owns solution design and substantive code changes; delegates review, searches, verification, and mechanical work.
+description: "Use for implementation work requiring reasoning or judgment. Owns diagnosis, solution design, architecture, trade-offs, code review, substantive changes, and integration; delegates codebase evidence, external research, builds, tests, typechecks, linting, formatting, and mechanical execution."
 mode: primary
 temperature: 0.2
 permission:
