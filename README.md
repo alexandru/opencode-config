@@ -27,7 +27,7 @@ and Codex can share them.
 <details>
 <summary>STEP 3 — Choose a model preset</summary>
 
-The [oc-switch](./bin/oc-switch.js) utility allows is for quickly switching between multiple setting presents, for example to help with switching between the set of models you're using.
+The [oc-switch](./bin/oc-switch.js) utility allows is for quickly switching between multiple setting presents (e.g., multiple sets of models assigned to your agents).
 
 ```sh
 # Example
