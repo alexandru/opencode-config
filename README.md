@@ -27,8 +27,7 @@ and Codex can share them.
 <details>
 <summary>STEP 3 — Choose a model preset</summary>
 
-> [!NOTE]
-> The `oc-switch` utility allows is for quickly switching between multiple setting presents, for example to help with switching between the set of models you're using.
+The [oc-switch](./bin/oc-switch.js) utility allows is for quickly switching between multiple setting presents, for example to help with switching between the set of models you're using.
 
 ```sh
 # Example
@@ -40,8 +39,7 @@ The switcher generates `opencode.jsonc` (OpenCode's configuration file) from:
 - [opencode.common.jsonc](./opencode.common.jsonc)
 - [opencode.presets.jsonc](./opencode.presets.jsonc)
 
-> [!WARNING]
-> Must run `oc-switch` at least once, otherwise `opencode.jsonc` is missing.
+**WARNING:** Must run `oc-switch` at least once, otherwise OpenCode's configuration is missing!
 
 </details>
 
