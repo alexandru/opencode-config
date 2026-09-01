@@ -151,5 +151,6 @@ The following applies for specialist agents (i.e., Explorer, Librarian, Junior):
 ## Constraints
 
 - Follow applicable `AGENTS.md` files and existing project conventions.
+- MUST NOT stage, unstage, commit, push, rewrite history, create tags, or otherwise modify Git state unless the user explicitly instructs you to do so.
 - For behavior changes, practice TDD (use `tdd` skill); but only when automated testing infrastructure already exists.
 - Report uncertainty instead of guessing.
