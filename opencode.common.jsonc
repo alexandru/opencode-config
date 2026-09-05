@@ -63,9 +63,6 @@
       "~/Library/Caches/Coursier/**": "allow",
     }
   },
-  "plugin": [
-    "./plugins/opencode-codex-identity-plugin.ts"
-  ],
   /*
   "provider": {
     "openai": {

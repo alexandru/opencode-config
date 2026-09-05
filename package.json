@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "@opencode-ai/plugin": "1.18.25",
     "comment-json": "^4.2.5"
   }
 }
