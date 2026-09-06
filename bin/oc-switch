@@ -9,8 +9,8 @@ while [ -L "$SCRIPT" ]; do
 done
 SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT")" && pwd)"
 
-# Change to the repository root (parent of bin/)
-cd "$SCRIPT_DIR/.." || exit 1
+# Change to the script directory
+cd "$SCRIPT_DIR" || exit 1
 
 # Run npm install if node_modules doesn't exist or package.json is newer
 if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
@@ -18,4 +18,5 @@ if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
 fi
 
 # Execute the Node.js script
+cd "$SCRIPT_DIR/.." || exit 1
 exec node "$SCRIPT_DIR/oc-switch.js" "$@"
