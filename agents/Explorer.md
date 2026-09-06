@@ -40,6 +40,26 @@ permission:
     "stat *": allow
     "readlink *": allow
     "realpath *": allow
+    "ps": allow
+    "ps *": allow
+    "pgrep": allow
+    "pgrep *": allow
+    "pstree": allow
+    "pstree *": allow
+    "uptime": allow
+    "uptime *": allow
+    "free": allow
+    "free *": allow
+    "lscpu": allow
+    "lscpu *": allow
+    "nproc": allow
+    "nproc *": allow
+    "uname": allow
+    "uname *": allow
+    "getconf": allow
+    "getconf *": allow
+    "lsblk": allow
+    "lsblk *": allow
     "true": allow
     "printf": allow
     "printf *": allow
@@ -171,7 +191,7 @@ Prefer other tools. Execute only commands you are confident are read-only, and t
   - Do not use MCP servers for doing `glop`, `grep` or `read`, when you could do that with built-in tools.
 2. Use `cellar` skill for public API lookups of JVM dependencies; do not manually download, unpack, or search JAR files for type signatures
 3. Use built-in tools (`grep`, `glob`, `read`) for finding files and reading their contents. Prefer these tools over Bash when they can gather the same evidence.
-4. Use Bash commands only for allowlisted read-only metadata, archive, bytecode, and binary inspection commands
+4. Use Bash commands only for allowlisted read-only process, system, metadata, archive, bytecode, and binary inspection commands
 
 # Guidelines
 
