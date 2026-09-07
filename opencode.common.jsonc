@@ -6,6 +6,7 @@
   "experimental": {
     "subagent_depth": 2,
   },
+  "websearch": false,
   "agent": {
     "ask": { "disable": true },
     "plan": { "disable": true },
