@@ -133,6 +133,8 @@ Commands use currently selected primary agent and do not override it.
   - `caveman`: token-efficient response modes with preserved technical accuracy.
 - [cursor/plugins](https://github.com/cursor/plugins/tree/main/pstack/skills/unslop)
   - `unslop`: remove AI writing patterns and add a human voice.
+- [brave/brave-search-skills](https://github.com/brave/brave-search-skills)
+  - `web-search`: ranked web search with snippets and rich metadata.
 
 ## Updating shared skills
 
