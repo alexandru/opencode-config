@@ -8,6 +8,7 @@ permission:
   plan_enter: deny
   plan_exit: deny
   skill: allow
+  webfetch: allow
   "mcp*": allow
   task:
     "*": deny

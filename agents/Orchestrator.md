@@ -10,7 +10,7 @@ permission:
   read: allow
   grep: allow
   glob: allow
-  webfetch: allow
+  webfetch: deny
   question: allow
   todowrite: allow
   skill: allow

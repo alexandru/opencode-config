@@ -164,6 +164,7 @@ permission:
     "~/.cache/coursier/**": allow
     "~/Library/Caches/Coursier/**": allow
   skill: allow
+  webfetch: allow
   question: allow
   "mcp*": allow
   task:
