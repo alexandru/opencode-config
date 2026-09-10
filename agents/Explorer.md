@@ -40,6 +40,7 @@ permission:
     "stat *": allow
     "readlink *": allow
     "realpath *": allow
+    "pwd": allow
     "ps": allow
     "ps *": allow
     "pgrep": allow
