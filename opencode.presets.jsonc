@@ -44,10 +44,10 @@
   // ----------------------------------------------------------------------------------
   // Pure DeepSeek
   "p-deepseek": {
-    "model": "opencode-go/deepseek-v4-pro",
+    "model": "opencode-go/deepseek-v4.1-flash",
     "agent": {
       "Orchestrator": {
-        "model": "opencode-go/deepseek-v4.1-pro",
+        "model": "opencode-go/deepseek-v4.1-flash",
         "variant": "max",
       },
       "Junior": {
