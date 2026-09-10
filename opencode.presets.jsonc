@@ -2,11 +2,11 @@
   // ----------------------------------------------------------------------------------
   // Pure OpenAI / ChatGPT
   "p-openai": {
-    "model": "openai/gpt-5.6-sol",
+    "model": "openai/gpt-5.6-terra",
     "agent": {
       "Orchestrator": {
-        "model": "openai/gpt-5.6-sol",
-        "variant": "medium",
+        "model": "openai/gpt-5.6-terra",
+        "variant": "high",
       },
       "Junior": {
         "model": "openai/gpt-5.6-luna",
@@ -28,16 +28,16 @@
     "extends": ["p-openai"],
     "agent": {
       "Junior": {
-        "model": "opencode-go/deepseek-v4-flash",
+        "model": "opencode-go/deepseek-v4.1-flash",
         "variant": "max",
       },
       "Explorer": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max",
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "low",
       },
       "Librarian": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max",
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "low",
       },
     },
   },
@@ -47,20 +47,20 @@
     "model": "opencode-go/deepseek-v4-pro",
     "agent": {
       "Orchestrator": {
-        "model": "opencode-go/deepseek-v4-pro",
+        "model": "opencode-go/deepseek-v4.1-pro",
         "variant": "max",
       },
       "Junior": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "max",
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "high",
       },
       "Explorer": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "high",
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "low",
       },
       "Librarian": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "variant": "high",
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "low",
       },
     },
   },
@@ -121,5 +121,8 @@
   },
   "w-mix-go": {
     "extends": ["w-common", "p-mix-go"],
+  },
+  "w-deepseek": {
+    "extends": ["w-common", "p-deepseek"],
   },
 }
