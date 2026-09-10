@@ -28,7 +28,7 @@
   "mcp": {
     "mcp-intellij-idea": {
       "type": "remote",
-      "url": "http://localhost:64342/sse",
+      "url": "http://localhost:64342/stream",
       "enabled": false
     },
     "mcp-metals": {

@@ -5,20 +5,20 @@
     "model": "openai/gpt-5.6-terra",
     "agent": {
       "Orchestrator": {
-        "model": "openai/gpt-5.6-sol",
+        "model": "openai/gpt-5.6-terra",
         "variant": "high",
       },
       "Junior": {
-        "model": "openai/gpt-5.6-luna-fast",
+        "model": "openai/gpt-5.6-luna",
         "variant": "high",
       },
       "Explorer": {
-        "model": "openai/gpt-5.6-luna-fast",
-        "variant": "high",
+        "model": "openai/gpt-5.6-luna",
+        "variant": "medium",
       },
       "Librarian": {
-        "model": "openai/gpt-5.6-luna-fast",
-        "variant": "high",
+        "model": "openai/gpt-5.6-luna",
+        "variant": "medium",
       },
     },
   },
@@ -71,7 +71,7 @@
     "common": true,
     "mcp": {
       "mcp-intellij-idea": {
-        "url": "http://host.docker.internal:64342/sse",
+        "url": "http://host.docker.internal:64342/stream",
         "headers": {
           "Host": "localhost:64342",
         },
