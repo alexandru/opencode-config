@@ -25,7 +25,7 @@ make install-skills
 ```
 
 The skills are installed under `~/.agents/skills`, where OpenCode, Copilot CLI,
-and Codex can share them.
+Codex, and Pi can share them.
 </details>
 
 <details>
@@ -33,7 +33,7 @@ and Codex can share them.
 
 ### Choose a configuration preset
 
-The [oc-switch](./bin/oc-switch.js) utility allows is for quickly switching between multiple setting presents (e.g., multiple sets of models assigned to your agents).
+The [oc-switch](./bin/oc-switch.js) utility is for quickly switching between multiple setting presets (e.g., multiple sets of models assigned to your agents).
 
 ```sh
 # Example
@@ -95,14 +95,13 @@ Sub-agents:
 
 ## Defined commands
 
-Commands use currently selected primary agent and do not override it.
-
 - `/plan`: prepare a detailed implementation plan and save it as a Markdown specification file.
 - `/grill-me`: stress-test a plan or decision.
 - `/grill-with-docs`: sharpen a plan or design while creating domain documentation.
 - `/handoff`: prepare context for another agent or session.
 - `/implement`: implement work from a specification or set of tickets.
 - `/improve-codebase-architecture`: find and work through codebase architecture improvements.
+- `/review`: review uncommitted changes, a commit, a branch, or a pull request.
 - `/setup-matt-pocock-skills`: configure the repository for Matt Pocock's engineering skills.
 - `/simplify`: simplify code without changing its behavior.
 - `/to-spec`: turn the current conversation into a published specification.
