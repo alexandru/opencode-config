@@ -8,6 +8,10 @@
         "model": "openai/gpt-5.6-terra",
         "variant": "high",
       },
+      "Solo": {
+        "model": "openai/gpt-5.6-terra",
+        "variant": "high",
+      },
       "Junior": {
         "model": "openai/gpt-5.6-luna",
         "variant": "high",
@@ -47,6 +51,10 @@
     "model": "opencode-go/deepseek-v4.1-flash",
     "agent": {
       "Orchestrator": {
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "max",
+      },
+      "Solo": {
         "model": "opencode-go/deepseek-v4.1-flash",
         "variant": "max",
       },
@@ -99,6 +107,10 @@
     "model": "github-copilot/grok-4.6",
     "agent": {
       "Orchestrator": {
+        "model": "github-copilot/grok-4.6",
+        "variant": "medium",
+      },
+      "Solo": {
         "model": "github-copilot/grok-4.6",
         "variant": "medium",
       },
