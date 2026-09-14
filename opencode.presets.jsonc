@@ -104,27 +104,25 @@
   // GitHub Copilot
   "w-copilot": {
     "extends": ["w-common"],
-    "model": "github-copilot/grok-4.6",
+    "model": "github-copilot/claude-sonnet-5",
     "agent": {
       "Orchestrator": {
-        "model": "github-copilot/grok-4.6",
-        "variant": "medium",
+        "model": "github-copilot/claude-sonnet-5",
+        "variant": "high",
       },
       "Solo": {
-        "model": "github-copilot/grok-4.6",
-        "variant": "medium",
+        "model": "github-copilot/claude-sonnet-5",
+        "variant": "high",
       },
       "Junior": {
-        "model": "github-copilot/gemini-3.7-flash",
-        "variant": "high",
+        "model": "github-copilot/claude-sonnet-5",
+        "variant": "low",
       },
       "Explorer": {
-        "model": "github-copilot/mai-code-1.1-flash",
-        "variant": "high",
+        "model": "github-copilot/claude-haiku-4.5",
       },
       "Librarian": {
-        "model": "github-copilot/mai-code-1.1-flash",
-        "variant": "high",
+        "model": "github-copilot/claude-haiku-4.5",
       },
     },
   },
