@@ -9,4 +9,3 @@ Load the `code-review` skill and use it to review the selected changes.
 Input: $ARGUMENTS
 
 ---
-

@@ -15,6 +15,7 @@ check-mattpocock-skills-tag:
 install-skills:
 	npx skills add https://github.com/alexandru/skills/ $(SKILLS_INSTALL_FLAGS) --skill \
 		code-review \
+		code-reviewing \
 		simplify
 	npx skills add https://github.com/mattpocock/skills/tree/$(MATTPOCOCK_SKILLS_TAG) $(SKILLS_INSTALL_FLAGS) --skill \
 		codebase-design \
