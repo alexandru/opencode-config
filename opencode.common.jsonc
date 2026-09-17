@@ -17,34 +17,26 @@
   },
   "lsp": {
     "kotlin-lsp": {
-      "command": [
-        "kotlin-lsp"
-      ],
-      "extensions": [
-        ".kt"
-      ]
-    }
+      "command": ["kotlin-lsp"],
+      "extensions": [".kt"],
+    },
   },
   "mcp": {
     "mcp-intellij-idea": {
       "type": "remote",
       "url": "http://localhost:64342/stream",
-      "enabled": false
+      "enabled": false,
     },
     "mcp-metals": {
       "type": "remote",
       "url": "http://localhost:8083/mcp",
-      "enabled": false
+      "enabled": false,
     },
     "mcp-chrome-devtools": {
       "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "chrome-devtools-mcp@latest"
-      ],
-      "enabled": false
-    }
+      "command": ["npx", "-y", "chrome-devtools-mcp@latest"],
+      "enabled": false,
+    },
   },
   "permission": {
     "external_directory": {
@@ -62,67 +54,7 @@
       "~/.ivy2/cache/**": "allow",
       "~/.cache/coursier/**": "allow",
       "~/Library/Caches/Coursier/**": "allow",
-    }
-  },
-  /*
-  "provider": {
-    "openai": {
-      "models": {
-        "gpt-5.6-sol": {
-          "limit": {
-            "context": 272000,
-            "output": 128000,
-          },
-        },
-        "gpt-5.6-luna": {
-          "limit": {
-            "context": 272000,
-            "output": 128000,
-          },
-        },
-        "gpt-5.6-terra": {
-          "limit": {
-            "context": 272000,
-            "output": 128000,
-          },
-        },
-      },
-    },
-    "deepseek": {
-      "models": {
-        "deepseek-v4-pro": {
-          "limit": {
-            "context": 272000,
-            "output": 128000,
-          },
-        },
-        "deepseek-v4-flash": {
-          "limit": {
-            "context": 272000,
-            "output": 128000,
-          },
-        },
-      },
-    },
-    "opencode-go": {
-      "models": {
-        "deepseek-v4-pro": {
-          "limit": {
-            "context": 272000,
-            "output": 128000,
-          },
-        },
-        "deepseek-v4-flash": {
-          "limit": {
-            "context": 272000,
-            "output": 128000,
-          },
-        },
-      },
     },
   },
-  */
-  "disabled_providers": [
-    "opencode"
-  ]
+  "disabled_providers": ["opencode"],
 }
