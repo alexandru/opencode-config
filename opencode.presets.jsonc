@@ -37,11 +37,11 @@
       },
       "Explorer": {
         "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "low",
+        "variant": "high",
       },
       "Librarian": {
         "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "low",
+        "variant": "high",
       },
     },
   },
