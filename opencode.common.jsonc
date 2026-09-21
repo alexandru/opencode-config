@@ -7,6 +7,41 @@
     "subagent_depth": 2,
   },
   "websearch": false,
+  "plugins": [
+    {
+      "package": "./plugins/shell-safety",
+      "options": {
+        "endpoint": "https://opencode.ai/zen/v1/systemone",
+        "model": "jev-1.13",
+        "integration": "opencode",
+        "allowProbability": 0.45,
+        "violationProbability": 0.4,
+        "timeoutMs": 15000,
+        "maxAttempts": 2,
+        "retryDelayMs": 250,
+        "cache": {
+          "capacity": 256,
+          "ttlMs": 300000
+        },
+        "agents": {
+          "Explorer": {
+            "http": {
+              "methods": [],
+              "credentials": {}
+            }
+          },
+          "Librarian": {
+            "http": {
+              "methods": ["GET", "HEAD"],
+              "credentials": {
+                "BRAVE_SEARCH_API_KEY": ["api.search.brave.com"]
+              }
+            }
+          }
+        }
+      },
+    },
+  ],
   "agent": {
     "ask": { "disable": true },
     "plan": { "disable": true },

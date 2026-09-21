@@ -6,7 +6,110 @@ permission:
   edit: deny
   write: deny
   apply_patch: deny
-  bash: allow
+  bash:
+    "*": ask
+    "cellar": allow
+    "cellar *": allow
+    "which *": allow
+    "command -v *": allow
+    "stat *": allow
+    "readlink *": allow
+    "realpath *": allow
+    "pwd": allow
+    "ps": allow
+    "ps *": allow
+    "pgrep": allow
+    "pgrep *": allow
+    "pstree": allow
+    "pstree *": allow
+    "uptime": allow
+    "uptime *": allow
+    "free": allow
+    "free *": allow
+    "lscpu": allow
+    "lscpu *": allow
+    "nproc": allow
+    "nproc *": allow
+    "uname": allow
+    "uname *": allow
+    "getconf": allow
+    "getconf *": allow
+    "lsblk": allow
+    "lsblk *": allow
+    "true": allow
+    "printf": allow
+    "printf *": allow
+    "grep": allow
+    "grep *": allow
+    "head": allow
+    "head *": allow
+    "tail": allow
+    "tail *": allow
+    "tr": allow
+    "tr *": allow
+    "cat": allow
+    "cat *": allow
+    "cut": allow
+    "cut *": allow
+    "comm": allow
+    "comm *": allow
+    "join": allow
+    "join *": allow
+    "paste": allow
+    "paste *": allow
+    "nl": allow
+    "nl *": allow
+    "fold": allow
+    "fold *": allow
+    "fmt": allow
+    "fmt *": allow
+    "expand": allow
+    "expand *": allow
+    "unexpand": allow
+    "unexpand *": allow
+    "uniq": allow
+    "uniq *": allow
+    "wc": allow
+    "wc *": allow
+    "sha256sum *": allow
+    "sha512sum *": allow
+    "md5sum *": allow
+    "cmp *": allow
+    "od *": allow
+    "hexdump *": allow
+    "strings *": allow
+    "readelf *": allow
+    "objdump *": allow
+    "nm *": allow
+    "c++filt *": allow
+    "jmod list *": allow
+    "jimage info *": allow
+    "jimage list *": allow
+    "jimage verify *": allow
+    "git ls-remote *": allow
+    "git -C /tmp/opencode-librarian/* remote get-url origin": allow
+    "git -C /tmp/opencode-librarian/* worktree list*": allow
+    "mkdir -p /tmp/opencode-librarian/*": allow
+    "git clone * /tmp/opencode-librarian/*": allow
+    "git -C /tmp/opencode-librarian/* fetch *": allow
+    "git -C /tmp/opencode-librarian/* worktree add /tmp/opencode-librarian/*": allow
+    "mvn -v": allow
+    "mvn * dependency:get *-Dmaven.repo.local=/tmp/opencode-librarian/*": allow
+    "mvn * -f /tmp/opencode-librarian/* dependency:tree *-Dmaven.repo.local=/tmp/opencode-librarian/*": allow
+    "cat > /tmp/opencode-librarian/*": allow
+    "jar tf *": allow
+    "jar --list *": allow
+    "unzip -l *": allow
+    "unzip -p *": allow
+    "zipinfo *": allow
+    "tar -tf *": allow
+    "tar * -C /tmp/opencode-librarian/*": allow
+    "ar t *": allow
+    "ar p *": allow
+    "git -C * push*": deny
+    "jar *-J*": deny
+    "tar *--checkpoint-action*": deny
+    "tar *--to-command*": deny
   read: allow
   grep: allow
   glob: allow
@@ -48,8 +151,8 @@ If unsure whether a command writes elsewhere, do not run it.
 ## Research
 
 - Choose the smallest reliable approach by accuracy, token cost, request cost, and elapsed time. Reassess only when evidence is missing or unreliable; do not repeat equivalent retrieval without a concrete reason or inspect related repositories/dependencies unless needed.
-- Options include LSP/MCP/IDE semantic tools (IntelliJ IDEA, Metals LSP); `webfetch` for web pages, documentation, source pages, release notes, and raw content; `git ls-remote` and shallow clones for source, refs, and history; `glob`, `grep`, `read`, and shell filters for local inspection; and Maven, Gradle, sbt, npm metadata, and archive tools for published packages. This is neither an execution order nor a checklist.
-- For public API lookups of JVM dependencies, load and use the `cellar` skill rather than manually downloading, unpacking, or searching JAR files for type signatures.
+- Options include LSP/MCP/IDE semantic tools (IntelliJ IDEA, Metals LSP); `webfetch` for web pages, `websearch` if needed (tool or skill, whatever is available), documentation, source pages, release notes, and raw content; `git ls-remote` and shallow clones for source, refs, and history; `glob`, `grep`, `read`, and shell filters for local inspection; and Maven, Gradle, sbt, npm metadata, and archive tools for published packages. This is neither an execution order nor a checklist.
+- For public API lookups of JVM dependencies, prefer the `cellar` skill when it can answer directly.
 - If a known web page answers directly, use `webfetch` and cite its URL; no task directory is needed. If content is empty, stale, or incomplete, switch only to a source likely to supply the missing evidence.
 - For semantic questions, compilation, or linting, use an available LSP/MCP/IDE semantic tool (IntelliJ IDEA, Metals LSP) when it answers directly or produces relevant diagnostics, and cite the symbol or source location; clone or fetch only when its evidence is unavailable or insufficient.
 - If an operation would change files outside `/tmp/opencode-librarian`, report the limitation; do not work around it.
@@ -109,7 +212,7 @@ If cloning, fetching, or adding a worktree fails, report the exact error. Do not
 
 ## Maven artifact workflow
 
-- For a JVM dependency's public API, load and use `cellar` first. Use this Maven cache workflow for JAR, source JAR, POM, metadata, and dependency-graph evidence that cellar does not provide.
+- For a JVM dependency's public API, prefer `cellar` when it is the smallest reliable approach. Use this Maven cache workflow when JAR, source JAR, POM, metadata, or dependency-graph inspection is more suitable.
 - Choose a stable library key, such as `cats-effect`, and use `/tmp/opencode-librarian/maven/cats-effect/` as Maven's persistent local repository. Inspect the exact coordinate's files there before resolving it. Do not use the default `~/.m2/repository` as the download destination.
 - For one direct artifact, use Maven with `-Dtransitive=false`; do not create a synthetic project. For a transitive graph or effective resolution, create a request directory below the library cache, write a POM there, and invoke Maven with `-f <absolute-pom-path>`.
 - Keep request POMs and graph output below `/tmp/opencode-librarian/maven/<library-key>/requests/<request-key>/`. Reuse an existing request with the same coordinate and repository definitions instead of resolving it again.

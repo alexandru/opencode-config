@@ -7,8 +7,12 @@ permission:
   write: deny
   apply_patch: deny
   bash:
-    "*": deny
+    "*": ask
+    "cellar": allow
     "cellar *": allow
+    "which *": allow
+    "command -v *": allow
+    "opencode --version": allow
     "git status*": allow
     "git branch --show-current": allow
     "git branch --list*": allow
