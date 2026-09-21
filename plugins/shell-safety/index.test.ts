@@ -27,9 +27,19 @@ const options: Options = {
   cache: { capacity: 32, ttlMs: 60_000 },
   agents: {
     Explorer: {
+      enabled: true,
       http: { methods: [], credentials: {} },
     },
     Librarian: {
+      enabled: true,
+      http: {
+        methods: ["GET", "HEAD"],
+        credentials: { BRAVE_SEARCH_API_KEY: ["api.search.brave.com"] },
+      },
+    },
+    Junior: {
+      enabled: true,
+      thresholds: { allowProbability: 0.35, violationProbability: 0.5 },
       http: {
         methods: ["GET", "HEAD"],
         credentials: { BRAVE_SEARCH_API_KEY: ["api.search.brave.com"] },
@@ -98,7 +108,15 @@ describe("configuration", () => {
     expect(agentPolicy(decoded.agents, "Librarian").http.credentials["BRAVE_SEARCH_API_KEY"]).toEqual([
       "api.search.brave.com",
     ])
+    expect(agentPolicy(decoded.agents, "Junior").http.credentials["BRAVE_SEARCH_API_KEY"]).toEqual([
+      "api.search.brave.com",
+    ])
+    expect(agentPolicy(decoded.agents, "Junior").thresholds).toEqual({
+      allowProbability: 0.35,
+      violationProbability: 0.5,
+    })
     expect(decoded.cache).toEqual({ capacity: 32, ttlMs: 60_000 })
+    expect(agentPolicy(decoded.agents, "Explorer").enabled).toBeTrue()
     expect(decoded.allowProbability).toBe(0.45)
     expect(decoded.violationProbability).toBe(0.4)
     expect(decoded.maxAttempts).toBe(2)
@@ -161,6 +179,9 @@ describe("Jev request", () => {
     })
     expect(request.state.policy.http.credentials["BRAVE_SEARCH_API_KEY"]).toEqual(["api.search.brave.com"])
     expect(request.questions.withinPolicy.instructions).toContain("full system prompt")
+    expect(request.questions.withinPolicy.instructions).toContain(
+      "Work explicitly assigned by the full system prompt is within policy",
+    )
     expect(request.questions.filesystemViolation.instructions).toContain(
       'complete ordered list of external-directory rules',
     )
@@ -172,6 +193,9 @@ describe("Jev request", () => {
     )
     expect(request.questions.filesystemViolation.instructions).toContain(
       'Redirection to the exact path "/dev/null" discards output',
+    )
+    expect(request.questions.filesystemViolation.instructions).toContain(
+      'Executable lookup through "PATH"',
     )
     expect(request.questions.withinPolicy.instructions.startsWith('Read "state.agentDefinition"')).toBeTrue()
     expect(request.questions.withinPolicy.instructions).toContain("\nRules:\n- ")
@@ -185,6 +209,23 @@ describe("Jev request", () => {
     expect(permissionFromAssessment(assessment(0.99, 0.01, 0.4, 0.01), options)).toBe("deny")
     expect(permissionFromAssessment(assessment(0.99, 0.01, 0.01, 0.4), options)).toBe("deny")
     expect(permissionFromAssessment(assessment(0.1, 0.9, 0.9, 0.9), options)).toBe("deny")
+  })
+
+  test("applies per-agent threshold overrides", async () => {
+    const evaluate = await Effect.runPromise(
+      evaluator(async () => effectResponse(assessment(0.4, 0.49, 0.12, 0.08))),
+    )
+    const event: PermissionEvent = {
+      sessionID: "session",
+      agent: "Junior",
+      action: "shell",
+      resources: ["assigned work"],
+      effect: "ask",
+    }
+
+    await Effect.runPromise(evaluate(event))
+
+    expect(event.effect).toBe("allow")
   })
 })
 
@@ -236,7 +277,9 @@ describe("permission hook", () => {
   test("classifies any agent present in configuration", async () => {
     const genericOptions: Options = {
       ...options,
-      agents: { Researcher: { http: { methods: [], credentials: {} } } },
+      agents: {
+        Researcher: { enabled: true, http: { methods: [], credentials: {} } },
+      },
     }
     let resolvedAgent = ""
     const evaluate = await Effect.runPromise(
@@ -263,6 +306,40 @@ describe("permission hook", () => {
 
     expect(resolvedAgent).toBe("Researcher")
     expect(event.effect).toBe("allow")
+  })
+
+  test("does not classify commands for a disabled agent", async () => {
+    let requests = 0
+    const disabledOptions: Options = {
+      ...options,
+      agents: {
+        Researcher: { enabled: false, http: { methods: [], credentials: {} } },
+      },
+    }
+    const evaluate = await Effect.runPromise(
+      createPermissionEvaluator(
+        async () => {
+          requests += 1
+          return effectResponse(assessment(0.01, 0.99, 0.99, 0.99))
+        },
+        disabledOptions,
+        Effect.succeed("test-key"),
+        () => Effect.succeed(agentDefinition),
+        "/home/dev/project",
+      ),
+    )
+    const event: PermissionEvent = {
+      sessionID: "session",
+      agent: "Researcher",
+      action: "shell",
+      resources: ["inspect project"],
+      effect: "ask",
+    }
+
+    await Effect.runPromise(evaluate(event))
+
+    expect(requests).toBe(0)
+    expect(event.effect).toBe("ask")
   })
 
   test("caches an identical successful classification", async () => {

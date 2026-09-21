@@ -10,6 +10,8 @@ permission:
   skill: allow
   webfetch: allow
   "mcp*": allow
+  bash:
+    "*": ask
   task:
     "*": deny
     Explorer: allow

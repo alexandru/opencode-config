@@ -28,12 +28,19 @@ export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promi
 
 const Probability = Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 }))
 
+const ThresholdsSchema = Schema.Struct({
+  allowProbability: Probability,
+  violationProbability: Probability,
+})
+
 const HttpPolicySchema = Schema.Struct({
   methods: Schema.Array(Schema.String),
   credentials: Schema.Record(Schema.String, Schema.Array(Schema.String)),
 })
 
 const AgentPolicySchema = Schema.Struct({
+  enabled: Schema.Boolean,
+  thresholds: Schema.optionalKey(ThresholdsSchema),
   http: HttpPolicySchema,
 })
 
@@ -57,6 +64,7 @@ export const OptionsSchema = Schema.Struct({
 
 export type Options = typeof OptionsSchema.Type
 export type AgentPolicy = typeof AgentPolicySchema.Type
+export type Thresholds = typeof ThresholdsSchema.Type
 
 const NoulAnswerSchema = Schema.Struct({
   type: Schema.Literal("noul"),
@@ -144,13 +152,13 @@ export const resolveAgentDefinition = (agent: Agent.Info): ResolvedAgentDefiniti
 
 export const permissionFromAssessment = (
   assessment: SafetyAssessment,
-  options: Pick<Options, "allowProbability" | "violationProbability">,
+  thresholds: Thresholds,
 ): PermissionEffect => {
   const hasViolation =
-    assessment.filesystemViolation.noul >= options.violationProbability ||
-    assessment.remoteMutation.noul >= options.violationProbability ||
-    assessment.credentialViolation.noul >= options.violationProbability
-  return assessment.withinPolicy.noul >= options.allowProbability && !hasViolation ? "allow" : "deny"
+    assessment.filesystemViolation.noul >= thresholds.violationProbability ||
+    assessment.remoteMutation.noul >= thresholds.violationProbability ||
+    assessment.credentialViolation.noul >= thresholds.violationProbability
+  return assessment.withinPolicy.noul >= thresholds.allowProbability && !hasViolation ? "allow" : "deny"
 }
 
 const noulQuestion = (instructions: string, yes: string, no: string): NoulQuestion => ({
@@ -206,6 +214,7 @@ export const buildRequest = (
         |- An "ask" rule means this classifier must decide from the command's actual effects; it is not a violation.
         |- Shell deny rules remain final.
         |- Apply ordered permission rules with the last matching rule winning.
+        |- Work explicitly assigned by the full system prompt is within policy when the command performs that work and its effects satisfy all permissions.
         |- A Bash command may access only project paths and external paths allowed by the last matching rule in "state.filesystemAccess.externalDirectoryRules".
         |- Apply that path restriction to every filesystem read and write, regardless of whether the command itself is read-only.
         |- Treat the exact path "/dev/null" as a shell output sink, not as a filesystem access or write. Do not extend this exception to any other path under "/dev".
@@ -231,6 +240,7 @@ export const buildRequest = (
         |- For every path outside that project directory, apply "state.filesystemAccess.externalDirectoryRules" in order with the last matching rule winning.
         |- An external path is forbidden unless its final matching rule is "allow". This applies to reads and writes, even for commands such as "cat", "grep", "head", and "tail".
         |- A read-only command does not make a forbidden external path safe.
+        |- Executable lookup through "PATH", loading an executable, and loading its runtime or library dependencies are not project-data access. A "PATH" entry does not authorize the command to read or write unrelated files there.
         |- Pipelines and file-descriptor redirections such as "2>&1" move process output and do not write a filesystem path.
         |- Redirection to the exact path "/dev/null" discards output and is not a filesystem violation. No other path under "/dev" has this exception.
         |- Stream filters such as "head" and "tail" do not write files unless a separate file redirection names a destination.
@@ -412,7 +422,7 @@ export const createPermissionEvaluator = (
       if (event.action !== "shell" || !agent || event.effect === "deny") return Effect.void
       if (event.effect === "allow" && !hasShellControlSyntax(event.resources)) return Effect.void
       const policy = findPolicy(options, agent)
-      if (!policy) return Effect.void
+      if (!policy?.enabled) return Effect.void
       const classifiedEvent = { ...event, agent }
 
       return Effect.gen(function* () {
@@ -439,7 +449,7 @@ export const createPermissionEvaluator = (
           return
         }
 
-        event.effect = permissionFromAssessment(result.assessment, options)
+        event.effect = permissionFromAssessment(result.assessment, policy.thresholds ?? options)
         event.message = summary(result.assessment, event.effect)
       })
     }

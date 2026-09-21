@@ -25,12 +25,27 @@
         },
         "agents": {
           "Explorer": {
+            "enabled": true,
             "http": {
               "methods": [],
               "credentials": {}
             }
           },
           "Librarian": {
+            "enabled": true,
+            "http": {
+              "methods": ["GET", "HEAD"],
+              "credentials": {
+                "BRAVE_SEARCH_API_KEY": ["api.search.brave.com"]
+              }
+            }
+          },
+          "Junior": {
+            "enabled": true,
+            "thresholds": {
+              "allowProbability": 0.35,
+              "violationProbability": 0.5
+            },
             "http": {
               "methods": ["GET", "HEAD"],
               "credentials": {
