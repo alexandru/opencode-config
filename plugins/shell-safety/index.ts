@@ -285,26 +285,26 @@ const requestAssessment = (
   requestBody: string,
   apiKey: string,
 ): Effect.Effect<SafetyAssessment, JevRequestError> => {
-  const attempt = Effect.tryPromise({
-    try: (signal) =>
-      fetch(options.endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: requestBody,
-        signal,
-      }),
-    catch: () => new JevNetworkError({ message: "network request failed" }),
+  const attempt = Effect.gen(function* () {
+    const response = yield* Effect.tryPromise({
+      try: (signal) =>
+        fetch(options.endpoint, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: requestBody,
+          signal,
+        }),
+      catch: () => new JevNetworkError({ message: "network request failed" }),
+    })
+    const responseText = yield* responseBody(response)
+    const decoded = yield* Schema.decodeUnknownEffect(JevResponseJsonSchema)(responseText).pipe(
+      Effect.mapError((cause) => new JevDecodeError({ message: cause.message })),
+    )
+    return decoded.answers
   }).pipe(
-    Effect.flatMap(responseBody),
-    Effect.flatMap((responseText) =>
-      Schema.decodeUnknownEffect(JevResponseJsonSchema)(responseText).pipe(
-        Effect.map((decoded) => decoded.answers),
-        Effect.mapError((cause) => new JevDecodeError({ message: cause.message })),
-      ),
-    ),
     Effect.timeoutOrElse({
       duration: `${options.timeoutMs} millis`,
       orElse: () => Effect.fail(new JevTimeoutError({ timeoutMs: options.timeoutMs })),
@@ -332,10 +332,10 @@ const isRetryable = (error: JevRequestError): boolean => {
   }
 }
 
-const environmentApiKey = Config.redacted("OPENCODE_API_KEY").pipe(
-  Effect.map(Redacted.value),
-  Effect.catch(() => Effect.succeed(undefined)),
-)
+const environmentApiKey = Effect.gen(function* () {
+  const apiKey = yield* Config.redacted("OPENCODE_API_KEY")
+  return Redacted.value(apiKey)
+}).pipe(Effect.catch(() => Effect.succeed(undefined)))
 
 const credentialApiKey = (ctx: Plugin.Context, integration: string) =>
   Effect.gen(function* () {
@@ -348,16 +348,18 @@ const credentialApiKey = (ctx: Plugin.Context, integration: string) =>
   }).pipe(Effect.catch(() => Effect.succeed(undefined)))
 
 const resolveApiKey = (ctx: Plugin.Context, integration: string) =>
-  credentialApiKey(ctx, integration).pipe(
-    Effect.flatMap((key) => (key ? Effect.succeed(key) : environmentApiKey)),
-  )
+  Effect.gen(function* () {
+    const key = yield* credentialApiKey(ctx, integration)
+    if (key) return key
+    return yield* environmentApiKey
+  })
 
 const agentDefinitionResolver = (ctx: Plugin.Context): AgentDefinitionResolver =>
   (agent) =>
-    ctx.agent.get({ agentID: Agent.ID.make(agent) }).pipe(
-      Effect.map((result) => resolveAgentDefinition(result.data)),
-      Effect.catch(() => Effect.succeed(undefined)),
-    )
+    Effect.gen(function* () {
+      const result = yield* ctx.agent.get({ agentID: Agent.ID.make(agent) })
+      return resolveAgentDefinition(result.data)
+    }).pipe(Effect.catch(() => Effect.succeed(undefined)))
 
 const findPolicy = (options: Options, agent: string): AgentPolicy | undefined => {
   const target = agent.toLowerCase()
@@ -403,7 +405,6 @@ export const createPermissionEvaluator = (
   options: Options,
   resolveKey: Effect.Effect<string | undefined>,
   resolveAgentDefinition: AgentDefinitionResolver,
-  projectDirectory: string,
 ) =>
   Effect.gen(function* () {
     const apiKey = yield* resolveKey
@@ -417,7 +418,7 @@ export const createPermissionEvaluator = (
         )
       : undefined
 
-    return (event: PermissionEvent): Effect.Effect<void> => {
+    return (event: PermissionEvent, projectDirectory?: string): Effect.Effect<void> => {
       const agent = event.agent
       if (event.action !== "shell" || !agent || event.effect === "deny") return Effect.void
       if (event.effect === "allow" && !hasShellControlSyntax(event.resources)) return Effect.void
@@ -427,6 +428,10 @@ export const createPermissionEvaluator = (
 
       return Effect.gen(function* () {
         event.effect = "deny"
+        if (!projectDirectory) {
+          event.message = "Jev could not classify this command because the session directory is unavailable."
+          return
+        }
         if (!assessmentCache) {
           event.message = "Jev could not classify this command because no OpenCode Zen credential is available."
           return
@@ -466,9 +471,15 @@ export const createPlugin = (fetch: Fetch = globalThis.fetch) =>
           options,
           resolveApiKey(ctx, options.integration),
           agentDefinitionResolver(ctx),
-          ctx.location.directory,
         )
-        yield* ctx.permission.hook("evaluate", evaluate)
+        yield* ctx.permission.hook("evaluate", (event) =>
+          Effect.gen(function* () {
+            const session = yield* ctx.session
+              .get({ sessionID: event.sessionID })
+              .pipe(Effect.catch(() => Effect.succeed(undefined)))
+            yield* evaluate(event, session?.location.directory)
+          }),
+        )
       }),
   })
 

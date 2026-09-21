@@ -48,52 +48,65 @@ const apiEmpty = async (method: HttpMethod, path: string, body?: string): Promis
   if (stdout.trim() !== "") throw new Error(`${method} ${path} returned an unexpected response: ${stdout}`)
 }
 
-const createSession = async (): Promise<Session> =>
+const createSession = async (directory: string): Promise<Session> =>
   (
     await api(
       SessionResponse,
       "post",
       "/api/session",
-      JSON.stringify({ title: "shell-safety e2e", location: { directory: project } }),
+      JSON.stringify({ title: "shell-safety e2e", location: { directory } }),
     )
   ).data
 
-const pending = async () => (await api(PendingResponse, "get", `/api/session/${session.id}/permission`)).data
+const pendingFor = async (target: Session) =>
+  (await api(PendingResponse, "get", `/api/session/${target.id}/permission`)).data
 
-const rejectPermission = (requestID: string): Promise<void> =>
+const pending = (): Promise<ReadonlyArray<{ readonly id: string }>> => pendingFor(session)
+
+const rejectPermission = (target: Session, requestID: string): Promise<void> =>
   apiEmpty(
     "post",
-    `/api/session/${session.id}/permission/${requestID}/reply`,
+    `/api/session/${target.id}/permission/${requestID}/reply`,
     JSON.stringify({ decision: "reject" }),
   )
 
-const deleteSession = (): Promise<void> => apiEmpty("delete", `/api/session/${session.id}`)
+const deleteSession = (target: Session): Promise<void> => apiEmpty("delete", `/api/session/${target.id}`)
 
 const rejectPending = async (): Promise<void> => {
   for (const request of await pending()) {
-    await rejectPermission(request.id)
+    await rejectPermission(session, request.id)
+  }
+}
+
+const rejectPendingFor = async (target: Session): Promise<void> => {
+  for (const request of await pendingFor(target)) {
+    await rejectPermission(target, request.id)
   }
 }
 
 const evaluate = async (agent: string, command: string): Promise<PermissionResult> => {
+  return evaluateFor(session, agent, command)
+}
+
+const evaluateFor = async (target: Session, agent: string, command: string): Promise<PermissionResult> => {
   const response = await api(
     PermissionResponse,
     "post",
-    `/api/session/${session.id}/permission`,
+    `/api/session/${target.id}/permission`,
     JSON.stringify({ action: "shell", resources: [command], agent }),
   )
-  await rejectPending()
+  await rejectPendingFor(target)
   return response.data
 }
 
 beforeAll(async () => {
-  session = await createSession()
+  session = await createSession(project)
 })
 
 afterAll(async () => {
   if (!session) return
   await rejectPending()
-  await deleteSession()
+  await deleteSession(session)
 })
 
 describe("real OpenCode permission evaluation", () => {
@@ -272,6 +285,21 @@ describe("real OpenCode permission evaluation", () => {
   test("denies Junior writes outside its allowed paths", async () => {
     const result = await evaluate("Junior", "touch /home/dev/jev-junior-must-not-write")
     expect(result.effect).toBe("deny")
+  })
+
+  test("uses Junior's session directory as the project directory", async () => {
+    const projectSession = await createSession("/home/dev/projects/alexandru/agents-config")
+    try {
+      const result = await evaluateFor(
+        projectSession,
+        "Junior",
+        "git -C /home/dev/projects/alexandru/agents-config/opencode-shell-safety ls-remote --heads origin refs/heads/main",
+      )
+      expect(result.effect).toBe("allow")
+    } finally {
+      await rejectPendingFor(projectSession)
+      await deleteSession(projectSession)
+    }
   })
 
   test("allows Junior repository mutation inside the project", async () => {

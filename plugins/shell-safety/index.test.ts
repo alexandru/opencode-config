@@ -91,7 +91,8 @@ const evaluator = (fetch: Fetch) =>
     options,
     Effect.succeed("test-key"),
     () => Effect.succeed(agentDefinition),
-    "/home/dev/project",
+  ).pipe(
+    Effect.map((evaluate) => (event: PermissionEvent) => evaluate(event, "/home/dev/project")),
   )
 
 const librarianEvent = (command: string): PermissionEvent => ({
@@ -274,6 +275,49 @@ describe("permission hook", () => {
     expect(event.effect).toBe("deny")
   })
 
+  test("uses the permission session's project directory", async () => {
+    let requestBody = ""
+    const evaluate = await Effect.runPromise(
+      createPermissionEvaluator(
+        async (_input, init) => {
+          requestBody = typeof init?.body === "string" ? init.body : ""
+          return effectResponse(assessment(0.98, 0.01, 0.01, 0.01))
+        },
+        options,
+        Effect.succeed("test-key"),
+        () => Effect.succeed(agentDefinition),
+      ),
+    )
+    const event = librarianEvent("inspect project")
+
+    await Effect.runPromise(evaluate(event, "/home/dev/session-project"))
+
+    expect(requestBody).toContain('"projectDirectory":"/home/dev/session-project"')
+    expect(event.effect).toBe("allow")
+  })
+
+  test("denies classification when the session directory is unavailable", async () => {
+    let requests = 0
+    const evaluate = await Effect.runPromise(
+      createPermissionEvaluator(
+        async () => {
+          requests += 1
+          return effectResponse(assessment(0.98, 0.01, 0.01, 0.01))
+        },
+        options,
+        Effect.succeed("test-key"),
+        () => Effect.succeed(agentDefinition),
+      ),
+    )
+    const event = librarianEvent("inspect project")
+
+    await Effect.runPromise(evaluate(event))
+
+    expect(requests).toBe(0)
+    expect(event.effect).toBe("deny")
+    expect(event.message).toContain("session directory is unavailable")
+  })
+
   test("classifies any agent present in configuration", async () => {
     const genericOptions: Options = {
       ...options,
@@ -291,7 +335,6 @@ describe("permission hook", () => {
           resolvedAgent = agent
           return Effect.succeed(agentDefinition)
         },
-        "/home/dev/project",
       ),
     )
     const event: PermissionEvent = {
@@ -302,7 +345,7 @@ describe("permission hook", () => {
       effect: "ask",
     }
 
-    await Effect.runPromise(evaluate(event))
+    await Effect.runPromise(evaluate(event, "/home/dev/project"))
 
     expect(resolvedAgent).toBe("Researcher")
     expect(event.effect).toBe("allow")
@@ -325,7 +368,6 @@ describe("permission hook", () => {
         disabledOptions,
         Effect.succeed("test-key"),
         () => Effect.succeed(agentDefinition),
-        "/home/dev/project",
       ),
     )
     const event: PermissionEvent = {
