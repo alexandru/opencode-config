@@ -65,7 +65,9 @@ fn main() -> Result<()> {
     write_json(&config_dir.join(OUTPUT_FILE), &merged)?;
     println!("✓ Successfully switched to preset: {preset_name}");
     println!("✓ Generated {OUTPUT_FILE}");
-    print_agent_table(&merged);
+    if let Some(table) = format_agent_table(&merged) {
+        print!("{table}");
+    }
 
     Ok(())
 }
@@ -236,47 +238,53 @@ fn print_help(presets: &Map<String, Value>) {
     println!("  and may be inherited with extends.");
 }
 
-/// Prints the configured agent, model, and variant mappings when any agents are present.
-fn print_agent_table(config: &Value) {
+/// Formats the configured mappings for enabled agents as a table.
+fn format_agent_table(config: &Value) -> Option<String> {
     let Some(agents) = config.get("agent").and_then(Value::as_object) else {
-        return;
+        return None;
     };
-    if agents.is_empty() {
-        return;
-    }
 
     let rows = agents
         .iter()
+        .filter(|(_, config)| config.get("disable") != Some(&Value::Bool(true)))
         .map(|(name, config)| AgentRow {
             name,
             model: string_field(config, "model").unwrap_or("-"),
             variant: string_field(config, "variant").unwrap_or("-"),
         })
         .collect::<Vec<_>>();
+    if rows.is_empty() {
+        return None;
+    }
+
     let agent_width = column_width("Agent", rows.iter().map(|row| row.name));
     let model_width = column_width("Model", rows.iter().map(|row| row.model));
     let variant_width = column_width("Variant", rows.iter().map(|row| row.variant));
 
-    println!();
-    println!(
+    let header = format!(
         "  {0:<agent_width$} │ {1:<model_width$} │ Variant",
         "Agent", "Model"
     );
-    println!(
+    let separator = format!(
         "  {}─┼─{}─┼─{}",
         "─".repeat(agent_width),
         "─".repeat(model_width),
         "─".repeat(variant_width)
     );
-    for row in rows {
-        println!(
-            "  {name:<agent_width$} │ {model:<model_width$} │ {variant}",
-            name = row.name,
-            model = row.model,
-            variant = row.variant
-        );
-    }
-    println!();
+    let body = rows
+        .iter()
+        .map(|row| {
+            format!(
+                "  {name:<agent_width$} │ {model:<model_width$} │ {variant}",
+                name = row.name,
+                model = row.model,
+                variant = row.variant
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Some(format!("\n{header}\n{separator}\n{body}\n\n"))
 }
 
 struct AgentRow<'a> {
@@ -359,12 +367,34 @@ mod tests {
             .context("test presets must be an object")?;
 
         let error = resolve_preset(&presets, "first", &mut Vec::new())
-            .expect_err("inheritance cycle must fail");
+            .err()
+            .context("inheritance cycle must fail")?;
 
         assert_eq!(
             error.to_string(),
             "Circular preset inheritance detected: first -> second -> first"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn agent_table_omits_disabled_agents() -> Result<()> {
+        let config = json!({
+            "agent": {
+                "ask": { "disable": true },
+                "Orchestrator": { "model": "opencode-go/mimo-v2.6-pro" },
+                "Explorer": {
+                    "model": "opencode-go/deepseek-v4.1-flash",
+                    "variant": "low"
+                }
+            }
+        });
+
+        let table = format_agent_table(&config).context("enabled agents should produce a table")?;
+
+        assert!(!table.contains("ask"));
+        assert!(table.contains("Orchestrator"));
+        assert!(table.contains("Explorer"));
         Ok(())
     }
 }
