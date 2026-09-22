@@ -46,6 +46,31 @@
     },
   },
   // ----------------------------------------------------------------------------------
+  // Go mixture
+  "p-go": {
+    "model": "opencode-go/mimo-v2.6-pro",
+    "agent": {
+      "Orchestrator": {
+        "model": "opencode-go/mimo-v2.6-pro",
+      },
+      "Solo": {
+        "model": "opencode-go/mimo-v2.6-pro",
+      },
+      "Junior": {
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "high",
+      },
+      "Explorer": {
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "low",
+      },
+      "Librarian": {
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "low",
+      },
+    },
+  },
+  // ----------------------------------------------------------------------------------
   // Pure DeepSeek
   "p-deepseek": {
     "model": "opencode-go/deepseek-v4.1-flash",
@@ -131,6 +156,9 @@
   },
   "w-mix-go": {
     "extends": ["w-common", "p-mix-go"],
+  },
+  "w-go": {
+    "extends": ["w-common", "p-go"],
   },
   "w-deepseek": {
     "extends": ["w-common", "p-deepseek"],
