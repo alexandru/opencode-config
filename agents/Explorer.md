@@ -170,6 +170,7 @@ permission:
     "~/Library/Caches/Coursier/**": allow
   skill: allow
   webfetch: allow
+  websearch: allow
   question: allow
   "mcp*": allow
   task:

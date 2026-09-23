@@ -32,9 +32,6 @@
             "enabled": true,
             "http": {
               "methods": ["GET", "HEAD"],
-              "credentials": {
-                "BRAVE_SEARCH_API_KEY": ["api.search.brave.com"]
-              }
             }
           },
           "Junior": {
@@ -45,9 +42,6 @@
             },
             "http": {
               "methods": ["GET", "HEAD"],
-              "credentials": {
-                "BRAVE_SEARCH_API_KEY": ["api.search.brave.com"]
-              }
             }
           }
         }
