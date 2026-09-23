@@ -6,23 +6,23 @@
     "agent": {
       "Orchestrator": {
         "model": "openai/gpt-6-sol",
-        "variant": "medium",
+        "variant": "high",
       },
       "Solo": {
         "model": "openai/gpt-6-sol",
-        "variant": "medium",
+        "variant": "high",
       },
       "Junior": {
         "model": "openai/gpt-6-luna",
-        "variant": "high",
+        "variant": "xhigh",
       },
       "Explorer": {
         "model": "openai/gpt-6-luna",
-        "variant": "medium",
+        "variant": "high",
       },
       "Librarian": {
         "model": "openai/gpt-6-luna",
-        "variant": "medium",
+        "variant": "high",
       },
     },
   },
