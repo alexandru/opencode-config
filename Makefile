@@ -1,14 +1,8 @@
 MATTPOCOCK_SKILLS_TAG := v1.2.3
 SKILLS_AGENT := opencode
 SKILLS_INSTALL_FLAGS := -g -a $(SKILLS_AGENT) -y
-BUN ?= $(shell command -v bun 2>/dev/null || printf '%s' "$(HOME)/.bun/bin/bun")
 
-.PHONY: install-skills update-skills check-mattpocock-skills-tag test test-shell-safety
-
-test: test-shell-safety
-
-test-shell-safety:
-	cd plugins/shell-safety && export PATH="$(dir $(BUN)):$$PATH" && $(BUN) run check && $(BUN) run test && $(BUN) run test:e2e
+.PHONY: install-skills update-skills check-mattpocock-skills-tag
 
 check-mattpocock-skills-tag:
 	@latest=$$(git ls-remote --tags --refs --sort=-version:refname https://github.com/mattpocock/skills.git 'v*' 2>/dev/null | sed -n '1s#.*refs/tags/##p'); \

@@ -9,7 +9,7 @@
   "websearch": false,
   "plugins": [
     {
-      "package": "./plugins/shell-safety",
+      "package": "opencode-shell-safety",
       "options": {
         "endpoint": "https://opencode.ai/zen/v1/systemone",
         "model": "jev-1.13",
@@ -26,10 +26,6 @@
         "agents": {
           "Explorer": {
             "enabled": true,
-            "http": {
-              "methods": [],
-              "credentials": {}
-            }
           },
           "Librarian": {
             "enabled": true,
