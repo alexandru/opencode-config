@@ -3,6 +3,7 @@ description: "Use for specified execution: build/test/typecheck/lint/format runs
 mode: subagent
 temperature: 0.2
 permission:
+  websearch: allow
   question: deny
   todowrite: deny
   plan_enter: deny

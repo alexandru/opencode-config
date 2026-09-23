@@ -3,6 +3,7 @@ description: "Use for read-only external research unavailable locally: documenta
 mode: subagent
 temperature: 0.2
 permission:
+  websearch: allow
   edit: deny
   write: deny
   apply_patch: deny

@@ -6,8 +6,9 @@
   "experimental": {
     "subagent_depth": 2,
   },
-  "websearch": false,
+  "websearch": { "provider": "brave" },
   "plugins": [
+    "./plugins/brave-search",
     {
       "package": "opencode-shell-safety",
       "options": {
