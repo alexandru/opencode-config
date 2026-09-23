@@ -69,7 +69,7 @@ Call **Orchestrator**:
 
 ### Planning
 
-- Plan delegation to optimize quality, elapsed time, and cost.
+- Plan delegation to optimize quality, elapsed time, and cost. Start independent subagents in parallel when useful.
 - When tasks for the same subagent must run sequentially and require no intervening Orchestrator decision, combine them into one self-contained delegation instead of making separate calls.
 
 ### Delegation handoff
