@@ -8,7 +8,7 @@
   },
   "websearch": { "provider": "brave" },
   "plugins": [
-    "./plugins/brave-search",
+    "opencode-brave-websearch",
     {
       "package": "opencode-shell-safety",
       "options": {
