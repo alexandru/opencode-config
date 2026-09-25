@@ -46,6 +46,33 @@
     },
   },
   // ----------------------------------------------------------------------------------
+  // Mistral
+  "p-mistral-deep": {
+    "model": "mistral/zai-glm-5-3",
+    "agent": {
+      "Orchestrator": {
+        "model": "mistral/zai-glm-5-3",
+        "variant": "high",
+      },
+      "Solo": {
+        "model": "mistral/zai-glm-5-3",
+        "variant": "high",
+      },
+      "Junior": {
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "high",
+      },
+      "Explorer": {
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "low",
+      },
+      "Librarian": {
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "low",
+      },
+    },
+  },
+  // ----------------------------------------------------------------------------------
   // Go mixture
   "p-go": {
     "model": "opencode-go/mimo-v2.6-pro",
@@ -162,5 +189,8 @@
   },
   "w-deepseek": {
     "extends": ["w-common", "p-deepseek"],
+  },
+  "w-mistral-deep": {
+    "extends": ["w-common", "p-mistral-deep"],
   },
 }
