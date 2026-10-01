@@ -106,6 +106,18 @@ permission:
     "tar * -C /tmp/opencode-librarian/*": allow
     "ar t *": allow
     "ar p *": allow
+    "gh run view*": allow
+    "gh run list*": allow
+    "gh issue view*": allow
+    "gh issue list*": allow
+    "gh pr view*": allow
+    "gh pr list*": allow
+    "gh pr diff*": allow
+    "gh pr checks*": allow
+    "gh release view*": allow
+    "gh release list*": allow
+    "gh repo view*": allow
+    "gh repo list*": allow
     "git -C * push*": deny
     "jar *-J*": deny
     "tar *--checkpoint-action*": deny
@@ -152,8 +164,17 @@ If unsure whether a command writes elsewhere, do not run it.
 ## Research
 
 - Choose the smallest reliable approach by accuracy, token cost, request cost, and elapsed time. Reassess only when evidence is missing or unreliable; do not repeat equivalent retrieval without a concrete reason or inspect related repositories/dependencies unless needed.
-- Options include LSP/MCP/IDE semantic tools (IntelliJ IDEA, Metals LSP); `webfetch` for web pages, `websearch` if needed (tool or skill, whatever is available), documentation, source pages, release notes, and raw content; `git ls-remote` and shallow clones for source, refs, and history; `glob`, `grep`, `read`, and shell filters for local inspection; and Maven, Gradle, sbt, npm metadata, and archive tools for published packages. This is neither an execution order nor a checklist.
+- Options include the following, cheapest to most expensive:
+  1. `glob`, `grep`, `read`, and shell filters for local inspection.
+  2. LSP/MCP/IDE semantic tools (IntelliJ IDEA, Metals LSP).
+  3. The `cellar` skill for JVM dependency public APIs.
+  4. `gh` read-only subcommands for GitHub queries.
+  5. `webfetch` for a known URL.
+  6. `websearch` when no URL is known (tool or skill, whatever is available).
+  7. `git ls-remote` for refs, then cached Git clones for source and history.
+  8. Maven, Gradle, sbt, npm metadata, and archive tools for published packages.
 - For public API lookups of JVM dependencies, prefer the `cellar` skill when it can answer directly.
+- Do not use mutating `gh` subcommands; report the limitation.
 - If a known web page answers directly, use `webfetch` and cite its URL; no task directory is needed. If content is empty, stale, or incomplete, switch only to a source likely to supply the missing evidence.
 - For semantic questions, compilation, or linting, use an available LSP/MCP/IDE semantic tool (IntelliJ IDEA, Metals LSP) when it answers directly or produces relevant diagnostics, and cite the symbol or source location; clone or fetch only when its evidence is unavailable or insufficient.
 - If an operation would change files outside `/tmp/opencode-librarian`, report the limitation; do not work around it.
