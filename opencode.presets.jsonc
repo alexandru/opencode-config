@@ -52,11 +52,11 @@
     "agent": {
       "Orchestrator": {
         "model": "mistral/zai-glm-5-3",
-        "variant": "high",
+        "variant": "max",
       },
       "Solo": {
         "model": "mistral/zai-glm-5-3",
-        "variant": "high",
+        "variant": "max",
       },
       "Junior": {
         "model": "opencode-go/deepseek-v4.1-flash",
@@ -135,12 +135,14 @@
         "headers": {
           "Host": "localhost:64342",
         },
+        "codemode": false,
       },
       "mcp-metals": {
         "url": "http://host.docker.internal:8083/mcp",
         "headers": {
           "Host": "localhost:8083",
         },
+        "codemode": false,
       },
       "mcp-chrome-devtools": {
         "command": [
@@ -149,6 +151,7 @@
           "chrome-devtools-mcp@latest",
           "--browser-url=http://host.docker.internal:9222",
         ],
+        "codemode": false,
       },
     },
   },

@@ -10,6 +10,7 @@ permission:
   skill: allow
   websearch: allow
   webfetch: allow
+  execute: allow
   "mcp*": allow
   bash:
     "*": ask

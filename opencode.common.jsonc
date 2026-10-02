@@ -43,6 +43,10 @@
             "http": {
               "methods": ["GET", "HEAD"],
             }
+          },
+          "Solo": {
+            "enabled": true,
+            "fallback": "ask"
           }
         }
       },
@@ -67,16 +71,19 @@
       "type": "remote",
       "url": "http://localhost:64342/stream",
       "enabled": false,
+      "codemode": false,
     },
     "mcp-metals": {
       "type": "remote",
       "url": "http://localhost:8083/mcp",
       "enabled": false,
+      "codemode": false,
     },
     "mcp-chrome-devtools": {
       "type": "local",
       "command": ["npx", "-y", "chrome-devtools-mcp@latest"],
       "enabled": false,
+      "codemode": false,
     },
   },
   "permission": {

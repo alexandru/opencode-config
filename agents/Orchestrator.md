@@ -12,6 +12,7 @@ permission:
   glob: allow
   webfetch: deny
   websearch: deny
+  execute: deny
   question: allow
   todowrite: allow
   skill: allow

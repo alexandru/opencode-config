@@ -3,7 +3,7 @@ description: "Use for implementation requiring judgment and direct tool use with
 mode: primary
 temperature: 0.2
 permission:
-  bash: allow
+  bash: ask
   edit: allow
   write: allow
   apply_patch: allow
