@@ -153,6 +153,15 @@
         ],
         "codemode": false,
       },
+      "mcp-playwright": {
+        "command": [
+          "npx",
+          "-y",
+          "@playwright/mcp@latest",
+          "--cdp-endpoint=http://host.docker.internal:9222",
+        ],
+        "codemode": false,
+      },
     },
   },
   // ----------------------------------------------------------------------------------
