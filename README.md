@@ -115,7 +115,7 @@ Sub-agents:
   - `code-review`: user-invoked adapter for `code-reviewing`.
   - `code-reviewing`: review changed code for bugs, structural problems, performance issues, and unintended behavior.
   - `simplify`: behavior-preserving code cleanup.
-- [mattpocock/skills](https://github.com/mattpocock/skills/tree/v1.2.3)
+- [mattpocock/skills](https://github.com/mattpocock/skills/tree/v1.3.1)
   - `codebase-design`: deep-module design vocabulary and principles.
   - `diagnosing-bugs`: disciplined diagnosis for hard bugs and regressions.
   - `domain-modeling`: domain language and architectural decisions.
@@ -124,7 +124,6 @@ Sub-agents:
   - `handoff`: prepare context for another agent or session.
   - `implement`: implement work from a specification or set of tickets.
   - `improve-codebase-architecture`: find and work through codebase architecture improvements.
-  - `resolving-merge-conflicts`: merge and rebase conflict resolution.
   - `setup-matt-pocock-skills`: configure a repository for the engineering skills.
   - `tdd`: test-first development guidance.
   - `teach`: teach the user a topic through a stateful learning workspace with lessons and reference documents.

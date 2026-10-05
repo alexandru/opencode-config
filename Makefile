@@ -1,4 +1,4 @@
-MATTPOCOCK_SKILLS_TAG := v1.2.3
+MATTPOCOCK_SKILLS_TAG := v1.3.1
 SKILLS_AGENT := opencode
 SKILLS_INSTALL_FLAGS := -g -a $(SKILLS_AGENT) -y
 
@@ -26,7 +26,6 @@ install-skills:
 		handoff \
 		implement \
 		improve-codebase-architecture \
-		resolving-merge-conflicts \
 		setup-matt-pocock-skills \
 		tdd \
 		teach \
