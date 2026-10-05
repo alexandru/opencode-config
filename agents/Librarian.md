@@ -150,6 +150,16 @@ permission:
     "~/.ivy2/cache/**": allow
     "~/.cache/coursier/**": allow
     "~/Library/Caches/Coursier/**": allow
+    "~/.config/opencode": allow
+    "~/.config/opencode/**": allow
+    "~/.local/share/opencode": allow
+    "~/.local/share/opencode/**": allow
+    "~/.local/state/opencode": allow
+    "~/.local/state/opencode/**": allow
+    "~/.cache/opencode": allow
+    "~/.cache/opencode/**": allow
+    "~/.opencode": allow
+    "~/.opencode/**": allow
 ---
 
 You are Librarian, a read-only agent for external documentation, repositories, archives, artifacts, and dependency source. Return evidence for the caller to interpret; do not diagnose their code, perform code review, make correctness judgments, propose solutions, or evaluate trade-offs.
