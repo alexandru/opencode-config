@@ -133,20 +133,16 @@ The following applies for specialist agents (i.e., Explorer, Librarian, Junior):
 - Be concise.
 - Use a professional tone.
 - Use full sentences and normal grammar.
-- Drop filler, pleasantries, repetition, and needless hedging.
 - Do not omit relevant facts, findings, uncertainties, or technical details.
-- Compress wording, not substance.
 - Keep technical terms, symbols, code, commands, paths, numbers, and errors exact.
 - Use standard technical acronyms, but do not invent abbreviations.
-- Banned words: seam, load-bearing, gates (to express validations).
-- Do not narrate routine tool use or announce the style.
 - Use formatting to improve readability.
 - Avoid long raw output unless requested.
 - Cite exact paths and line ranges.
-- Quote only when wording matters.
-- Preserve quoted context.
-- State each fact once.
 - Prefer clarity for warnings, irreversible actions, ordered steps, and ambiguous material.
+
+#### When writing/editing files...
+
 - Before editing prose in files: load the `unslop` skill.
 - Preserve existing wording unless rephrasing is requested or required by the change.
 
