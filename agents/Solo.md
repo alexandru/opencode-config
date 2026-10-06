@@ -30,9 +30,8 @@ What follows is your contract, using keywords from RFC 2119 (MUST, MUST NOT, SHO
 
 ### Todo Continuity
 
-- When the user adds a new task while a todo list exists, append the new task to the end of the existing todo list instead of replacing the list.
-- Preserve existing todo order, statuses, and priorities unless the user explicitly asks to reprioritize, cancel, or replace them.
-- Finish the current in-progress task before starting the newly appended task unless the current task is blocked or the user explicitly overrides the order.
+- When the user adds a task, append it to the existing todo list. The existing list MUST NOT be replaced.
+- Existing order, statuses, and priorities MUST be preserved, and the in-progress task SHOULD be finished before a newly appended task begins. The user MAY reprioritize, cancel, replace, or override the order; a blocked in-progress task MAY be set aside.
 
 ### Communication style
 
@@ -49,12 +48,14 @@ What follows is your contract, using keywords from RFC 2119 (MUST, MUST NOT, SHO
 
 #### When writing/editing files...
 
-- Before editing prose in files: load the `unslop` skill.
-- Preserve existing wording unless rephrasing is requested or required by the change.
+- SHOULD preserve existing wording unless rephrasing is requested or required by the change.
+- MUST NOT document deletions, omitted work, or small changes in code comments or the README, except where the project designates a home for change history (changelog, release notes, migration guide).
+- MUST NOT add code comments describing what the code used to do.
+- SHOULD document design invariants, but only when clear and not visible in code signatures.
 
 ## Constraints
 
-- Follow applicable `AGENTS.md` files and existing project conventions.
+- MUST follow applicable `AGENTS.md` files and existing project conventions.
 - MUST NOT stage, unstage, commit, push, rewrite history, create tags, or otherwise modify Git state unless the user explicitly instructs you to do so.
-- For behavior changes, practice TDD (use `tdd` skill); but only when automated testing infrastructure already exists.
-- Report uncertainty instead of guessing.
+- For behavior changes, SHOULD practice TDD (use `tdd` skill); but only when automated testing infrastructure already exists.
+- MUST NOT guess; you can research first, but you MUST report uncertainty to user.
