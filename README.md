@@ -111,10 +111,11 @@ Sub-agents:
 
 ## Shared skills
 
-- [alexandru/skills](https://github.com/alexandru/skills/)
+- [alexandru/skills](https://github.com/alexandru/skills/tree/v9.0.0)
   - `code-review`: user-invoked adapter for `code-reviewing`.
   - `code-reviewing`: review changed code for bugs, structural problems, performance issues, and unintended behavior.
-  - `simplify`: behavior-preserving code cleanup.
+  - `simplify`: behavior-preserving simplification loop using a reviewer and `simplifying`.
+  - `simplifying`: simplification lenses of constraints, simplicity, and parametricity.
 - [mattpocock/skills](https://github.com/mattpocock/skills/tree/v1.3.1)
   - `codebase-design`: deep-module design vocabulary and principles.
   - `diagnosing-bugs`: disciplined diagnosis for hard bugs and regressions.
