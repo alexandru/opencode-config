@@ -111,7 +111,7 @@ Sub-agents:
 
 ## Shared skills
 
-- [alexandru/skills](https://github.com/alexandru/skills/tree/v10.0.0)
+- [alexandru/skills](https://github.com/alexandru/skills/tree/v10.2.0)
   - `code-review`: user-invoked adapter for `code-reviewing`.
   - `code-reviewing`: review changed code for bugs, structural problems, performance issues, and unintended behavior.
   - `simplicity`: simplification lenses of constraints, simplicity, and parametricity.

@@ -146,6 +146,8 @@ permission:
     "/private/tmp": allow
     "/private/tmp/**": allow
     "~/.m2/repository/**": allow
+    "~/.npm": allow
+    "~/.npm/**": allow
     "~/.gradle/caches/**": allow
     "~/.ivy2/cache/**": allow
     "~/.cache/coursier/**": allow
