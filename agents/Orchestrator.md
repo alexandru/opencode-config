@@ -64,7 +64,7 @@ Use **Junior**:
 Call **Orchestrator**:
 
 - When the instructions require parallelism for work that specialists MUST NOT perform.
-- Only one level (an Orchestrator sub-agent MUST NOT call on another Orchestrator sub-agent)
+- For untainted, impartial judgment (SHOULD delegate such work, for example a review)
 - Reasoning/cost: max.
 
 ### Planning
