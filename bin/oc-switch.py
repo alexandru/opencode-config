@@ -173,8 +173,6 @@ def print_help(presets: JsonObject) -> None:
     print("Description:")
     print("  Merges opencode.common.jsonc with the selected preset")
     print("  from opencode.presets.jsonc to generate opencode.jsonc")
-    print("  Presets marked common: true are hidden from this list")
-    print("  and may be inherited with extends.")
 
 
 @dataclass(frozen=True)
