@@ -41,27 +41,21 @@ class ConfigError(Exception):
     """A configuration problem, reported as one clear message, not a traceback."""
 
 
-def merge_values(source: Json, target: Json) -> Json:
-    """Objects merge recursively, everything else replaces, and a null on either
-    side yields the other value.
-    """
-    if target is None:
-        return source
-    if source is None:
-        return target
-    if isinstance(source, dict) and isinstance(target, dict):
-        return merge_objects(source, target)
-    return target
-
-
 def merge_objects(source: JsonObject, target: JsonObject) -> JsonObject:
-    """Target values win, shared objects merge recursively, and the result keeps
-    the source's key order, then keys new in the target.
+    """Target values win, shared objects merge recursively, a target null keeps
+    the source object, and the result keeps the source's key order, then keys
+    new in the target.
     """
-    return {
-        **source,
-        **{key: merge_values(source.get(key), value) for key, value in target.items()},
-    }
+    merged = dict(source)
+    for key, target_value in target.items():
+        source_value = merged.get(key)
+        if isinstance(source_value, dict) and target_value is None:
+            merged[key] = source_value
+        elif isinstance(source_value, dict) and isinstance(target_value, dict):
+            merged[key] = merge_objects(source_value, target_value)
+        else:
+            merged[key] = target_value
+    return merged
 
 
 def extends_names(preset: JsonObject, name: str) -> list[str]:

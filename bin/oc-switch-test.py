@@ -51,11 +51,13 @@ class MergeTest(unittest.TestCase):
             },
         )
 
-    def test_null_never_wipes_a_source_object(self) -> None:
-        source = {"http": {"methods": ["GET"]}}
-        self.assertEqual(tool.merge_objects(source, {"http": None}), source)
-        self.assertEqual(tool.merge_values(None, source), source)
-        self.assertEqual(tool.merge_values(source, None), source)
+    def test_null_targets_keep_source_objects_and_replace_scalars(self) -> None:
+        source = {"nested": {"kept": True}, "replaced": "source"}
+        target = {"nested": None, "replaced": None}
+
+        merged = tool.merge_objects(source, target)
+
+        self.assertEqual(merged, {"nested": {"kept": True}, "replaced": None})
 
 
 class ResolvePresetTest(unittest.TestCase):
