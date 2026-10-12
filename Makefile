@@ -1,4 +1,4 @@
-ALEXANDRU_SKILLS_TAG := v10.2.0
+ALEXANDRU_SKILLS_TAG := v11.0.4
 MATTPOCOCK_SKILLS_TAG := v1.3.1
 SKILLS_AGENT := opencode
 SKILLS_INSTALL_FLAGS := -g -a $(SKILLS_AGENT) -y
@@ -17,8 +17,8 @@ install-skills:
 	npx skills add https://github.com/alexandru/skills/tree/$(ALEXANDRU_SKILLS_TAG) $(SKILLS_INSTALL_FLAGS) --skill \
 		code-review \
 		code-reviewing \
-		simplicity \
-		simplify
+		refine \
+		refinements
 	npx skills add https://github.com/mattpocock/skills/tree/$(MATTPOCOCK_SKILLS_TAG) $(SKILLS_INSTALL_FLAGS) --skill \
 		codebase-design \
 		diagnosing-bugs \
