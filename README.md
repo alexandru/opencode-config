@@ -15,12 +15,12 @@ git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
 </details>
 
 <details>
-<summary>STEP 2 — Install the shared skills globally</summary>
+<summary>STEP 2 — Install dependencies</summary>
 
-### Install the shared skills globally
+### Install dependencies
 
 ```sh
-cd ~/.config/opencode && make install-skills
+cd ~/.config/opencode && make
 ```
 
 The skills are installed under `~/.agents/skills`, where OpenCode, Copilot CLI,
@@ -28,9 +28,9 @@ Codex, and Pi can share them.
 </details>
 
 <details>
-<summary>STEP 3 — Choose a configuration preset</summary>
+<summary>STEP 3 — Choose a configuration preset (optional)</summary>
 
-### Choose a configuration preset
+### Choose a configuration preset (optional)
 
 The [oc-switch](./bin/oc-switch.py) utility is for quickly switching between multiple setting presets (e.g., multiple sets of models assigned to your agents). It's built with Python 🐍, so you need [pipx](https://pipx.pypa.io/) installed (`make install-pipx`).
 
@@ -43,9 +43,6 @@ The switcher generates `opencode.jsonc` (OpenCode's configuration file) from:
 
 - [opencode.common.jsonc](./opencode.common.jsonc)
 - [opencode.presets.jsonc](./opencode.presets.jsonc)
-
-**WARNING:** Must run `oc-switch` at least once, otherwise OpenCode's configuration is missing!
-
 </details>
 
 <details>
