@@ -20,8 +20,7 @@ git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
 ### Install the shared skills globally
 
 ```sh
-cd ~/.config/opencode
-make install-skills
+cd ~/.config/opencode && make install-skills
 ```
 
 The skills are installed under `~/.agents/skills`, where OpenCode, Copilot CLI,
@@ -58,26 +57,38 @@ The switcher generates `opencode.jsonc` (OpenCode's configuration file) from:
 
 Install [Coursier](https://get-coursier.io/docs/cli-installation) first:
 
-```sh
+```bash
 ## MacOS
-brew install coursier/formulas/coursier
-cs setup
+brew install coursier/formulas/coursier && cs setup
+```
 
-## Linux x86-64 (aka AMD64)
-curl -fL "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz" | gzip -d > cs
+```bash
+(
+  set -eo pipefail
+  ## Linux x86-64 (aka AMD64)
+  curl -fL "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz" | gzip -d > cs
+)
+```
 
-## Linux ARM64
-curl -fL "https://github.com/VirtusLab/coursier-m1/releases/latest/download/cs-aarch64-pc-linux.gz" | gzip -d > cs
+```bash
+(
+  set -eo pipefail
+  ## Linux ARM64
+  curl -fL "https://github.com/VirtusLab/coursier-m1/releases/latest/download/cs-aarch64-pc-linux.gz" | gzip -d > cs
+)
 ```
 
 Then install Cellar via Coursier:
 
-```sh
-cs install --contrib cellar
-cellar --version
+```bash
+(
+  set -e
+  cs install --contrib cellar
+  cellar --version
 
-# Disable telemetry
-cellar telemetry disable
+  # Disable telemetry
+  cellar telemetry disable
+)
 ```
 </details>
 
