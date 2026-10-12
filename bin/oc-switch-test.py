@@ -129,17 +129,45 @@ class ReloadTest(unittest.TestCase):
             tool.reload_opencode()
         run.assert_not_called()
 
-    def test_failed_reload_warns_without_failing(self) -> None:
-        stderr = io.StringIO()
-        completed = subprocess.CompletedProcess[str](
-            args=["opencode", "reload"], returncode=1
+    def test_skips_when_no_service_is_running(self) -> None:
+        stopped = subprocess.CompletedProcess[str](
+            args=["opencode", "service", "status"], returncode=0, stdout="stopped\n"
         )
         with (
             mock.patch.object(tool.shutil, "which", return_value="/usr/bin/opencode"),
-            mock.patch.object(tool.subprocess, "run", return_value=completed),
+            mock.patch.object(tool.subprocess, "run", side_effect=[stopped]) as run,
+        ):
+            tool.reload_opencode()
+        self.assertEqual(run.call_count, 1)
+
+    def test_skips_on_unexpected_status_output(self) -> None:
+        empty = subprocess.CompletedProcess[str](args=[], returncode=1, stdout=None)
+        with (
+            mock.patch.object(tool.shutil, "which", return_value="/usr/bin/opencode"),
+            mock.patch.object(tool.subprocess, "run", side_effect=[empty]) as run,
+        ):
+            tool.reload_opencode()
+        self.assertEqual(run.call_count, 1)
+
+    def test_failed_reload_warns_without_failing(self) -> None:
+        running = subprocess.CompletedProcess[str](
+            args=["opencode", "service", "status"],
+            returncode=0,
+            stdout="http://127.0.0.1:49374\n",
+        )
+        failed = subprocess.CompletedProcess[str](
+            args=["opencode", "reload"], returncode=1
+        )
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(tool.shutil, "which", return_value="/usr/bin/opencode"),
+            mock.patch.object(
+                tool.subprocess, "run", side_effect=[running, failed]
+            ) as run,
             mock.patch("sys.stderr", stderr),
         ):
             tool.reload_opencode()
+        self.assertEqual(run.call_count, 2)
         self.assertIn("opencode reload failed", stderr.getvalue())
 
 

@@ -140,11 +140,17 @@ def write_json(path: Path, value: Json) -> None:
 
 
 def reload_opencode() -> None:
-    """Reloads OpenCode's configuration when its executable is on PATH; a
-    failed reload warns instead of failing the switch.
+    """Reloads a running OpenCode's configuration; a failed reload warns
+    instead of failing the switch.
     """
     if shutil.which("opencode") is None:
         return
+    status = subprocess.run(
+        ["opencode", "service", "status"], capture_output=True, text=True, check=False
+    )
+    if not (status.stdout or "").strip().startswith("http"):
+        return
+    sys.stdout.flush()
     result = subprocess.run(["opencode", "reload"], check=False)
     if result.returncode != 0:
         print("⚠ opencode reload failed", file=sys.stderr)
