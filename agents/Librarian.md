@@ -93,6 +93,7 @@ permission:
     "git clone * /tmp/opencode-librarian/*": allow
     "git -C /tmp/opencode-librarian/* fetch *": allow
     "git -C /tmp/opencode-librarian/* worktree add /tmp/opencode-librarian/*": allow
+    "git -C /tmp/opencode-librarian/* worktree add -b * /tmp/opencode-librarian/* origin/*": allow
     "mvn -v": allow
     "mvn * dependency:get *-Dmaven.repo.local=/tmp/opencode-librarian/*": allow
     "mvn * -f /tmp/opencode-librarian/* dependency:tree *-Dmaven.repo.local=/tmp/opencode-librarian/*": allow
