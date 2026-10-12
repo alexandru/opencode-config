@@ -1,8 +1,12 @@
 ---
 description: Refine code using the refine skill
+subtask: true
 ---
 
-Load @refine, and other skills that are relevant for this project and that may help.
+Run a @refine session.
 
-Use @refine to review and refine the code in context:
-$ARGUMENTS
+---
+
+Input: $ARGUMENTS
+
+---
