@@ -1,9 +1,37 @@
+# Bootstrap and manage the local OpenCode configuration.
+# The default target installs every missing prerequisite, generates the default
+# configuration when missing, and installs the shared skills globally. Never run
+# automatically (no CI, no hooks); review upstream skill content before installation.
+
+.NOTPARALLEL:
+
 ALEXANDRU_SKILLS_TAG := v11.0.4
 MATTPOCOCK_SKILLS_TAG := v1.3.1
 SKILLS_AGENT := opencode
 SKILLS_INSTALL_FLAGS := -g -a $(SKILLS_AGENT) -y
 
-.PHONY: install-skills update-skills check-mattpocock-skills-tag
+.PHONY: all install-pipx generate-config check-mattpocock-skills-tag install-skills update-skills test-oc-switch
+
+all: install-pipx generate-config install-skills
+
+# oc-switch runs through pipx.
+install-pipx:
+	@set -e; \
+	if command -v pipx >/dev/null 2>&1; then \
+		echo "pipx already installed: $$(pipx --version)"; exit 0; \
+	fi; \
+	case "$$(uname -s)" in \
+		Darwin) brew install pipx ;; \
+		Linux) sudo apt-get install -y pipx ;; \
+		*) echo "Unsupported platform: $$(uname -s)" >&2; exit 1 ;; \
+	esac
+
+generate-config:
+	@if [ ! -f opencode.jsonc ]; then \
+		./bin/oc-switch default; \
+	else \
+		echo "opencode.jsonc already exists; leaving it untouched"; \
+	fi
 
 check-mattpocock-skills-tag:
 	@latest=$$(git ls-remote --tags --refs --sort=-version:refname https://github.com/mattpocock/skills.git 'v*' 2>/dev/null | sed -n '1s#.*refs/tags/##p'); \
@@ -41,3 +69,6 @@ install-skills:
 
 update-skills: check-mattpocock-skills-tag
 	$(MAKE) install-skills
+
+test-oc-switch:
+	./bin/oc-switch-test.py

@@ -1,4 +1,5 @@
-# Rust script guidelines
+# Python script guidelines
 
-- Rust code must not panic. Do not use `unwrap`, `expect`, `panic!`, `todo!`, or `unreachable!`.
-- Return `Result` and use `?` for fallible operations.
+- Code must be statically typed and stay `mypy --strict` clean.
+- Scripts declare pinned dependencies in PEP 723 inline metadata and run via `pipx run`.
+- Expected failures raise a domain error with one clear message; users never see a traceback.

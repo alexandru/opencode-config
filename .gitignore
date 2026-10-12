@@ -1,4 +1,7 @@
 node_modules
+__pycache__
+.mypy_cache
+.ruff_cache
 /package.json
 package-lock.json
 bun.lock

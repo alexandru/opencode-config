@@ -32,7 +32,7 @@ Codex, and Pi can share them.
 
 ### Choose a configuration preset
 
-The [oc-switch](./bin/oc-switch.rs) utility is for quickly switching between multiple setting presets (e.g., multiple sets of models assigned to your agents). It's built with Rust 😎, so you need [rustup](https://rustup.rs/) installed.
+The [oc-switch](./bin/oc-switch.py) utility is for quickly switching between multiple setting presets (e.g., multiple sets of models assigned to your agents). It's built with Python 🐍, so you need [pipx](https://pipx.pypa.io/) installed (`make install-pipx`).
 
 ```sh
 # Example
