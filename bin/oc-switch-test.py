@@ -151,14 +151,32 @@ class ReloadTest(unittest.TestCase):
             tool.reload_opencode()
         self.assertEqual(run.call_count, 1)
 
-    def test_failed_reload_warns_without_failing(self) -> None:
+    def test_successful_reload_prints_a_status_line(self) -> None:
+        running = subprocess.CompletedProcess[str](
+            args=["opencode", "service", "status"],
+            returncode=0,
+            stdout="http://127.0.0.1:49374\n",
+        )
+        reloaded = subprocess.CompletedProcess[str](
+            args=["opencode", "reload"], returncode=0
+        )
+        stdout = io.StringIO()
+        with (
+            mock.patch.object(tool.shutil, "which", return_value="/usr/bin/opencode"),
+            mock.patch.object(tool.subprocess, "run", side_effect=[running, reloaded]),
+            mock.patch("sys.stdout", stdout),
+        ):
+            tool.reload_opencode()
+        self.assertIn("✓ Configuration reloaded", stdout.getvalue())
+
+    def test_failed_reload_forwards_child_errors_and_warns(self) -> None:
         running = subprocess.CompletedProcess[str](
             args=["opencode", "service", "status"],
             returncode=0,
             stdout="http://127.0.0.1:49374\n",
         )
         failed = subprocess.CompletedProcess[str](
-            args=["opencode", "reload"], returncode=1
+            args=["opencode", "reload"], returncode=1, stderr="Could not reload\n"
         )
         stderr = io.StringIO()
         with (
@@ -170,6 +188,7 @@ class ReloadTest(unittest.TestCase):
         ):
             tool.reload_opencode()
         self.assertEqual(run.call_count, 2)
+        self.assertIn("Could not reload", stderr.getvalue())
         self.assertIn("opencode reload failed", stderr.getvalue())
 
 

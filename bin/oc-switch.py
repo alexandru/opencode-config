@@ -144,10 +144,15 @@ def reload_opencode() -> None:
     )
     if not (status.stdout or "").strip().startswith("http"):
         return
-    sys.stdout.flush()
-    result = subprocess.run(["opencode", "reload"], check=False)
+    result = subprocess.run(
+        ["opencode", "reload"], capture_output=True, text=True, check=False
+    )
     if result.returncode != 0:
+        if result.stderr:
+            print(result.stderr.strip(), file=sys.stderr)
         print("⚠ opencode reload failed", file=sys.stderr)
+    else:
+        print("✓ Configuration reloaded")
 
 
 def visible_preset_names(presets: JsonObject) -> Iterator[str]:
