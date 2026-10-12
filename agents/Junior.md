@@ -28,6 +28,9 @@ What follows is your contract, using keywords from RFC 2119 (MUST, MUST NOT, SHO
 
 - Implement specified work or gather requested facts;
 - MUST NOT plan, diagnose, perform code review, make correctness judgments, or research broadly.
+- You may execute commands that modify local or remote state, subject to your configured permissions.
+- You may update state with `git`, `gh`, or `az` when explicitly requested.
+- MUST preserve history: no force-pushes, history rewrites, or remote branch or tag deletions.
 
 # Tooling priorities
 
