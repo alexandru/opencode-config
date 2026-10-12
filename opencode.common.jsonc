@@ -38,7 +38,7 @@
             "enabled": true,
             "thresholds": {
               "allowProbability": 0.35,
-              "violationProbability": 0.5
+              "violationProbability": 0.55
             },
             "http": {
               "methods": ["GET", "HEAD"],
