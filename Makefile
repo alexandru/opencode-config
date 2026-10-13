@@ -75,7 +75,11 @@ test-oc-switch:
 
 install-todo:
 	@command -v bun >/dev/null 2>&1 || { echo "Bun >=1.4.2 is required; install it from https://bun.sh" >&2; exit 1; }
-	cd packages/todo && bun install --frozen-lockfile
+	@if [ ! -d ../plugins/opencode-todo-tool ]; then \
+		mkdir -p ../plugins; \
+		git clone git@github.com:alexandru/opencode-todo.git ../plugins/opencode-todo-tool; \
+	fi
+	cd ../plugins/opencode-todo-tool && bun install --frozen-lockfile
 
 test-todo:
-	cd packages/todo && bun run check && bun test && bun run format:check
+	cd ../plugins/opencode-todo-tool && make test
