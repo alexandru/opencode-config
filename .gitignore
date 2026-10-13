@@ -5,6 +5,9 @@ __pycache__
 /package.json
 package-lock.json
 bun.lock
+!/packages/todo/bun.lock
+packages/todo/.agents/
+/.agents/sessions/
 opencode.json*
 plans/
 service.json

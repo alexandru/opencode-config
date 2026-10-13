@@ -183,7 +183,7 @@ permission:
   skill: allow
   webfetch: allow
   websearch: allow
-  execute: deny
+  execute: allow
   question: allow
   "mcp*": allow
   task:

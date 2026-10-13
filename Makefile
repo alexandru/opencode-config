@@ -1,7 +1,7 @@
 # Bootstrap and manage the local OpenCode configuration.
-# The default target installs every missing prerequisite, generates the default
-# configuration when missing, and installs the shared skills globally. Never run
-# automatically (no CI, no hooks); review upstream skill content before installation.
+# The default target installs missing pipx and plugin dependencies, generates the
+# default configuration when missing, and installs the shared skills globally.
+# Never run automatically (no CI, no hooks); review upstream skill content before installation.
 
 .NOTPARALLEL:
 
@@ -10,9 +10,9 @@ MATTPOCOCK_SKILLS_TAG := v1.3.1
 SKILLS_AGENT := opencode
 SKILLS_INSTALL_FLAGS := -g -a $(SKILLS_AGENT) -y
 
-.PHONY: all install-pipx generate-config check-mattpocock-skills-tag install-skills update-skills test-oc-switch
+.PHONY: all install-pipx generate-config check-mattpocock-skills-tag install-skills update-skills test-oc-switch install-todo test-todo
 
-all: install-pipx generate-config install-skills
+all: install-pipx install-todo generate-config install-skills
 
 # oc-switch runs through pipx.
 install-pipx:
@@ -72,3 +72,10 @@ update-skills: check-mattpocock-skills-tag
 
 test-oc-switch:
 	./bin/oc-switch-test.py
+
+install-todo:
+	@command -v bun >/dev/null 2>&1 || { echo "Bun >=1.4.2 is required; install it from https://bun.sh" >&2; exit 1; }
+	cd packages/todo && bun install --frozen-lockfile
+
+test-todo:
+	cd packages/todo && bun run check && bun test && bun run format:check

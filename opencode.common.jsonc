@@ -8,6 +8,7 @@
   },
   "websearch": { "provider": "brave" },
   "plugins": [
+    "./packages/todo",
     "opencode-brave-websearch",
     {
       "package": "opencode-shell-safety",
