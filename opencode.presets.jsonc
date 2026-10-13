@@ -17,6 +17,10 @@
         "model": "openai/gpt-6.1-sol",
         "variant": "medium",
       },
+      "Analyst": {
+        "model": "openai/gpt-6.1-sol",
+        "variant": "high",
+      },
       "Junior": {
         "model": "openai/gpt-6-luna",
         "variant": "xhigh",
@@ -63,6 +67,10 @@
         "model": "mistral/zai-glm-5-3",
         "variant": "max",
       },
+      "Analyst": {
+        "model": "mistral/zai-glm-5-3",
+        "variant": "max",
+      },
       "Junior": {
         "model": "opencode-go/deepseek-v4.1-flash",
         "variant": "high",
@@ -86,6 +94,9 @@
         "model": "opencode-go/mimo-v2.6-pro",
       },
       "Solo": {
+        "model": "opencode-go/mimo-v2.6-pro",
+      },
+      "Analyst": {
         "model": "opencode-go/mimo-v2.6-pro",
       },
       "Junior": {
@@ -112,6 +123,10 @@
         "variant": "max",
       },
       "Solo": {
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "variant": "max",
+      },
+      "Analyst": {
         "model": "opencode-go/deepseek-v4.1-flash",
         "variant": "max",
       },
@@ -180,6 +195,10 @@
         "variant": "high",
       },
       "Solo": {
+        "model": "github-copilot/claude-sonnet-5",
+        "variant": "high",
+      },
+      "Analyst": {
         "model": "github-copilot/claude-sonnet-5",
         "variant": "high",
       },
