@@ -4,7 +4,7 @@ import { lstat, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { type Snapshot, type TodoError, Todos } from "../src/model.ts"
-import { makeTodoStore, SessionDirectory, type TodoStore } from "../src/store.ts"
+import { makeTodoStore, SessionDirectory, type TodoStore, type WriteResult } from "../src/store.ts"
 
 const directories: Set<string> = new Set()
 
@@ -85,6 +85,19 @@ test("a session can replace and reopen its list as standard todo.txt", async ():
   )
   const reopened = await Effect.runPromise(makeTodoStore)
   expect((await Effect.runPromise(reopened.read(session))).todos).toEqual(todos)
+})
+
+test("write reports the replaced list as previous", async (): Promise<void> => {
+  const directory: string = await temporary()
+  const store: TodoStore = await newStore()
+  const session: SessionDirectory = sessionDirectory(directory, "ses_previous")
+  const first: WriteResult = await Effect.runPromise(store.write(session, validTodos("First")))
+  expect(first.path).toBe(join(directory, ".agents", "sessions", "ses_previous", "todo.txt"))
+  expect(first.todos).toEqual(validTodos("First"))
+  expect(first.previous).toEqual(emptyTodos)
+  const second: WriteResult = await Effect.runPromise(store.write(session, validTodos("Second")))
+  expect(second.todos).toEqual(validTodos("Second"))
+  expect(second.previous).toEqual(validTodos("First"))
 })
 
 test("completing and reopening an externally dated task preserves its creation date", async (): Promise<void> => {
@@ -378,12 +391,12 @@ test("concurrent writes and reads expose only complete snapshots", async (): Pro
     initial.push(listFor(index, "Task"))
     initialExpected.push(`(${letterFor(index)}) Task ${index} +p${index} @c${index}\n`)
   }
-  const firstRound: Snapshot[] = await Promise.all(
+  const firstRound: WriteResult[] = await Promise.all(
     initial.map(
-      (todos: Todos): Promise<Snapshot> => Effect.runPromise(store.write(session, todos)),
+      (todos: Todos): Promise<WriteResult> => Effect.runPromise(store.write(session, todos)),
     ),
   )
-  expect(firstRound.map((snapshot: Snapshot): Todos => snapshot.todos)).toEqual(initial)
+  expect(firstRound.map((result: WriteResult): Todos => result.todos)).toEqual(initial)
   expect(initialExpected).toContain(await readFile(path, "utf8"))
   expect(await readdir(sessionPath)).toEqual(["todo.txt"])
 
@@ -393,18 +406,18 @@ test("concurrent writes and reads expose only complete snapshots", async (): Pro
     updated.push(listFor(index, "Updated"))
     updatedExpected.push(`(${letterFor(index)}) Updated ${index} +p${index} @c${index}\n`)
   }
-  const writes: Promise<Snapshot>[] = updated.map(
-    (todos: Todos): Promise<Snapshot> => Effect.runPromise(store.write(session, todos)),
+  const writes: Promise<WriteResult>[] = updated.map(
+    (todos: Todos): Promise<WriteResult> => Effect.runPromise(store.write(session, todos)),
   )
   const reads: Promise<Snapshot>[] = []
   for (let index = 0; index < 32; index += 1) {
     reads.push(Effect.runPromise(store.read(session)))
   }
-  const [written, observed]: [Snapshot[], Snapshot[]] = await Promise.all([
+  const [written, observed]: [WriteResult[], Snapshot[]] = await Promise.all([
     Promise.all(writes),
     Promise.all(reads),
   ])
-  expect(written.map((snapshot: Snapshot): Todos => snapshot.todos)).toEqual(updated)
+  expect(written.map((result: WriteResult): Todos => result.todos)).toEqual(updated)
   const possible: Todos[] = [...initial, ...updated]
   for (const snapshot of observed) {
     expect(possible).toContainEqual(snapshot.todos)

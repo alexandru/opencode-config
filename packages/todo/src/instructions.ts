@@ -1,7 +1,7 @@
 export const TodoInstructions: string = `TODO lifecycle
 
 - You MUST keep this session's TODO list synchronized with the requested work and its actual progress.
-- You MUST use todoread before changing an existing list. You MUST preserve existing tasks, order, statuses, and priorities unless actual progress or the user's instructions require a change.
+- You MUST pass the list you expect to be stored as \`previous\` to every todowrite; when the write reports the stored list changed, you MUST use todoread and retry with the refreshed list. You MUST preserve existing tasks, order, statuses, and priorities unless actual progress or the user's instructions require a change.
 - You MUST mark a task in_progress before starting it. You MUST keep at most one task in_progress.
 - You MUST mark a task completed immediately after finishing its work and required verification.
 - You MUST NOT mark blocked, failed, skipped, unfinished, or unverified work completed. Unstarted or deferred work MUST remain pending; cancelled work MUST be represented as cancelled.

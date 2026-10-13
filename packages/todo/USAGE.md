@@ -18,10 +18,11 @@ Reopen the TUI after configuration changes. Plugin entry in `opencode.jsonc`:
 ## Tools
 
 - `todoread({})` reads the current session's tasks and file path. Missing files return an empty list.
-- `todowrite({ todos })` replaces the ordered list. An empty array clears it.
+- `todowrite({ previous, todos })` replaces the ordered list only when the stored list still equals `previous`; take `previous` from the latest `todoread` or `todowrite` result. A mismatch fails with an instruction to `todoread` and retry. The result reports a before/after diff. An empty `todos` array clears the list.
 
 ```json
 {
+  "previous": [],
   "todos": [
     { "content": "Run the tests", "status": "in_progress", "priority": "high" }
   ]
@@ -39,6 +40,7 @@ cannot begin with a priority/date, and cannot contain `status:` or `pri:` tokens
   with the active task first.
 - **Show all …**, `/todos`, or **Ctrl+P → Toggle session todos** opens the full scrollable panel.
 - Close with **Close ×**, **Esc** while focused, or the same command-palette action.
+- Each `todowrite` pops a toast with the before/after diff of the change.
 - Manual file edits appear within two seconds. Collapsing does not change the tasks.
 
 ## Storage

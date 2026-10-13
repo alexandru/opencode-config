@@ -12,7 +12,7 @@ permission:
   glob: allow
   webfetch: allow
   question: allow
-  todowrite: allow
+  todowrite: deny
   skill: allow
   lsp: allow
   "mcp*": allow

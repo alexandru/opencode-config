@@ -15,9 +15,15 @@ export const SessionDirectory = Schema.Struct({
 })
 export type SessionDirectory = typeof SessionDirectory.Type
 
+export interface WriteResult {
+  readonly path: string
+  readonly todos: Todos
+  readonly previous: Todos
+}
+
 export interface TodoStore {
   readonly read: (session: SessionDirectory) => Effect.Effect<Snapshot, TodoError>
-  readonly write: (session: SessionDirectory, todos: Todos) => Effect.Effect<Snapshot, TodoError>
+  readonly write: (session: SessionDirectory, todos: Todos) => Effect.Effect<WriteResult, TodoError>
 }
 
 const io = <A>(message: string, run: () => Promise<A>): Effect.Effect<A, TodoError> =>
@@ -95,10 +101,10 @@ export const makeTodoStore: Effect.Effect<TodoStore> = Effect.gen(
       const document: Document = yield* load(path)
       return { path, todos: document.todos }
     })
-    const write: TodoStore["write"] = (session, todos): Effect.Effect<Snapshot, TodoError> =>
+    const write: TodoStore["write"] = (session, todos): Effect.Effect<WriteResult, TodoError> =>
       lock.withPermit(
         Effect.uninterruptible(
-          Effect.gen(function*(): Effect.fn.Return<Snapshot, TodoError> {
+          Effect.gen(function*(): Effect.fn.Return<WriteResult, TodoError> {
             const path: string = pathFor(session)
             yield* ensureDirectory(session)
             const previous: Document = yield* load(path)
@@ -116,7 +122,7 @@ export const makeTodoStore: Effect.Effect<TodoStore> = Effect.gen(
                 await rm(temporary, { force: true })
               }
             })
-            return { path, todos }
+            return { path, todos, previous: previous.todos }
           }),
         ),
       )

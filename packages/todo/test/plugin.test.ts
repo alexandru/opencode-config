@@ -285,7 +285,8 @@ const bothTodoTools = (): SessionContext["tools"] => ({
 const occurrences = (parts: ReadonlyArray<SystemPart>, text: string): number =>
   parts.filter((part): boolean => part.text.includes(text)).length
 
-const ruleReadBeforeWrite: string = "You MUST use todoread before changing an existing list."
+const ruleExpectedOnWrite: string =
+  "You MUST pass the list you expect to be stored as `previous` to every todowrite"
 const ruleInProgressBeforeStart: string = "You MUST mark a task in_progress before starting it."
 const ruleCompletedAfterVerification: string =
   "You MUST mark a task completed immediately after finishing its work and required verification."
@@ -297,7 +298,7 @@ const ruleReconcileBeforeFinal: string =
   "Before your final response, you MUST reconcile the list with what was actually done"
 
 const contractRules: ReadonlyArray<string> = [
-  ruleReadBeforeWrite,
+  ruleExpectedOnWrite,
   ruleInProgressBeforeStart,
   ruleCompletedAfterVerification,
   ruleNoPrematureComplete,
@@ -315,10 +316,16 @@ const writeOutcome = (
   host: TodoHost,
   session: Session.Info,
   agent: Agent.Info,
+  previous: unknown,
   todos: unknown,
 ): Effect.Effect<ToolOutcome> =>
   Effect.gen(function*(): Effect.fn.Return<ToolOutcome, never> {
-    return yield* callTool(host, "todowrite", { todos }, toolContext(session.id, agent.id))
+    return yield* callTool(
+      host,
+      "todowrite",
+      { previous, todos },
+      toolContext(session.id, agent.id),
+    )
   })
 
 const sessionHost = (directory: string, session: Session.Info, agent: Agent.Info): TodoHost =>
@@ -361,16 +368,25 @@ test("todowrite persists exact bytes and todoread returns the same list and path
       { readonly write: ToolOutcome; readonly read: ToolOutcome },
       never
     > {
-      const write: ToolOutcome = yield* callTool(host, "todowrite", { todos }, context)
+      const write: ToolOutcome = yield* callTool(
+        host,
+        "todowrite",
+        { previous: [], todos },
+        context,
+      )
       const read: ToolOutcome = yield* callTool(host, "todoread", {}, context)
       return { write, read }
     }),
   )
-  const written: Snapshot = snapshotOf(expectSuccess(outcome.write))
+  const written: Tool.Result = expectSuccess(outcome.write)
   const read: Snapshot = snapshotOf(expectSuccess(outcome.read))
   const path: string = join(directory, ".agents", "sessions", "ses_tools", "todo.txt")
-  expect(written.path).toBe(path)
-  expect(written.todos).toEqual(todos)
+  const stored: Snapshot = Schema.decodeUnknownSync(Snapshot)(written.output)
+  expect(stored.path).toBe(path)
+  expect(stored.todos).toEqual(todos)
+  expect(written.content).toBe(
+    "Todo list updated:\n+ [in_progress|high] Ship +plugin @opencode\n+ [pending|medium] Read docs",
+  )
   expect(read.path).toBe(path)
   expect(read.todos).toEqual(todos)
   expect(await readFile(path, "utf8")).toBe(
@@ -378,7 +394,106 @@ test("todowrite persists exact bytes and todoread returns the same list and path
   )
   expect(await readdir(join(directory, ".agents", "sessions", "ses_tools"))).toEqual(["todo.txt"])
   expect(host.events).toHaveLength(1)
-  expect(host.events[0]).toEqual(["updated", { sessionID: "ses_tools" }])
+  expect(host.events[0]).toEqual([
+    "updated",
+    {
+      sessionID: "ses_tools",
+      diff: "+ [in_progress|high] Ship +plugin @opencode\n+ [pending|medium] Read docs",
+    },
+  ])
+})
+
+test("todowrite reports a before/after diff over the stored list", async (): Promise<void> => {
+  const directory: string = await temporary()
+  const session: Session.Info = sessionInfo(directory, [rule("todowrite", "*", "allow")])
+  const agent: Agent.Info = agentInfo([rule("todowrite", "*", "allow")])
+  const host: TodoHost = sessionHost(directory, session, agent)
+  const first: ToolOutcome = await runPlugin(
+    host,
+    writeOutcome(host, session, agent, [], [
+      { content: "Alpha", status: "pending", priority: "high" },
+      { content: "Beta", status: "pending", priority: "medium" },
+    ]),
+  )
+  const second: ToolOutcome = await runPlugin(
+    host,
+    writeOutcome(
+      host,
+      session,
+      agent,
+      [
+        { content: "Alpha", status: "pending", priority: "high" },
+        { content: "Beta", status: "pending", priority: "medium" },
+      ],
+      [
+        { content: "Alpha", status: "in_progress", priority: "high" },
+        { content: "Gamma", status: "pending", priority: "low" },
+      ],
+    ),
+  )
+  const third: ToolOutcome = await runPlugin(
+    host,
+    writeOutcome(
+      host,
+      session,
+      agent,
+      [
+        { content: "Alpha", status: "in_progress", priority: "high" },
+        { content: "Gamma", status: "pending", priority: "low" },
+      ],
+      [
+        { content: "Alpha", status: "in_progress", priority: "high" },
+        { content: "Gamma", status: "pending", priority: "low" },
+      ],
+    ),
+  )
+  expect(expectSuccess(first).content).toBe(
+    "Todo list updated:\n+ [pending|high] Alpha\n+ [pending|medium] Beta",
+  )
+  expect(expectSuccess(second).content).toBe(
+    "Todo list updated:\n- [pending|high] Alpha\n- [pending|medium] Beta\n"
+      + "+ [in_progress|high] Alpha\n+ [pending|low] Gamma",
+  )
+  expect(expectSuccess(third).content).toBe("Todo list unchanged.")
+})
+
+test("todowrite fails on an unexpected stored list and instructs a fresh read", async (): Promise<void> => {
+  const directory: string = await temporary()
+  const session: Session.Info = sessionInfo(directory, [rule("todowrite", "*", "allow")])
+  const agent: Agent.Info = agentInfo([rule("todowrite", "*", "allow")])
+  const host: TodoHost = sessionHost(directory, session, agent)
+  const first: ToolOutcome = await runPlugin(
+    host,
+    writeOutcome(host, session, agent, [], [
+      { content: "Alpha", status: "pending", priority: "high" },
+    ]),
+  )
+  expectSuccess(first)
+  const stale: ToolOutcome = await runPlugin(
+    host,
+    writeOutcome(host, session, agent, [], [
+      { content: "Beta", status: "pending", priority: "medium" },
+    ]),
+  )
+  const failure: Tool.Error = expectToolError(stale)
+  expect(failure.message).toContain("does not match the `previous` list")
+  expect(failure.message).toContain("todoread")
+  const path: string = join(directory, ".agents", "sessions", "ses_tools", "todo.txt")
+  expect(await readFile(path, "utf8")).toBe("(A) Alpha\n")
+  expect(host.events).toHaveLength(1)
+  const recovered: ToolOutcome = await runPlugin(
+    host,
+    writeOutcome(
+      host,
+      session,
+      agent,
+      [{ content: "Alpha", status: "pending", priority: "high" }],
+      [{ content: "Alpha", status: "in_progress", priority: "high" }],
+    ),
+  )
+  expectSuccess(recovered)
+  expect(await readFile(path, "utf8")).toBe("(A) Alpha status:in_progress\n")
+  expect(host.events).toHaveLength(2)
 })
 
 test("deny, ask, and unmatched rules reject todowrite without creating .agents", async (): Promise<void> => {
@@ -394,7 +509,7 @@ test("deny, ask, and unmatched rules reject todowrite without creating .agents",
     const host: TodoHost = sessionHost(directory, session, agent)
     const outcome: ToolOutcome = await runPlugin(
       host,
-      writeOutcome(host, session, agent, [
+      writeOutcome(host, session, agent, [], [
         { content: "Blocked", status: "pending", priority: "high" },
       ]),
     )
@@ -412,7 +527,7 @@ test("a session deny overrides an earlier agent allow", async (): Promise<void> 
   const host: TodoHost = sessionHost(directory, session, agent)
   const outcome: ToolOutcome = await runPlugin(
     host,
-    writeOutcome(host, session, agent, [
+    writeOutcome(host, session, agent, [], [
       { content: "Blocked", status: "pending", priority: "high" },
     ]),
   )
@@ -432,7 +547,7 @@ test("a resource-specific deny after a generic allow denies with native separato
   const host: TodoHost = sessionHost(directory, session, agent)
   const outcome: ToolOutcome = await runPlugin(
     host,
-    writeOutcome(host, session, agent, [
+    writeOutcome(host, session, agent, [], [
       { content: "Blocked", status: "pending", priority: "high" },
     ]),
   )
@@ -449,7 +564,7 @@ test("a session allow overrides an earlier agent deny", async (): Promise<void> 
   const host: TodoHost = sessionHost(directory, session, agent)
   const outcome: ToolOutcome = await runPlugin(
     host,
-    writeOutcome(host, session, agent, [
+    writeOutcome(host, session, agent, [], [
       { content: "Override", status: "pending", priority: "high" },
     ]),
   )
@@ -457,7 +572,10 @@ test("a session allow overrides an earlier agent deny", async (): Promise<void> 
   const path: string = join(directory, ".agents", "sessions", "ses_tools", "todo.txt")
   expect(await readFile(path, "utf8")).toBe("(A) Override\n")
   expect(host.events).toHaveLength(1)
-  expect(host.events[0]).toEqual(["updated", { sessionID: "ses_tools" }])
+  expect(host.events[0]).toEqual([
+    "updated",
+    { sessionID: "ses_tools", diff: "+ [pending|high] Override" },
+  ])
 })
 
 test("an unknown session rejects todowrite without writing", async (): Promise<void> => {
@@ -475,7 +593,7 @@ test("an unknown session rejects todowrite without writing", async (): Promise<v
       return yield* callTool(
         host,
         "todowrite",
-        { todos: [{ content: "Blocked", status: "pending", priority: "high" }] },
+        { previous: [], todos: [{ content: "Blocked", status: "pending", priority: "high" }] },
         toolContext(sessionID, agent.id),
       )
     }),
@@ -493,7 +611,7 @@ test("a session bound to another location rejects todowrite without writing", as
   const host: TodoHost = sessionHost(directory, session, agent)
   const outcome: ToolOutcome = await runPlugin(
     host,
-    writeOutcome(host, session, agent, [
+    writeOutcome(host, session, agent, [], [
       { content: "Blocked", status: "pending", priority: "high" },
     ]),
   )
@@ -507,15 +625,19 @@ test("invalid todo input fails decoding before execute and creates no file", asy
   const cases: ReadonlyArray<readonly [string, unknown]> = [
     [
       "empty status token",
-      { todos: [{ content: "Discuss status:", status: "pending", priority: "high" }] },
+      {
+        previous: [],
+        todos: [{ content: "Discuss status:", status: "pending", priority: "high" }],
+      },
     ],
     [
       "empty priority token",
-      { todos: [{ content: "Discuss pri:", status: "pending", priority: "high" }] },
+      { previous: [], todos: [{ content: "Discuss pri:", status: "pending", priority: "high" }] },
     ],
     [
       "two in_progress",
       {
+        previous: [],
         todos: [
           { content: "First", status: "in_progress", priority: "high" },
           { content: "Second", status: "in_progress", priority: "low" },
@@ -552,7 +674,7 @@ test.skipIf(process.platform !== "win32")(
     const host: TodoHost = sessionHost(directory, session, agent)
     const outcome: ToolOutcome = await runPlugin(
       host,
-      writeOutcome(host, session, agent, [
+      writeOutcome(host, session, agent, [], [
         { content: "Blocked", status: "pending", priority: "high" },
       ]),
     )
@@ -670,7 +792,7 @@ test("repeated dispatch of the same event does not duplicate the instruction", a
     }),
   )
   expect(event.system).toHaveLength(2)
-  expect(occurrences(event.system, ruleReadBeforeWrite)).toBe(1)
+  expect(occurrences(event.system, ruleExpectedOnWrite)).toBe(1)
 })
 
 test("a distinct new-turn event receives the instruction", async (): Promise<void> => {
@@ -697,8 +819,8 @@ test("a distinct new-turn event receives the instruction", async (): Promise<voi
   )
   expect(first.system).toHaveLength(2)
   expect(second.system).toHaveLength(2)
-  expect(occurrences(first.system, ruleReadBeforeWrite)).toBe(1)
-  expect(occurrences(second.system, ruleReadBeforeWrite)).toBe(1)
+  expect(occurrences(first.system, ruleExpectedOnWrite)).toBe(1)
+  expect(occurrences(second.system, ruleExpectedOnWrite)).toBe(1)
 })
 
 test("context hook registration is scoped and re-registration leaves one active hook", async (): Promise<void> => {
@@ -743,5 +865,5 @@ test("context hook registration is scoped and re-registration leaves one active 
   expect(secondCount).toBe(1)
   expect(host.activeContextHooks()).toBe(0)
   expect(second.system).toHaveLength(2)
-  expect(occurrences(second.system, ruleReadBeforeWrite)).toBe(1)
+  expect(occurrences(second.system, ruleExpectedOnWrite)).toBe(1)
 })

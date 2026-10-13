@@ -1,6 +1,7 @@
 import { Plugin } from "@opencode/plugin/tui"
 import type { KeymapLayer, PanelInput } from "@opencode/plugin/tui/context"
 import { Session } from "@opencode/schema/session"
+import type { ResolvedTheme } from "@opencode/theme/tui"
 import type { MouseEvent } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { Effect, Result, Schema } from "effect"
@@ -34,6 +35,22 @@ const symbols: Readonly<Record<Todo["status"], string>> = {
   cancelled: "[–]",
 }
 
+const colorFor = (
+  status: Todo["status"],
+  theme: ResolvedTheme,
+): ResolvedTheme["text"]["base"] => {
+  switch (status) {
+    case "pending":
+      return theme.text.base
+    case "in_progress":
+      return theme.text.feedback.warning.base
+    case "completed":
+      return theme.text.muted
+    case "cancelled":
+      return theme.text.feedback.error.base
+  }
+}
+
 const Message = Schema.Struct({ message: Schema.String })
 const messageFor = (error: unknown): string =>
   Schema.is(Message)(error) ? error.message : String(error)
@@ -53,6 +70,15 @@ export default Plugin.define({
     const api = ctx.client.rpc(TodoRpc)
     const [sidebarView, updateSidebarView] = ctx.storage.store("sidebar", {
       initial: { open: true },
+    })
+    const notify: () => void = api.events.on("updated", (event): void => {
+      if (event.data.diff === "") return
+      ctx.ui.toast.show({
+        title: "TODO updated",
+        message: event.data.diff,
+        variant: "info",
+        sessionID: event.data.sessionID,
+      })
     })
     const List = (props: Props): JSX.Element => {
       const [view, setView] = createSignal<View>({ status: "loading" })
@@ -180,13 +206,7 @@ export default Plugin.define({
               </Show>
               <For each={todos()}>
                 {(todo): JSX.Element => (
-                  <text
-                    fg={todo.status === "in_progress"
-                      ? ctx.theme.text.feedback.warning.base
-                      : todo.status === "pending"
-                      ? ctx.theme.text.base
-                      : ctx.theme.text.muted}
-                  >
+                  <text fg={colorFor(todo.status, ctx.theme)}>
                     {symbols[todo.status]} {todo.content} · {todo.priority}
                   </text>
                 )}
@@ -273,6 +293,7 @@ export default Plugin.define({
     return (): void => {
       sidebar()
       panel()
+      notify()
     }
   },
 })

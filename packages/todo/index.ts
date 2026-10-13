@@ -9,11 +9,12 @@ import { Tool } from "@opencode/schema/tool"
 import { Effect, Schema, type Scope } from "effect"
 import { resolve } from "node:path"
 import { TodoRpc } from "./rpc.ts"
+import { diffTodos } from "./src/diff.ts"
 import { TodoInstructions } from "./src/instructions.ts"
-import { Snapshot, TodoError, Todos } from "./src/model.ts"
-import { makeTodoStore, SessionDirectory, type TodoStore } from "./src/store.ts"
+import { Snapshot, Todo, TodoError, Todos } from "./src/model.ts"
+import { makeTodoStore, SessionDirectory, type TodoStore, type WriteResult } from "./src/store.ts"
 
-const WriteInput = Schema.Struct({ todos: Todos })
+const WriteInput = Schema.Struct({ previous: Todos, todos: Todos })
 const ReadInput = Schema.Struct({})
 
 export interface TodoPluginContext {
@@ -44,6 +45,23 @@ const allowed = (action: string, resource: string, rules: readonly Permission.Ru
   rules.findLast(
     (rule): boolean => matches(action, rule.action) && matches(resource, rule.resource),
   )?.effect === "allow"
+
+const sameTodos = (left: readonly Todo[], right: readonly Todo[]): boolean => {
+  if (left.length !== right.length) return false
+  const cursor: Iterator<Todo> = right[Symbol.iterator]()
+  for (const todo of left) {
+    const step: IteratorResult<Todo> = cursor.next()
+    if (
+      step.done
+      || step.value.content !== todo.content
+      || step.value.status !== todo.status
+      || step.value.priority !== todo.priority
+    ) {
+      return false
+    }
+  }
+  return true
+}
 
 export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function*(): Effect.fn.Return<void, unknown, Scope.Scope> {
@@ -132,16 +150,29 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
             "todowrite requires an allow permission. OpenCode V2 does not expose custom-tool approval prompts; deny and ask are rejected.",
         })
       }
-      const save: Effect.Effect<Snapshot, TodoError> = directoryFor(session).pipe(
-        Effect.flatMap(
-          (target): Effect.Effect<Snapshot, TodoError> => store.write(target, input.todos),
-        ),
-      )
-      const snapshot: Snapshot = yield* save.pipe(
+      const target: SessionDirectory = yield* directoryFor(session).pipe(
         Effect.mapError((error): Tool.Error => new Tool.Error({ message: error.message })),
       )
+      const current: Snapshot = yield* store.read(target).pipe(
+        Effect.mapError((error): Tool.Error => new Tool.Error({ message: error.message })),
+      )
+      if (!sameTodos(input.previous, current.todos)) {
+        return yield* new Tool.Error({
+          message:
+            "The stored todo list does not match the `previous` list you sent. Use todoread, then retry todowrite with the refreshed `previous` list.",
+        })
+      }
+      const save: Effect.Effect<WriteResult, TodoError> = directoryFor(session).pipe(
+        Effect.flatMap(
+          (target): Effect.Effect<WriteResult, TodoError> => store.write(target, input.todos),
+        ),
+      )
+      const saved: WriteResult = yield* save.pipe(
+        Effect.mapError((error): Tool.Error => new Tool.Error({ message: error.message })),
+      )
+      const diff: string = diffTodos(saved.previous, saved.todos)
       yield* rpc.events
-        .emit("updated", { sessionID: context.sessionID })
+        .emit("updated", { sessionID: context.sessionID, diff })
         .pipe(
           Effect.catch(
             (error): Effect.Effect<void> =>
@@ -149,9 +180,9 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
           ),
         )
       return {
-        output: snapshot,
-        content: JSON.stringify(snapshot),
-        metadata: { todos: snapshot.todos, path: snapshot.path },
+        output: { path: saved.path, todos: saved.todos },
+        content: diff === "" ? "Todo list unchanged." : `Todo list updated:\n${diff}`,
+        metadata: { todos: saved.todos, path: saved.path },
       }
     })
 
@@ -175,7 +206,7 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
       editor.add({
         name: "todowrite",
         description:
-          `Replace this session's ordered todo list. First use todoread to preserve existing tasks, order, statuses, and priorities. Status: pending, in_progress, completed, cancelled; at most one in_progress. Priority: high, medium, low. Text is one trimmed line; status:/pri: are reserved. An empty list explicitly clears it. Persists as project-local todo.txt and updates the TUI.\n\n${TodoInstructions}`,
+          `Replace this session's ordered todo list when it still equals the \`previous\` list you send; take \`previous\` from the latest todoread or todowrite result in this conversation. A mismatch fails the write: use todoread, then retry. Status: pending, in_progress, completed, cancelled; at most one in_progress. Priority: high, medium, low. Text is one trimmed line; status:/pri: are reserved. An empty todos array clears the list. Persists as project-local todo.txt and updates the TUI.\n\n${TodoInstructions}`,
         input: WriteInput,
         output: Snapshot,
         options: { codemode: false, permission: "todowrite" },
@@ -184,7 +215,7 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
       editor.add({
         name: "todoread",
         description:
-          `Read this session's todo.txt list and storage path. Use before updating an existing list; missing files mean an empty list.\n\n${TodoInstructions}`,
+          `Read this session's todo.txt list and storage path. Use it to obtain the \`previous\` list todowrite expects, or to retry after a failed write; missing files mean an empty list.\n\n${TodoInstructions}`,
         input: ReadInput,
         output: Snapshot,
         options: { codemode: false, permission: "todowrite" },

@@ -185,6 +185,7 @@ permission:
   websearch: allow
   execute: allow
   question: allow
+  todowrite: deny
   "mcp*": allow
   task:
     "*": deny
