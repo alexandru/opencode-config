@@ -45,6 +45,20 @@ test("a reorder reports the unmatched line as removed then added", (): void => {
   expect(diffTodos(previous, next)).toBe("- [pending|high] Alpha\n+ [pending|high] Alpha")
 })
 
+test("rotating three tasks reports only the moved task", (): void => {
+  const previous: Todos = list([
+    ["Alpha", "pending", "high"],
+    ["Beta", "pending", "medium"],
+    ["Gamma", "pending", "low"],
+  ])
+  const next: Todos = list([
+    ["Beta", "pending", "medium"],
+    ["Gamma", "pending", "low"],
+    ["Alpha", "pending", "high"],
+  ])
+  expect(diffTodos(previous, next)).toBe("- [pending|high] Alpha\n+ [pending|high] Alpha")
+})
+
 test("clearing the list removes every line", (): void => {
   const previous: Todos = list([["Alpha", "pending", "high"], ["Beta", "completed", "low"]])
   expect(diffTodos(previous, list([]))).toBe("- [pending|high] Alpha\n- [completed|low] Beta")

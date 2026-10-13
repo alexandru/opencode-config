@@ -150,6 +150,21 @@ test("pending tasks keep their original order after the active task", (): void =
   })
 })
 
+test("an active first task reserves its row before later pending tasks", (): void => {
+  const todos: Todos = decodeTodos([
+    { content: "Active task", status: "in_progress", priority: "high" },
+    { content: "Pending one", status: "pending", priority: "medium" },
+    { content: "Pending two", status: "pending", priority: "low" },
+    { content: "Pending three", status: "pending", priority: "medium" },
+  ])
+  expect(projectTodos(todos, limit(2))).toEqual({
+    kind: "limited",
+    items: todos.slice(0, 2),
+    remaining: 4,
+    total: 4,
+  })
+})
+
 test("the visible rows are capped at the limit while remaining counts hidden unfinished tasks", (): void => {
   const todos: Todos = decodeTodos([
     { content: "Pending one", status: "pending", priority: "high" },

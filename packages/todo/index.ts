@@ -17,6 +17,8 @@ import { makeTodoStore, SessionDirectory, type TodoStore, type WriteResult } fro
 const WriteInput = Schema.Struct({ previous: Todos, todos: Todos })
 const ReadInput = Schema.Struct({})
 
+const toolError = (error: TodoError): Tool.Error => new Tool.Error({ message: error.message })
+
 export interface TodoPluginContext {
   readonly location: Pick<Plugin.Context["location"], "directory">
   readonly tool: Pick<Plugin.Context["tool"], "transform">
@@ -129,7 +131,7 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
       "todo.write",
     )(function*(input, context): Effect.fn.Return<Tool.Result<typeof Snapshot>, Tool.Error> {
       const session: Session.Info = yield* getSession(context.sessionID).pipe(
-        Effect.mapError((error): Tool.Error => new Tool.Error({ message: error.message })),
+        Effect.mapError(toolError),
       )
       const agent: Agent.Info = (yield* ctx.agent
         .get({ agentID: context.agent })
@@ -151,10 +153,10 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
         })
       }
       const target: SessionDirectory = yield* directoryFor(session).pipe(
-        Effect.mapError((error): Tool.Error => new Tool.Error({ message: error.message })),
+        Effect.mapError(toolError),
       )
       const current: Snapshot = yield* store.read(target).pipe(
-        Effect.mapError((error): Tool.Error => new Tool.Error({ message: error.message })),
+        Effect.mapError(toolError),
       )
       if (!sameTodos(input.previous, current.todos)) {
         return yield* new Tool.Error({
@@ -162,13 +164,8 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
             "The stored todo list does not match the `previous` list you sent. Use todoread, then retry todowrite with the refreshed `previous` list.",
         })
       }
-      const save: Effect.Effect<WriteResult, TodoError> = directoryFor(session).pipe(
-        Effect.flatMap(
-          (target): Effect.Effect<WriteResult, TodoError> => store.write(target, input.todos),
-        ),
-      )
-      const saved: WriteResult = yield* save.pipe(
-        Effect.mapError((error): Tool.Error => new Tool.Error({ message: error.message })),
+      const saved: WriteResult = yield* store.write(target, input.todos).pipe(
+        Effect.mapError(toolError),
       )
       const diff: string = diffTodos(saved.previous, saved.todos)
       yield* rpc.events
@@ -187,10 +184,9 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
     })
 
     const executeRead: Tool.Info<typeof ReadInput, typeof Snapshot>["execute"] = (
-      input,
+      _input,
       context,
     ): Effect.Effect<Tool.Result<typeof Snapshot>, Tool.Error> => {
-      void input
       return read(context.sessionID).pipe(
         Effect.map(
           (snapshot): Tool.Result<typeof Snapshot> => ({
@@ -198,7 +194,7 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
             content: JSON.stringify(snapshot),
           }),
         ),
-        Effect.mapError((error): Tool.Error => new Tool.Error({ message: error.message })),
+        Effect.mapError(toolError),
       )
     }
 

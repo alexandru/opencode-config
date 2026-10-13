@@ -15,19 +15,20 @@ const advance = (cursor: Iterator<string>): string | undefined => {
 }
 
 const diffLines = (previous: readonly string[], next: readonly string[]): readonly string[] => {
-  if (previous.length * next.length > MAX_CELLS) return replaced(previous, next)
+  if (
+    previous.length === 0 || next.length === 0
+    || previous.length * next.length > MAX_CELLS
+  ) return replaced(previous, next)
   const width: number = next.length + 1
   const lengths: Int32Array = new Int32Array((previous.length + 1) * width)
   const cell = (index: number): number => lengths[index] ?? 0
-  for (const [position, prevLine] of previous.entries()) {
-    const i: number = previous.length - 1 - position
-    for (const [offset, nextLine] of next.entries()) {
-      const j: number = next.length - 1 - offset
+  previous.reduceRight<void>((_, prevLine: string, i: number): void => {
+    next.reduceRight<void>((_, nextLine: string, j: number): void => {
       lengths[i * width + j] = prevLine === nextLine
         ? cell((i + 1) * width + j + 1) + 1
         : Math.max(cell((i + 1) * width + j), cell(i * width + j + 1))
-    }
-  }
+    }, undefined)
+  }, undefined)
   const lines: string[] = []
   const previousCursor: Iterator<string> = previous[Symbol.iterator]()
   const nextCursor: Iterator<string> = next[Symbol.iterator]()

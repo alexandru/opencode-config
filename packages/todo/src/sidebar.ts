@@ -31,17 +31,14 @@ export const projectTodos = (todos: Todos, mode: "full" | SidebarLimit): TodoPro
     }
   }
   const items: Todo[] = []
-  let current: Todo | undefined
   let remaining: number = 0
   for (const todo of todos) {
     if (!incomplete(todo)) continue
     remaining += 1
-    if (todo.status === "in_progress") current = todo
-    else if (items.length < mode) items.push(todo)
-  }
-  if (current !== undefined) {
-    if (items.length === mode) items.pop()
-    items.unshift(current)
+    if (todo.status === "in_progress") {
+      if (items.length === mode) items.pop()
+      items.unshift(todo)
+    } else if (items.length < mode) items.push(todo)
   }
   return { kind: "limited", items, remaining, total: todos.length }
 }

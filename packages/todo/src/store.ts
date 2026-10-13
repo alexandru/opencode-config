@@ -1,5 +1,6 @@
 import { DateTime, Effect, Schema, Semaphore } from "effect"
 import { randomUUID } from "node:crypto"
+import type { Stats } from "node:fs"
 import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises"
 import { isAbsolute, join } from "node:path"
 import { SessionName, Snapshot, TodoError, Todos } from "./model.ts"
@@ -15,9 +16,7 @@ export const SessionDirectory = Schema.Struct({
 })
 export type SessionDirectory = typeof SessionDirectory.Type
 
-export interface WriteResult {
-  readonly path: string
-  readonly todos: Todos
+export interface WriteResult extends Snapshot {
   readonly previous: Todos
 }
 
@@ -38,11 +37,18 @@ const missing = (error: unknown): boolean =>
 const pathFor = (session: SessionDirectory): string =>
   join(session.directory, ".agents", "sessions", session.name, "todo.txt")
 
+const requireDirectory = async (directory: string): Promise<void> => {
+  const info: Stats = await lstat(directory)
+  if (!info.isDirectory()) {
+    throw new Error(`${directory} must be a real directory`)
+  }
+}
+
 const load = Effect.fnUntraced(function*(path: string): Effect.fn.Return<Document, TodoError> {
   const text: string = yield* io(`Cannot read ${path}`, async (): Promise<string> => {
     try {
-      const info = await lstat(path)
-      if (!info.isFile() || info.isSymbolicLink()) {
+      const info: Stats = await lstat(path)
+      if (!info.isFile()) {
         throw new Error("todo.txt must be a regular file")
       }
       return await readFile(path, "utf8")
@@ -62,10 +68,7 @@ const checkDirectory = Effect.fnUntraced(function*(
     for (const segment of [".agents", "sessions", session.name]) {
       directory = join(directory, segment)
       try {
-        const info = await lstat(directory)
-        if (!info.isDirectory() || info.isSymbolicLink()) {
-          throw new Error(`${directory} must be a real directory`)
-        }
+        await requireDirectory(directory)
       } catch (error) {
         if (missing(error)) return
         throw error
@@ -82,10 +85,7 @@ const ensureDirectory = Effect.fnUntraced(function*(
     for (const segment of [".agents", "sessions", session.name]) {
       directory = join(directory, segment)
       await mkdir(directory, { recursive: true, mode: 0o700 })
-      const info = await lstat(directory)
-      if (!info.isDirectory() || info.isSymbolicLink()) {
-        throw new Error(`${directory} must be a real directory`)
-      }
+      await requireDirectory(directory)
     }
   })
 })

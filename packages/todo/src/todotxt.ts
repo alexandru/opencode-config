@@ -2,12 +2,12 @@ import { Effect, Schema } from "effect"
 import { Todo, TodoError, Todos } from "./model.ts"
 
 export type Record =
-  & Todo
+  & Pick<Todo, "content" | "priority">
+  & { readonly created: string | undefined }
   & (
-    | { readonly status: "pending" | "in_progress"; readonly created: string | undefined }
+    | { readonly status: "pending" | "in_progress" }
     | {
       readonly status: "completed" | "cancelled"
-      readonly created: string | undefined
       readonly completed: string | undefined
     }
   )
@@ -108,42 +108,41 @@ export const parse = Effect.fnUntraced(function*(
   return { records, todos }
 })
 
+const renderLine = (todo: Todo, old: Record | undefined, today: string): string => {
+  const created: string | undefined = old?.created
+  const openBody: string = created ? `${created} ${todo.content}` : todo.content
+  const letter: Letter = letters[todo.priority]
+  switch (todo.status) {
+    case "pending":
+      return `(${letter}) ${openBody}\n`
+    case "in_progress":
+      return `(${letter}) ${openBody} status:in_progress\n`
+    case "completed":
+    case "cancelled": {
+      const completed: string | undefined =
+        old?.status === "completed" || old?.status === "cancelled"
+          ? old.completed
+          : created
+          ? today
+          : undefined
+      const closedBody: string = completed ? `${completed} ${openBody}` : todo.content
+      const status: string = todo.status === "cancelled" ? " status:cancelled" : ""
+      return `x ${closedBody} pri:${letter}${status}\n`
+    }
+  }
+}
+
 export const render = (todos: Todos, previous: readonly Record[], today: string): string => {
-  const records: Map<string, Record[]> = previous.reduceRight(
-    (grouped: Map<string, Record[]>, record: Record): Map<string, Record[]> => {
+  const records: Map<Todo["content"], Record[]> = previous.reduceRight(
+    (grouped: Map<Todo["content"], Record[]>, record: Record): Map<Todo["content"], Record[]> => {
       const existing: Record[] | undefined = grouped.get(record.content)
       if (existing) existing.push(record)
       else grouped.set(record.content, [record])
       return grouped
     },
-    new Map<string, Record[]>(),
+    new Map<Todo["content"], Record[]>(),
   )
-  const lines: string[] = []
-  for (const todo of todos) {
-    const old: Record | undefined = records.get(todo.content)?.pop()
-    const created: string | undefined = old?.created
-    const completed: string | undefined = old?.status === "completed" || old?.status === "cancelled"
-      ? old.completed
-      : created
-      ? today
-      : undefined
-    const openBody: string = created ? `${created} ${todo.content}` : todo.content
-    const closedBody: string = completed ? `${completed} ${openBody}` : todo.content
-    const letter: Letter = letters[todo.priority]
-    switch (todo.status) {
-      case "pending":
-        lines.push(`(${letter}) ${openBody}`)
-        break
-      case "in_progress":
-        lines.push(`(${letter}) ${openBody} status:in_progress`)
-        break
-      case "completed":
-        lines.push(`x ${closedBody} pri:${letter}`)
-        break
-      case "cancelled":
-        lines.push(`x ${closedBody} pri:${letter} status:cancelled`)
-        break
-    }
-  }
-  return lines.length === 0 ? "" : `${lines.join("\n")}\n`
+  return todos.map(
+    (todo: Todo): string => renderLine(todo, records.get(todo.content)?.pop(), today),
+  ).join("")
 }

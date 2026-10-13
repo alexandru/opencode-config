@@ -55,3 +55,27 @@ test("duplicate task text preserves dates in occurrence order without mutating p
   expect(render(todos, previous.records, "2026-10-13")).toBe(expected)
   expect(previous.records).toHaveLength(4)
 })
+
+test("rendering an empty list produces no newline", (): void => {
+  const todos: Todos = Schema.decodeUnknownSync(Todos)([])
+  expect(render(todos, [], "2026-10-13")).toBe("")
+})
+
+test("completion-only dates survive closed transitions but not reopening", async (): Promise<void> => {
+  const previous: Document = await Effect.runPromise(parse("x 2026-10-04 Task pri:A\n"))
+  const cases: readonly {
+    readonly status: "pending" | "in_progress" | "completed" | "cancelled"
+    readonly text: string
+  }[] = [
+    { status: "pending", text: "(A) Task\n" },
+    { status: "in_progress", text: "(A) Task status:in_progress\n" },
+    { status: "completed", text: "x 2026-10-04 Task pri:A\n" },
+    { status: "cancelled", text: "x 2026-10-04 Task pri:A status:cancelled\n" },
+  ]
+  for (const { status, text } of cases) {
+    const todos: Todos = Schema.decodeUnknownSync(Todos)([
+      { content: "Task", status, priority: "high" },
+    ])
+    expect(render(todos, previous.records, "2026-10-13")).toBe(text)
+  }
+})
