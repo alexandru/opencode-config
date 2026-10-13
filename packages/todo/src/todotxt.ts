@@ -24,6 +24,8 @@ const letters: Readonly<{ high: "A"; medium: "B"; low: "C" }> = {
   medium: "B",
   low: "C",
 }
+const STATUS_PREFIX: string = "status:"
+const PRIORITY_PREFIX: string = "pri:"
 
 export interface Document {
   readonly records: readonly Record[]
@@ -38,8 +40,8 @@ const decodeLetter = (value: unknown): Effect.Effect<Letter, TodoError> =>
   )
 
 const parseLine = Effect.fnUntraced(function*(line: string): Effect.fn.Return<Record, TodoError> {
-  const completed: boolean = line.startsWith("x ")
-  let body: string = completed ? line.slice(2) : line
+  const closed: boolean = line.startsWith("x ")
+  let body: string = closed ? line.slice(2) : line
   let letter: Letter | undefined
   const priority: RegExpMatchArray | null = body.match(/^\(([A-Z])\) /)
   if (priority) {
@@ -47,27 +49,27 @@ const parseLine = Effect.fnUntraced(function*(line: string): Effect.fn.Return<Re
     body = body.slice(priority[0].length)
   }
   const datePrefix: RegExpMatchArray | null = body.match(
-    completed ? /^\d{4}-\d{2}-\d{2} (?:\d{4}-\d{2}-\d{2} )?/ : /^\d{4}-\d{2}-\d{2} /,
+    closed ? /^\d{4}-\d{2}-\d{2} (?:\d{4}-\d{2}-\d{2} )?/ : /^\d{4}-\d{2}-\d{2} /,
   )
   const dates: string = datePrefix?.[0] ?? ""
   body = body.slice(dates.length)
   let statusToken: string | undefined
   const words: string[] = []
   for (const word of body.split(" ")) {
-    if (word.startsWith("status:")) {
+    if (word.startsWith(STATUS_PREFIX)) {
       if (statusToken !== undefined) {
         return yield* new TodoError({ message: "Duplicate status: token" })
       }
-      statusToken = word.slice(7)
-    } else if (word.startsWith("pri:")) {
+      statusToken = word.slice(STATUS_PREFIX.length)
+    } else if (word.startsWith(PRIORITY_PREFIX)) {
       if (letter !== undefined) return yield* new TodoError({ message: "Duplicate priority" })
-      letter = yield* decodeLetter(word.slice(4))
+      letter = yield* decodeLetter(word.slice(PRIORITY_PREFIX.length))
     } else {
       words.push(word)
     }
   }
-  const status: string = statusToken ?? (completed ? "completed" : "pending")
-  if (completed !== (status === "completed" || status === "cancelled")) {
+  const status: string = statusToken ?? (closed ? "completed" : "pending")
+  if (closed !== (status === "completed" || status === "cancelled")) {
     return yield* new TodoError({ message: "The x marker and status: token disagree" })
   }
   const todo: Todo = yield* Schema.decodeUnknownEffect(Todo)({
