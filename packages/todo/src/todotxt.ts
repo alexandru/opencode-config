@@ -30,18 +30,20 @@ export interface Document {
   readonly todos: Todos
 }
 
+const decodeLetter = (value: unknown): Effect.Effect<Letter, TodoError> =>
+  Schema.decodeUnknownEffect(Letters)(value).pipe(
+    Effect.mapError(
+      (): TodoError => new TodoError({ message: "Supported todo.txt priorities are A, B, and C" }),
+    ),
+  )
+
 const parseLine = Effect.fnUntraced(function*(line: string): Effect.fn.Return<Record, TodoError> {
   const completed: boolean = line.startsWith("x ")
   let body: string = completed ? line.slice(2) : line
-  let letter: Letter = "B"
+  let letter: Letter | undefined
   const priority: RegExpMatchArray | null = body.match(/^\(([A-Z])\) /)
   if (priority) {
-    letter = yield* Schema.decodeUnknownEffect(Letters)(priority[1]).pipe(
-      Effect.mapError(
-        (): TodoError =>
-          new TodoError({ message: "Supported todo.txt priorities are A, B, and C" }),
-      ),
-    )
+    letter = yield* decodeLetter(priority[1])
     body = body.slice(priority[0].length)
   }
   const datePrefix: RegExpMatchArray | null = body.match(
@@ -49,35 +51,29 @@ const parseLine = Effect.fnUntraced(function*(line: string): Effect.fn.Return<Re
   )
   const dates: string = datePrefix?.[0] ?? ""
   body = body.slice(dates.length)
-  let status: string = completed ? "completed" : "pending"
-  let statusSeen: boolean = false
-  let prioritySeen: boolean = false
+  let statusToken: string | undefined
   const words: string[] = []
   for (const word of body.split(" ")) {
     if (word.startsWith("status:")) {
-      if (statusSeen) return yield* new TodoError({ message: "Duplicate status: token" })
-      statusSeen = true
-      status = word.slice(7)
+      if (statusToken !== undefined) {
+        return yield* new TodoError({ message: "Duplicate status: token" })
+      }
+      statusToken = word.slice(7)
     } else if (word.startsWith("pri:")) {
-      if (prioritySeen || priority) return yield* new TodoError({ message: "Duplicate priority" })
-      prioritySeen = true
-      letter = yield* Schema.decodeUnknownEffect(Letters)(word.slice(4)).pipe(
-        Effect.mapError(
-          (): TodoError =>
-            new TodoError({ message: "Supported todo.txt priorities are A, B, and C" }),
-        ),
-      )
+      if (letter !== undefined) return yield* new TodoError({ message: "Duplicate priority" })
+      letter = yield* decodeLetter(word.slice(4))
     } else {
       words.push(word)
     }
   }
+  const status: string = statusToken ?? (completed ? "completed" : "pending")
   if (completed !== (status === "completed" || status === "cancelled")) {
     return yield* new TodoError({ message: "The x marker and status: token disagree" })
   }
   const todo: Todo = yield* Schema.decodeUnknownEffect(Todo)({
     content: words.join(" ").trim(),
     status,
-    priority: priorities[letter],
+    priority: priorities[letter ?? "B"],
   }).pipe(Effect.mapError((error): TodoError => new TodoError({ message: error.message })))
   const [first, second] = dates.trim().split(" ")
   switch (todo.status) {
@@ -113,15 +109,18 @@ export const parse = Effect.fnUntraced(function*(
 })
 
 export const render = (todos: Todos, previous: readonly Record[], today: string): string => {
-  const records: Map<string, Record[]> = new Map()
-  for (const record of previous) {
-    const existing: Record[] | undefined = records.get(record.content)
-    if (existing) existing.push(record)
-    else records.set(record.content, [record])
-  }
+  const records: Map<string, Record[]> = previous.reduceRight(
+    (grouped: Map<string, Record[]>, record: Record): Map<string, Record[]> => {
+      const existing: Record[] | undefined = grouped.get(record.content)
+      if (existing) existing.push(record)
+      else grouped.set(record.content, [record])
+      return grouped
+    },
+    new Map<string, Record[]>(),
+  )
   const lines: string[] = []
   for (const todo of todos) {
-    const old: Record | undefined = records.get(todo.content)?.shift()
+    const old: Record | undefined = records.get(todo.content)?.pop()
     const created: string | undefined = old?.created
     const completed: string | undefined = old?.status === "completed" || old?.status === "cancelled"
       ? old.completed
