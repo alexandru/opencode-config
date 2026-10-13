@@ -11,7 +11,7 @@ import { resolve } from "node:path"
 import { TodoRpc } from "./rpc.ts"
 import { diffTodos } from "./src/diff.ts"
 import { TodoInstructions } from "./src/instructions.ts"
-import { Snapshot, Todo, TodoError, Todos } from "./src/model.ts"
+import { Snapshot, TodoError, Todos } from "./src/model.ts"
 import { makeTodoStore, SessionDirectory, type TodoStore, type WriteResult } from "./src/store.ts"
 
 const WriteInput = Schema.Struct({ previous: Todos, todos: Todos })
@@ -48,30 +48,27 @@ const allowed = (action: string, resource: string, rules: readonly Permission.Ru
     (rule): boolean => matches(action, rule.action) && matches(resource, rule.resource),
   )?.effect === "allow"
 
-const sameTodos = (left: readonly Todo[], right: readonly Todo[]): boolean => {
-  if (left.length !== right.length) return false
-  const cursor: Iterator<Todo> = right[Symbol.iterator]()
-  for (const todo of left) {
-    const step: IteratorResult<Todo> = cursor.next()
-    if (
-      step.done
-      || step.value.content !== todo.content
-      || step.value.status !== todo.status
-      || step.value.priority !== todo.priority
-    ) {
-      return false
-    }
-  }
-  return true
-}
-
 export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function*(): Effect.fn.Return<void, unknown, Scope.Scope> {
     const store: TodoStore = yield* makeTodoStore
     yield* ctx.session.hook(
       "context",
       (event): Effect.Effect<void> =>
-        Effect.sync((): void => {
+        Effect.gen(function*(): Effect.fn.Return<void> {
+          if (!Object.hasOwn(event.tools, "todowrite") && !Object.hasOwn(event.tools, "todoread")) {
+            return
+          }
+          const root: boolean = yield* ctx.session.get({ sessionID: event.sessionID }).pipe(
+            Effect.match({
+              onSuccess: (session): boolean => session.parentID === undefined,
+              onFailure: (): boolean => false,
+            }),
+          )
+          if (!root) {
+            delete event.tools.todowrite
+            delete event.tools.todoread
+            return
+          }
           if (!Object.hasOwn(event.tools, "todowrite") || !Object.hasOwn(event.tools, "todoread")) {
             return
           }
@@ -155,16 +152,7 @@ export const register = (ctx: TodoPluginContext): Effect.Effect<void, never, Sco
       const target: SessionDirectory = yield* directoryFor(session).pipe(
         Effect.mapError(toolError),
       )
-      const current: Snapshot = yield* store.read(target).pipe(
-        Effect.mapError(toolError),
-      )
-      if (!sameTodos(input.previous, current.todos)) {
-        return yield* new Tool.Error({
-          message:
-            "The stored todo list does not match the `previous` list you sent. Use todoread, then retry todowrite with the refreshed `previous` list.",
-        })
-      }
-      const saved: WriteResult = yield* store.write(target, input.todos).pipe(
+      const saved: WriteResult = yield* store.write(target, input.todos, input.previous).pipe(
         Effect.mapError(toolError),
       )
       const diff: string = diffTodos(saved.previous, saved.todos)

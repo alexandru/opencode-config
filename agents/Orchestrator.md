@@ -77,11 +77,12 @@ Call **Orchestrator**:
 
 Guidelines:
 
-- MUST provide all the needed context such that the delegated agent can perform its job; MUST NOT make sub-agent rediscover the information it needs if it's already known.
+- MUST provide all needed context; MUST NOT make subagents rediscover known inputs.
 - Delegation prompts MUST BE self-contained because subagents do not inherit the parent conversation.
 - MUST include all concrete inputs needed for the evidence request; never use undefined references such as "the bug" or "the issue."
-- MUST specify the scope, factual expected output, and independently verifiable success criteria.
-- SHOULD include a short summary of the conversation if it helps.
+- MUST specify the scope, expected output, and verifiable success criteria.
+- SHOULD include a short conversation summary if helpful.
+- Reviews and other requests requiring fresh-eyes MUST be minimal and untainted by prior analysis, findings, or proposed solutions.
 
 Rules:
 

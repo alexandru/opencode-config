@@ -17,6 +17,8 @@ Reopen the TUI after configuration changes. Plugin entry in `opencode.jsonc`:
 
 ## Tools
 
+Only root sessions expose these tools and receive the TODO lifecycle instructions. Subagents see neither tool.
+
 - `todoread({})` reads the current session's tasks and file path. Missing files return an empty list.
 - `todowrite({ previous, todos })` replaces the ordered list only when the stored list still equals `previous`; take `previous` from the latest `todoread` or `todowrite` result. A mismatch fails with an instruction to `todoread` and retry. The result reports a before/after diff. An empty `todos` array clears the list.
 

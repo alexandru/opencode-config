@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto"
 import type { Stats } from "node:fs"
 import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises"
 import { isAbsolute, join } from "node:path"
-import { SessionName, Snapshot, TodoError, Todos } from "./model.ts"
+import { SessionName, Snapshot, Todo, TodoError, Todos } from "./model.ts"
 import { type Document, parse, render } from "./todotxt.ts"
 
 export const SessionDirectory = Schema.Struct({
@@ -22,7 +22,28 @@ export interface WriteResult extends Snapshot {
 
 export interface TodoStore {
   readonly read: (session: SessionDirectory) => Effect.Effect<Snapshot, TodoError>
-  readonly write: (session: SessionDirectory, todos: Todos) => Effect.Effect<WriteResult, TodoError>
+  readonly write: (
+    session: SessionDirectory,
+    todos: Todos,
+    expected?: Todos,
+  ) => Effect.Effect<WriteResult, TodoError>
+}
+
+const sameTodos = (left: readonly Todo[], right: readonly Todo[]): boolean => {
+  if (left.length !== right.length) return false
+  const cursor: Iterator<Todo> = right[Symbol.iterator]()
+  for (const todo of left) {
+    const step: IteratorResult<Todo> = cursor.next()
+    if (
+      step.done
+      || step.value.content !== todo.content
+      || step.value.status !== todo.status
+      || step.value.priority !== todo.priority
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 const io = <A>(message: string, run: () => Promise<A>): Effect.Effect<A, TodoError> =>
@@ -101,13 +122,23 @@ export const makeTodoStore: Effect.Effect<TodoStore> = Effect.gen(
       const document: Document = yield* load(path)
       return { path, todos: document.todos }
     })
-    const write: TodoStore["write"] = (session, todos): Effect.Effect<WriteResult, TodoError> =>
+    const write: TodoStore["write"] = (
+      session,
+      todos,
+      expected,
+    ): Effect.Effect<WriteResult, TodoError> =>
       lock.withPermit(
         Effect.uninterruptible(
           Effect.gen(function*(): Effect.fn.Return<WriteResult, TodoError> {
             const path: string = pathFor(session)
             yield* ensureDirectory(session)
             const previous: Document = yield* load(path)
+            if (expected !== undefined && !sameTodos(expected, previous.todos)) {
+              return yield* new TodoError({
+                message:
+                  "The stored todo list does not match the `previous` list you sent. Use todoread, then retry todowrite with the refreshed `previous` list.",
+              })
+            }
             const temporary: string = `${path}.${randomUUID()}.tmp`
             const today: string = DateTime.formatIsoDateUtc(yield* DateTime.now)
             yield* io(`Cannot write ${path}`, async (): Promise<void> => {

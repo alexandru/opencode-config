@@ -403,6 +403,39 @@ test("todowrite persists exact bytes and todoread returns the same list and path
   ])
 })
 
+test("concurrent writes with the same previous list cannot both succeed", async (): Promise<void> => {
+  const directory: string = await temporary()
+  const session: Session.Info = sessionInfo(directory, [rule("todowrite", "*", "allow")])
+  const agent: Agent.Info = agentInfo([rule("todowrite", "*", "allow")])
+  const host: TodoHost = sessionHost(directory, session, agent)
+  await runPlugin(
+    host,
+    Effect.gen(function*(): Effect.fn.Return<void> {
+      const outcomes: ToolOutcome[] = yield* Effect.all(
+        ["First", "Second"].map((content): Effect.Effect<ToolOutcome> =>
+          writeOutcome(host, session, agent, [], [
+            { content, status: "pending", priority: "high" },
+          ])
+        ),
+        { concurrency: "unbounded" },
+      )
+      expect(outcomes.filter((outcome): boolean => Result.isSuccess(outcome))).toHaveLength(1)
+      expect(outcomes.filter((outcome): boolean => Result.isFailure(outcome))).toHaveLength(1)
+      const stored: Snapshot = snapshotOf(expectSuccess(
+        yield* callTool(host, "todoread", {}, toolContext(session.id, agent.id)),
+      ))
+      for (const outcome of outcomes) {
+        if (Result.isSuccess(outcome)) {
+          expect(Schema.decodeUnknownSync(Snapshot)(outcome.success.output)).toEqual(stored)
+        } else {
+          expect(expectToolError(outcome).message).toContain("does not match the `previous` list")
+        }
+      }
+      expect(host.events).toHaveLength(1)
+    }),
+  )
+})
+
 test("todowrite reports a before/after diff over the stored list", async (): Promise<void> => {
   const directory: string = await temporary()
   const session: Session.Info = sessionInfo(directory, [rule("todowrite", "*", "allow")])
@@ -704,11 +737,71 @@ test("both todo tool descriptions carry the RFC 2119 lifecycle rules", async ():
   }
 })
 
-test("context hook appends one instruction after existing system text when both todo tools are present", async (): Promise<void> => {
+test("child sessions see neither todo tools nor todo instructions", async (): Promise<void> => {
+  const directory: string = await temporary()
+  const child: Session.Info = {
+    ...sessionInfo(directory, [], "ses_hook"),
+    parentID: Session.ID.make("ses_parent"),
+  }
+  const host: TodoHost = makeHost({
+    directory,
+    sessions: new Map([[child.id, child]]),
+    agents: new Map<string, Agent.Info>(),
+  })
+  const base: SystemPart = { type: "text", text: "existing system prompt" }
+  const unrelated: SessionContext["tools"][string] = toolEntry("unrelated tool")
+  const event: SessionContext = sessionContext([base], {
+    ...bothTodoTools(),
+    unrelated,
+  })
+  await runPlugin(host, host.dispatchContext(event))
+  expect(event.tools).toEqual({ unrelated })
+  expect(event.system).toEqual([base])
+  expect(host.tools.size).toBe(2)
+})
+
+test("child sessions hide either todo tool even when the other is already absent", async (): Promise<void> => {
+  const directory: string = await temporary()
+  const child: Session.Info = {
+    ...sessionInfo(directory, [], "ses_hook"),
+    parentID: Session.ID.make("ses_parent"),
+  }
+  const host: TodoHost = makeHost({
+    directory,
+    sessions: new Map([[child.id, child]]),
+    agents: new Map<string, Agent.Info>(),
+  })
+  await runPlugin(
+    host,
+    Effect.gen(function*(): Effect.fn.Return<void> {
+      for (const name of ["todowrite", "todoread"]) {
+        const event: SessionContext = sessionContext([], { [name]: toolEntry(name) })
+        yield* host.dispatchContext(event)
+        expect(event.tools).toEqual({})
+        expect(event.system).toEqual([])
+      }
+    }),
+  )
+})
+
+test("an unresolved session hides todo tools without failing the model request", async (): Promise<void> => {
   const directory: string = await temporary()
   const host: TodoHost = makeHost({
     directory,
     sessions: new Map<string, Session.Info>(),
+    agents: new Map<string, Agent.Info>(),
+  })
+  const event: SessionContext = sessionContext([], bothTodoTools())
+  await runPlugin(host, host.dispatchContext(event))
+  expect(event.tools).toEqual({})
+  expect(event.system).toEqual([])
+})
+
+test("context hook appends one instruction after existing system text when both todo tools are present", async (): Promise<void> => {
+  const directory: string = await temporary()
+  const host: TodoHost = makeHost({
+    directory,
+    sessions: new Map([["ses_hook", sessionInfo(directory, [], "ses_hook")]]),
     agents: new Map<string, Agent.Info>(),
   })
   const base: SystemPart = { type: "text", text: "existing system prompt" }
@@ -735,7 +828,7 @@ test("context hook skips injection when todowrite or todoread is missing", async
     const directory: string = await temporary()
     const host: TodoHost = makeHost({
       directory,
-      sessions: new Map<string, Session.Info>(),
+      sessions: new Map([["ses_hook", sessionInfo(directory, [], "ses_hook")]]),
       agents: new Map<string, Agent.Info>(),
     })
     const base: SystemPart = { type: "text", text: "existing system prompt" }
@@ -750,7 +843,7 @@ test("context hook injects without replacing system messages options tools or co
   const directory: string = await temporary()
   const host: TodoHost = makeHost({
     directory,
-    sessions: new Map<string, Session.Info>(),
+    sessions: new Map([["ses_hook", sessionInfo(directory, [], "ses_hook")]]),
     agents: new Map<string, Agent.Info>(),
   })
   const base: SystemPart = { type: "text", text: "existing system prompt" }
@@ -777,7 +870,7 @@ test("repeated dispatch of the same event does not duplicate the instruction", a
   const directory: string = await temporary()
   const host: TodoHost = makeHost({
     directory,
-    sessions: new Map<string, Session.Info>(),
+    sessions: new Map([["ses_hook", sessionInfo(directory, [], "ses_hook")]]),
     agents: new Map<string, Agent.Info>(),
   })
   const event: SessionContext = sessionContext(
@@ -799,7 +892,7 @@ test("a distinct new-turn event receives the instruction", async (): Promise<voi
   const directory: string = await temporary()
   const host: TodoHost = makeHost({
     directory,
-    sessions: new Map<string, Session.Info>(),
+    sessions: new Map([["ses_hook", sessionInfo(directory, [], "ses_hook")]]),
     agents: new Map<string, Agent.Info>(),
   })
   const first: SessionContext = sessionContext(
@@ -827,7 +920,7 @@ test("context hook registration is scoped and re-registration leaves one active 
   const directory: string = await temporary()
   const host: TodoHost = makeHost({
     directory,
-    sessions: new Map<string, Session.Info>(),
+    sessions: new Map([["ses_hook", sessionInfo(directory, [], "ses_hook")]]),
     agents: new Map<string, Agent.Info>(),
   })
   const first: SessionContext = sessionContext(
