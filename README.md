@@ -109,7 +109,6 @@ Sub-agents:
 
 ## Defined commands
 
-- `/plan`: prepare a detailed implementation plan and save it as a Markdown specification file.
 - `/grill-me`: stress-test a plan or decision.
 - `/grill-with-docs`: sharpen a plan or design while creating domain documentation.
 - `/handoff`: prepare context for another agent or session.

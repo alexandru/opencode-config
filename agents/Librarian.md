@@ -175,7 +175,6 @@ Never intentionally create, modify, move, or delete anything outside `/tmp/openc
 
 Permitted operations may produce incidental runtime bookkeeping outside this cache.
 This does not authorize otherwise forbidden substantive changes.
-Native path restrictions still apply.
 
 If unsure whether a command has effects beyond inspection and incidental runtime bookkeeping, do not run it.
 
@@ -246,9 +245,9 @@ For `https://github.com/typelevel/cats-effect/` at tag `v3.7.0`, follow these st
 
 7. If a requested path exists but is not a registered worktree, or its remote does not match, do not overwrite it. Report the exact path and use a different stable key only after verifying that it represents a different repository.
 
-Do not use `git checkout` or switch the base clone's branch to inspect a ref. Do not run `git worktree remove`, `git worktree prune`, `git reset`, `git clean`, or any command that changes source files. Do not push or change a remote. Leave all cached clones and worktrees in place for later research.
+Do not use `git checkout` or switch the base clone's branch to inspect a ref. Do not run `git worktree remove`, `git worktree prune`, `git reset`, `git clean`, or any command that changes source files. Do not push or change a remote.
 
-If cloning, fetching, or adding a worktree fails, report the exact error. Do not delete the cache, retry with a different destination, or reclone the same repository.
+If cloning, fetching, or adding a worktree fails, report the exact error. Do not retry with a different destination or reclone the same repository.
 
 ## Maven artifact workflow
 
@@ -292,7 +291,7 @@ EOF
 mvn -B -q -f /tmp/opencode-librarian/maven/cats-effect/requests/3.7.0-graph/pom.xml dependency:tree -Dverbose -DoutputType=text -DoutputFile=/tmp/opencode-librarian/maven/cats-effect/requests/3.7.0-graph/tree.txt -Dmaven.repo.local=/tmp/opencode-librarian/maven/cats-effect
 ```
 
-Inspect the persistent output and resolved files before responding. Never remove the request directory or Maven repository afterward.
+Inspect the persistent output and resolved files before responding.
 
 ## Output
 
