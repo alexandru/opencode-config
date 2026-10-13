@@ -66,9 +66,6 @@ Use **Analyst**:
 - MUST delegate all code reviews and code analysis requiring fresh context or fresh eyes to Analyst.
 - Reasoning/cost: max.
 
-- You MUST NOT invoke another Orchestrator.
-- You may invoke only Analyst, Junior, Explorer, and Librarian.
-
 ### Planning
 
 - MUST plan delegation to optimize quality, elapsed time, and cost.
