@@ -1,6 +1,6 @@
 ---
 description: Refine code using the refine skill
-subtask: true
+subagent: true
 ---
 
 Run a @refine session.

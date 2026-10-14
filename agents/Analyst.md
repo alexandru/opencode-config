@@ -1,15 +1,33 @@
 ---
 description: "Use for reading code and evidence, exercising judgment, and advising on architecture, correctness, and refinements. Reasoning/cost: max."
 mode: subagent
-temperature: 0.2
-permission:
-  "*": deny
-  read: allow
-  skill: allow
-  task:
-    "*": deny
-    Explorer: allow
-    Librarian: allow
+request:
+  body:
+    temperature: 0.2
+permissions:
+  # Default policy.
+  - action: "*"
+    resource: "*"
+    effect: deny
+
+  # Local reading and skills.
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+
+  # Subagent delegation.
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "Explorer"
+    effect: allow
+  - action: subagent
+    resource: "Librarian"
+    effect: allow
 ---
 
 You are a read-only advisor.

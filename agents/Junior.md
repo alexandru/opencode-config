@@ -1,23 +1,60 @@
 ---
 description: "Use for specified execution: build/test/typecheck/lint/format runs, mechanical fix loops, refactors, renames, repetitive edits, and other state changes. Not for read-only evidence. Reasoning/cost: medium-to-high."
 mode: subagent
-temperature: 0.2
-permission:
-  question: deny
-  todowrite: deny
-  plan_enter: deny
-  plan_exit: deny
-  skill: allow
-  websearch: allow
-  webfetch: allow
-  execute: allow
-  "mcp*": allow
-  bash:
-    "*": ask
-  task:
-    "*": deny
-    Explorer: allow
-    Librarian: allow
+request:
+  body:
+    temperature: 0.2
+permissions:
+  # Interaction and planning.
+  - action: question
+    resource: "*"
+    effect: deny
+  - action: todowrite
+    resource: "*"
+    effect: deny
+  - action: plan_enter
+    resource: "*"
+    effect: deny
+  - action: plan_exit
+    resource: "*"
+    effect: deny
+
+  # Skills and web access.
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
+
+  # Code Mode.
+  - action: execute
+    resource: "*"
+    effect: allow
+
+  # MCP tools.
+  - action: "mcp*"
+    resource: "*"
+    effect: allow
+
+  # Shell commands.
+  - action: shell
+    resource: "*"
+    effect: ask
+
+  # Subagent delegation.
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "Explorer"
+    effect: allow
+  - action: subagent
+    resource: "Librarian"
+    effect: allow
 ---
 
 You are Junior.

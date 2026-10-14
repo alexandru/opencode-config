@@ -8,30 +8,24 @@
   // Pure OpenAI / ChatGPT
   "p-openai": {
     "model": "openai/gpt-6.1-sol",
-    "agent": {
+    "agents": {
       "Orchestrator": {
-        "model": "openai/gpt-6.1-sol",
-        "variant": "medium",
+        "model": "openai/gpt-6.1-sol#medium",
       },
       "Solo": {
-        "model": "openai/gpt-6.1-sol",
-        "variant": "medium",
+        "model": "openai/gpt-6.1-sol#medium",
       },
       "Analyst": {
-        "model": "openai/gpt-6.1-sol",
-        "variant": "high",
+        "model": "openai/gpt-6.1-sol#high",
       },
       "Junior": {
-        "model": "openai/gpt-6-luna",
-        "variant": "xhigh",
+        "model": "openai/gpt-6-luna#xhigh",
       },
       "Explorer": {
-        "model": "openai/gpt-6-luna",
-        "variant": "high",
+        "model": "openai/gpt-6-luna#high",
       },
       "Librarian": {
-        "model": "openai/gpt-6-luna",
-        "variant": "high",
+        "model": "openai/gpt-6-luna#high",
       },
     },
   },
@@ -39,18 +33,15 @@
   // OpenAI + DeepSeek
   "p-mix-go": {
     "extends": ["p-openai"],
-    "agent": {
+    "agents": {
       "Junior": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "max",
+        "model": "opencode-go/deepseek-v4.1-flash#max",
       },
       "Explorer": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "high",
+        "model": "opencode-go/deepseek-v4.1-flash#high",
       },
       "Librarian": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "high",
+        "model": "opencode-go/deepseek-v4.1-flash#high",
       },
     },
   },
@@ -58,30 +49,24 @@
   // Mistral
   "p-mistral-deep": {
     "model": "mistral/zai-glm-5-3",
-    "agent": {
+    "agents": {
       "Orchestrator": {
-        "model": "mistral/zai-glm-5-3",
-        "variant": "max",
+        "model": "mistral/zai-glm-5-3#max",
       },
       "Solo": {
-        "model": "mistral/zai-glm-5-3",
-        "variant": "max",
+        "model": "mistral/zai-glm-5-3#max",
       },
       "Analyst": {
-        "model": "mistral/zai-glm-5-3",
-        "variant": "max",
+        "model": "mistral/zai-glm-5-3#max",
       },
       "Junior": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "high",
+        "model": "opencode-go/deepseek-v4.1-flash#high",
       },
       "Explorer": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "low",
+        "model": "opencode-go/deepseek-v4.1-flash#low",
       },
       "Librarian": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "low",
+        "model": "opencode-go/deepseek-v4.1-flash#low",
       },
     },
   },
@@ -89,7 +74,7 @@
   // Go mixture
   "p-go": {
     "model": "opencode-go/mimo-v2.6-pro",
-    "agent": {
+    "agents": {
       "Orchestrator": {
         "model": "opencode-go/mimo-v2.6-pro",
       },
@@ -100,16 +85,13 @@
         "model": "opencode-go/mimo-v2.6-pro",
       },
       "Junior": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "high",
+        "model": "opencode-go/deepseek-v4.1-flash#high",
       },
       "Explorer": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "low",
+        "model": "opencode-go/deepseek-v4.1-flash#low",
       },
       "Librarian": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "low",
+        "model": "opencode-go/deepseek-v4.1-flash#low",
       },
     },
   },
@@ -117,30 +99,24 @@
   // Pure DeepSeek
   "p-deepseek": {
     "model": "opencode-go/deepseek-v4.1-flash",
-    "agent": {
+    "agents": {
       "Orchestrator": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "max",
+        "model": "opencode-go/deepseek-v4.1-flash#max",
       },
       "Solo": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "max",
+        "model": "opencode-go/deepseek-v4.1-flash#max",
       },
       "Analyst": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "max",
+        "model": "opencode-go/deepseek-v4.1-flash#max",
       },
       "Junior": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "high",
+        "model": "opencode-go/deepseek-v4.1-flash#high",
       },
       "Explorer": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "low",
+        "model": "opencode-go/deepseek-v4.1-flash#low",
       },
       "Librarian": {
-        "model": "opencode-go/deepseek-v4.1-flash",
-        "variant": "low",
+        "model": "opencode-go/deepseek-v4.1-flash#low",
       },
     },
   },
@@ -150,37 +126,39 @@
   "w-common": {
     "common": true,
     "mcp": {
-      "mcp-intellij-idea": {
-        "url": "http://host.docker.internal:64342/stream",
-        "headers": {
-          "Host": "localhost:64342",
+      "servers": {
+        "mcp-intellij-idea": {
+          "url": "http://host.docker.internal:64342/stream",
+          "headers": {
+            "Host": "localhost:64342",
+          },
+          "codemode": false,
         },
-        "codemode": false,
-      },
-      "mcp-metals": {
-        "url": "http://host.docker.internal:8083/mcp",
-        "headers": {
-          "Host": "localhost:8083",
+        "mcp-metals": {
+          "url": "http://host.docker.internal:8083/mcp",
+          "headers": {
+            "Host": "localhost:8083",
+          },
+          "codemode": false,
         },
-        "codemode": false,
-      },
-      "mcp-chrome-devtools": {
-        "command": [
-          "npx",
-          "-y",
-          "chrome-devtools-mcp@latest",
-          "--browser-url=http://host.docker.internal:9222",
-        ],
-        "codemode": false,
-      },
-      "mcp-playwright": {
-        "command": [
-          "npx",
-          "-y",
-          "@playwright/mcp@latest",
-          "--cdp-endpoint=http://host.docker.internal:9222",
-        ],
-        "codemode": false,
+        "mcp-chrome-devtools": {
+          "command": [
+            "npx",
+            "-y",
+            "chrome-devtools-mcp@latest",
+            "--browser-url=http://host.docker.internal:9222",
+          ],
+          "codemode": false,
+        },
+        "mcp-playwright": {
+          "command": [
+            "npx",
+            "-y",
+            "@playwright/mcp@latest",
+            "--cdp-endpoint=http://host.docker.internal:9222",
+          ],
+          "codemode": false,
+        },
       },
     },
   },
@@ -189,22 +167,18 @@
   "w-copilot": {
     "extends": ["w-common"],
     "model": "github-copilot/claude-sonnet-5",
-    "agent": {
+    "agents": {
       "Orchestrator": {
-        "model": "github-copilot/claude-sonnet-5",
-        "variant": "high",
+        "model": "github-copilot/claude-sonnet-5#high",
       },
       "Solo": {
-        "model": "github-copilot/claude-sonnet-5",
-        "variant": "high",
+        "model": "github-copilot/claude-sonnet-5#high",
       },
       "Analyst": {
-        "model": "github-copilot/claude-sonnet-5",
-        "variant": "high",
+        "model": "github-copilot/claude-sonnet-5#high",
       },
       "Junior": {
-        "model": "github-copilot/claude-sonnet-5",
-        "variant": "low",
+        "model": "github-copilot/claude-sonnet-5#low",
       },
       "Explorer": {
         "model": "github-copilot/claude-haiku-4.5",

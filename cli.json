@@ -2,5 +2,8 @@
   "$schema": "https://opencode.ai/v2/cli.json",
   "session": {
     "verbosity": "medium"
+  },
+  "scroll": {
+    "acceleration": true
   }
 }

@@ -110,13 +110,13 @@ Sub-agents:
 ## Defined commands
 
 - `/grill-me`: stress-test a plan or decision.
-- `/grill-with-docs`: sharpen a plan or design while creating domain documentation.
+- `/grill-with-docs`: sharpen a plan or design while creating domain documentation (recommended).
 - `/handoff`: prepare context for another agent or session.
 - `/implement`: implement work from a specification or set of tickets.
 - `/improve-codebase-architecture`: find and work through codebase architecture improvements.
+- `/refine`: refine code without changing its behavior.
 - `/review`: review uncommitted changes, a commit, a branch, or a pull request.
 - `/setup-matt-pocock-skills`: configure the repository for Matt Pocock's engineering skills.
-- `/simplify`: simplify code without changing its behavior.
 - `/teach`: teach the user a topic through a stateful learning workspace.
 - `/to-spec`: turn the current conversation into a published specification.
 - `/to-tickets`: break a plan or specification into tracer-bullet tickets.
@@ -126,14 +126,14 @@ Sub-agents:
 - [alexandru/skills](https://github.com/alexandru/skills/tree/v10.2.0)
   - `code-review`: user-invoked adapter for `code-reviewing`.
   - `code-reviewing`: review changed code for bugs, structural problems, performance issues, and unintended behavior.
-  - `simplicity`: simplification lenses of constraints, simplicity, and parametricity.
-  - `simplify`: behavior-preserving simplification using the `simplicity` lenses.
+  - `refine`: behavior-preserving refinement using the `refinements` lenses.
+  - `refinements`: refinement lenses of constraints, simplicity, and parametricity.
 - [mattpocock/skills](https://github.com/mattpocock/skills/tree/v1.3.1)
   - `codebase-design`: deep-module design vocabulary and principles.
   - `diagnosing-bugs`: disciplined diagnosis for hard bugs and regressions.
   - `domain-modeling`: domain language and architectural decisions.
   - `grill-me`: user-invoked adapter for `grilling`.
-  - `grill-with-docs`: sharpen a plan or design while creating domain documentation.
+  - `grill-with-docs`: sharpen a plan or design while creating domain documentation (recommended).
   - `grilling`: structured decision-tree interviews.
   - `handoff`: prepare context for another agent or session.
   - `implement`: implement work from a specification or set of tickets.

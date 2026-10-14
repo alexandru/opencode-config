@@ -1,168 +1,502 @@
 ---
 description: "Use for read-only external research unavailable locally: documentation, public repositories, archives, dependency artifacts/source, and non-mutating shell fetch/inspection. Reasoning/cost: low-to-medium."
 mode: subagent
-temperature: 0.2
-permission:
-  edit: deny
-  write: deny
-  apply_patch: deny
-  bash:
-    "*": ask
-    "cellar": allow
-    "cellar *": allow
-    "which *": allow
-    "command -v *": allow
-    "stat *": allow
-    "readlink *": allow
-    "realpath *": allow
-    "pwd": allow
-    "ps": allow
-    "ps *": allow
-    "pgrep": allow
-    "pgrep *": allow
-    "pstree": allow
-    "pstree *": allow
-    "uptime": allow
-    "uptime *": allow
-    "free": allow
-    "free *": allow
-    "lscpu": allow
-    "lscpu *": allow
-    "nproc": allow
-    "nproc *": allow
-    "uname": allow
-    "uname *": allow
-    "getconf": allow
-    "getconf *": allow
-    "lsblk": allow
-    "lsblk *": allow
-    "true": allow
-    "printf": allow
-    "printf *": allow
-    "grep": allow
-    "grep *": allow
-    "head": allow
-    "head *": allow
-    "tail": allow
-    "tail *": allow
-    "tr": allow
-    "tr *": allow
-    "cat": allow
-    "cat *": allow
-    "cut": allow
-    "cut *": allow
-    "comm": allow
-    "comm *": allow
-    "join": allow
-    "join *": allow
-    "paste": allow
-    "paste *": allow
-    "nl": allow
-    "nl *": allow
-    "fold": allow
-    "fold *": allow
-    "fmt": allow
-    "fmt *": allow
-    "expand": allow
-    "expand *": allow
-    "unexpand": allow
-    "unexpand *": allow
-    "uniq": allow
-    "uniq *": allow
-    "wc": allow
-    "wc *": allow
-    "sha256sum *": allow
-    "sha512sum *": allow
-    "md5sum *": allow
-    "cmp *": allow
-    "od *": allow
-    "hexdump *": allow
-    "strings *": allow
-    "readelf *": allow
-    "objdump *": allow
-    "nm *": allow
-    "c++filt *": allow
-    "jmod list *": allow
-    "jimage info *": allow
-    "jimage list *": allow
-    "jimage verify *": allow
-    "git ls-remote *": allow
-    "git -C /tmp/opencode-librarian/* remote get-url origin": allow
-    "git -C /tmp/opencode-librarian/* worktree list*": allow
-    "mkdir -p /tmp/opencode-librarian/*": allow
-    "git clone * /tmp/opencode-librarian/*": allow
-    "git -C /tmp/opencode-librarian/* fetch *": allow
-    "git -C /tmp/opencode-librarian/* worktree add /tmp/opencode-librarian/*": allow
-    "git -C /tmp/opencode-librarian/* worktree add -b * /tmp/opencode-librarian/* origin/*": allow
-    "mvn -v": allow
-    "mvn * dependency:get *-Dmaven.repo.local=/tmp/opencode-librarian/*": allow
-    "mvn * -f /tmp/opencode-librarian/* dependency:tree *-Dmaven.repo.local=/tmp/opencode-librarian/*": allow
-    "cat > /tmp/opencode-librarian/*": allow
-    "jar tf *": allow
-    "jar --list *": allow
-    "unzip -l *": allow
-    "unzip -p *": allow
-    "zipinfo *": allow
-    "tar -tf *": allow
-    "tar * -C /tmp/opencode-librarian/*": allow
-    "ar t *": allow
-    "ar p *": allow
-    "gh run view*": allow
-    "gh run list*": allow
-    "gh issue view*": allow
-    "gh issue list*": allow
-    "gh pr view*": allow
-    "gh pr list*": allow
-    "gh pr diff*": allow
-    "gh pr checks*": allow
-    "gh release view*": allow
-    "gh release list*": allow
-    "gh repo view*": allow
-    "gh repo list*": allow
-    "git -C * push*": deny
-    "jar *-J*": deny
-    "tar *--checkpoint-action*": deny
-    "tar *--to-command*": deny
-  read: allow
-  grep: allow
-  glob: allow
-  webfetch: allow
-  websearch: allow
-  execute: allow
-  question: allow
-  todowrite: deny
-  skill: allow
-  lsp: allow
-  "mcp*": allow
-  task:
-    "*": deny
-  external_directory:
-    "*": deny
-    "~/.agents/skills": allow
-    "~/.agents/skills/**": allow
-    "~/.config/opencode/skills": allow
-    "~/.config/opencode/skills/**": allow
-    "/tmp": allow
-    "/tmp/**": allow
-    "/private/tmp": allow
-    "/private/tmp/**": allow
-    "~/.m2/repository/**": allow
-    "~/.npm": allow
-    "~/.npm/**": allow
-    "~/.gradle/caches/**": allow
-    "~/.ivy2/cache/**": allow
-    "~/.cache/coursier/**": allow
-    "~/Library/Caches/Coursier/**": allow
-    "~/.config/opencode": allow
-    "~/.config/opencode/**": allow
-    "~/.local/share/opencode": allow
-    "~/.local/share/opencode/**": allow
-    "~/.local/state/opencode": allow
-    "~/.local/state/opencode/**": allow
-    "~/.cache/opencode": allow
-    "~/.cache/opencode/**": allow
-    "~/.opencode": allow
-    "~/.opencode/**": allow
+request:
+  body:
+    temperature: 0.2
+permissions:
+  # Workspace mutations.
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: apply_patch
+    resource: "*"
+    effect: deny
+
+  # Shell approval default.
+  - action: shell
+    resource: "*"
+    effect: ask
+
+  # Research shell commands.
+  - action: shell
+    resource: "cellar"
+    effect: allow
+  - action: shell
+    resource: "cellar *"
+    effect: allow
+  - action: shell
+    resource: "which *"
+    effect: allow
+  - action: shell
+    resource: "command -v *"
+    effect: allow
+  - action: shell
+    resource: "stat *"
+    effect: allow
+  - action: shell
+    resource: "readlink *"
+    effect: allow
+  - action: shell
+    resource: "realpath *"
+    effect: allow
+  - action: shell
+    resource: "pwd"
+    effect: allow
+  - action: shell
+    resource: "ps"
+    effect: allow
+  - action: shell
+    resource: "ps *"
+    effect: allow
+  - action: shell
+    resource: "pgrep"
+    effect: allow
+  - action: shell
+    resource: "pgrep *"
+    effect: allow
+  - action: shell
+    resource: "pstree"
+    effect: allow
+  - action: shell
+    resource: "pstree *"
+    effect: allow
+  - action: shell
+    resource: "uptime"
+    effect: allow
+  - action: shell
+    resource: "uptime *"
+    effect: allow
+  - action: shell
+    resource: "free"
+    effect: allow
+  - action: shell
+    resource: "free *"
+    effect: allow
+  - action: shell
+    resource: "lscpu"
+    effect: allow
+  - action: shell
+    resource: "lscpu *"
+    effect: allow
+  - action: shell
+    resource: "nproc"
+    effect: allow
+  - action: shell
+    resource: "nproc *"
+    effect: allow
+  - action: shell
+    resource: "uname"
+    effect: allow
+  - action: shell
+    resource: "uname *"
+    effect: allow
+  - action: shell
+    resource: "getconf"
+    effect: allow
+  - action: shell
+    resource: "getconf *"
+    effect: allow
+  - action: shell
+    resource: "lsblk"
+    effect: allow
+  - action: shell
+    resource: "lsblk *"
+    effect: allow
+  - action: shell
+    resource: "true"
+    effect: allow
+  - action: shell
+    resource: "printf"
+    effect: allow
+  - action: shell
+    resource: "printf *"
+    effect: allow
+  - action: shell
+    resource: "grep"
+    effect: allow
+  - action: shell
+    resource: "grep *"
+    effect: allow
+  - action: shell
+    resource: "head"
+    effect: allow
+  - action: shell
+    resource: "head *"
+    effect: allow
+  - action: shell
+    resource: "tail"
+    effect: allow
+  - action: shell
+    resource: "tail *"
+    effect: allow
+  - action: shell
+    resource: "tr"
+    effect: allow
+  - action: shell
+    resource: "tr *"
+    effect: allow
+  - action: shell
+    resource: "cat"
+    effect: allow
+  - action: shell
+    resource: "cat *"
+    effect: allow
+  - action: shell
+    resource: "cut"
+    effect: allow
+  - action: shell
+    resource: "cut *"
+    effect: allow
+  - action: shell
+    resource: "comm"
+    effect: allow
+  - action: shell
+    resource: "comm *"
+    effect: allow
+  - action: shell
+    resource: "join"
+    effect: allow
+  - action: shell
+    resource: "join *"
+    effect: allow
+  - action: shell
+    resource: "paste"
+    effect: allow
+  - action: shell
+    resource: "paste *"
+    effect: allow
+  - action: shell
+    resource: "nl"
+    effect: allow
+  - action: shell
+    resource: "nl *"
+    effect: allow
+  - action: shell
+    resource: "fold"
+    effect: allow
+  - action: shell
+    resource: "fold *"
+    effect: allow
+  - action: shell
+    resource: "fmt"
+    effect: allow
+  - action: shell
+    resource: "fmt *"
+    effect: allow
+  - action: shell
+    resource: "expand"
+    effect: allow
+  - action: shell
+    resource: "expand *"
+    effect: allow
+  - action: shell
+    resource: "unexpand"
+    effect: allow
+  - action: shell
+    resource: "unexpand *"
+    effect: allow
+  - action: shell
+    resource: "uniq"
+    effect: allow
+  - action: shell
+    resource: "uniq *"
+    effect: allow
+  - action: shell
+    resource: "wc"
+    effect: allow
+  - action: shell
+    resource: "wc *"
+    effect: allow
+  - action: shell
+    resource: "sha256sum *"
+    effect: allow
+  - action: shell
+    resource: "sha512sum *"
+    effect: allow
+  - action: shell
+    resource: "md5sum *"
+    effect: allow
+  - action: shell
+    resource: "cmp *"
+    effect: allow
+  - action: shell
+    resource: "od *"
+    effect: allow
+  - action: shell
+    resource: "hexdump *"
+    effect: allow
+  - action: shell
+    resource: "strings *"
+    effect: allow
+  - action: shell
+    resource: "readelf *"
+    effect: allow
+  - action: shell
+    resource: "objdump *"
+    effect: allow
+  - action: shell
+    resource: "nm *"
+    effect: allow
+  - action: shell
+    resource: "c++filt *"
+    effect: allow
+  - action: shell
+    resource: "jmod list *"
+    effect: allow
+  - action: shell
+    resource: "jimage info *"
+    effect: allow
+  - action: shell
+    resource: "jimage list *"
+    effect: allow
+  - action: shell
+    resource: "jimage verify *"
+    effect: allow
+  - action: shell
+    resource: "git ls-remote *"
+    effect: allow
+  - action: shell
+    resource: "git -C /tmp/opencode-librarian/* remote get-url origin"
+    effect: allow
+  - action: shell
+    resource: "git -C /tmp/opencode-librarian/* worktree list*"
+    effect: allow
+  - action: shell
+    resource: "mkdir -p /tmp/opencode-librarian/*"
+    effect: allow
+  - action: shell
+    resource: "git clone * /tmp/opencode-librarian/*"
+    effect: allow
+  - action: shell
+    resource: "git -C /tmp/opencode-librarian/* fetch *"
+    effect: allow
+  - action: shell
+    resource: "git -C /tmp/opencode-librarian/* worktree add /tmp/opencode-librarian/*"
+    effect: allow
+  - action: shell
+    resource: "git -C /tmp/opencode-librarian/* worktree add -b * /tmp/opencode-librarian/* origin/*"
+    effect: allow
+  - action: shell
+    resource: "mvn -v"
+    effect: allow
+  - action: shell
+    resource: "mvn * dependency:get *-Dmaven.repo.local=/tmp/opencode-librarian/*"
+    effect: allow
+  - action: shell
+    resource: "mvn * -f /tmp/opencode-librarian/* dependency:tree *-Dmaven.repo.local=/tmp/opencode-librarian/*"
+    effect: allow
+  - action: shell
+    resource: "cat > /tmp/opencode-librarian/*"
+    effect: allow
+  - action: shell
+    resource: "jar tf *"
+    effect: allow
+  - action: shell
+    resource: "jar --list *"
+    effect: allow
+  - action: shell
+    resource: "unzip -l *"
+    effect: allow
+  - action: shell
+    resource: "unzip -p *"
+    effect: allow
+  - action: shell
+    resource: "zipinfo *"
+    effect: allow
+  - action: shell
+    resource: "tar -tf *"
+    effect: allow
+  - action: shell
+    resource: "tar * -C /tmp/opencode-librarian/*"
+    effect: allow
+  - action: shell
+    resource: "ar t *"
+    effect: allow
+  - action: shell
+    resource: "ar p *"
+    effect: allow
+  - action: shell
+    resource: "gh run view*"
+    effect: allow
+  - action: shell
+    resource: "gh run list*"
+    effect: allow
+  - action: shell
+    resource: "gh issue view*"
+    effect: allow
+  - action: shell
+    resource: "gh issue list*"
+    effect: allow
+  - action: shell
+    resource: "gh pr view*"
+    effect: allow
+  - action: shell
+    resource: "gh pr list*"
+    effect: allow
+  - action: shell
+    resource: "gh pr diff*"
+    effect: allow
+  - action: shell
+    resource: "gh pr checks*"
+    effect: allow
+  - action: shell
+    resource: "gh release view*"
+    effect: allow
+  - action: shell
+    resource: "gh release list*"
+    effect: allow
+  - action: shell
+    resource: "gh repo view*"
+    effect: allow
+  - action: shell
+    resource: "gh repo list*"
+    effect: allow
+
+  # Shell mutation safeguards.
+  - action: shell
+    resource: "git -C * push*"
+    effect: deny
+  - action: shell
+    resource: "jar *-J*"
+    effect: deny
+  - action: shell
+    resource: "tar *--checkpoint-action*"
+    effect: deny
+  - action: shell
+    resource: "tar *--to-command*"
+    effect: deny
+
+  # Workspace files.
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+
+  # Web access and Code Mode.
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
+  - action: execute
+    resource: "*"
+    effect: allow
+
+  # Interaction, task tracking, and skills.
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: todowrite
+    resource: "*"
+    effect: deny
+  - action: skill
+    resource: "*"
+    effect: allow
+
+  # MCP tools.
+  - action: "mcp*"
+    resource: "*"
+    effect: allow
+
+  # Subagent delegation.
+  - action: subagent
+    resource: "*"
+    effect: deny
+
+  # External directory boundaries.
+  - action: external_directory
+    resource: "*"
+    effect: deny
+
+  # Trusted skill directories.
+  - action: external_directory
+    resource: "~/.agents/skills"
+    effect: allow
+  - action: external_directory
+    resource: "~/.agents/skills/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.config/opencode/skills"
+    effect: allow
+  - action: external_directory
+    resource: "~/.config/opencode/skills/**"
+    effect: allow
+
+  # Temporary directories.
+  - action: external_directory
+    resource: "/tmp"
+    effect: allow
+  - action: external_directory
+    resource: "/tmp/**"
+    effect: allow
+  - action: external_directory
+    resource: "/private/tmp"
+    effect: allow
+  - action: external_directory
+    resource: "/private/tmp/**"
+    effect: allow
+
+  # Dependency caches.
+  - action: external_directory
+    resource: "~/.m2/repository/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.npm"
+    effect: allow
+  - action: external_directory
+    resource: "~/.npm/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.gradle/caches/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.ivy2/cache/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.cache/coursier/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/Library/Caches/Coursier/**"
+    effect: allow
+
+  # OpenCode configuration and runtime directories.
+  - action: external_directory
+    resource: "~/.config/opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.config/opencode/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.local/share/opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.local/share/opencode/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.local/state/opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.local/state/opencode/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.cache/opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.cache/opencode/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.opencode/**"
+    effect: allow
 ---
 
 You are Librarian, a read-only agent for external documentation, repositories, archives, artifacts, and dependency source. Return evidence for the caller to interpret; do not diagnose their code, perform code review, make correctness judgments, propose solutions, or evaluate trade-offs.

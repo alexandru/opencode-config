@@ -1,194 +1,581 @@
 ---
 description: "Use for read-only local evidence: codebase search, behavior traces, local API examples, Git history/diffs, and non-mutating shell inspection. Reasoning/cost: low-to-medium."
 mode: subagent
-temperature: 0.2
-permission:
-  edit: deny
-  write: deny
-  apply_patch: deny
-  bash:
-    "*": ask
-    "cellar": allow
-    "cellar *": allow
-    "which *": allow
-    "command -v *": allow
-    "opencode --version": allow
-    "git status*": allow
-    "git branch --show-current": allow
-    "git branch --list*": allow
-    "git log*": allow
-    "git diff*": allow
-    "git show*": allow
-    "git ls-files*": allow
-    "git ls-tree*": allow
-    "git blame*": allow
-    "git grep*": allow
-    "git check-ignore*": allow
-    "git check-attr*": allow
-    "git rev-parse*": allow
-    "git rev-list*": allow
-    "git describe*": allow
-    "git merge-base*": allow
-    "git name-rev*": allow
-    "git shortlog*": allow
-    "git for-each-ref*": allow
-    "git cat-file*": allow
-    "git tag": allow
-    "git tag --list*": allow
-    "git remote -v": allow
-    "git remote get-url*": allow
-    "git worktree list*": allow
-    "git stash list*": allow
-    "git submodule status*": allow
-    "file *": allow
-    "stat *": allow
-    "readlink *": allow
-    "realpath *": allow
-    "pwd": allow
-    "ps": allow
-    "ps *": allow
-    "pgrep": allow
-    "pgrep *": allow
-    "pstree": allow
-    "pstree *": allow
-    "uptime": allow
-    "uptime *": allow
-    "free": allow
-    "free *": allow
-    "lscpu": allow
-    "lscpu *": allow
-    "nproc": allow
-    "nproc *": allow
-    "uname": allow
-    "uname *": allow
-    "getconf": allow
-    "getconf *": allow
-    "lsblk": allow
-    "lsblk *": allow
-    "true": allow
-    "printf": allow
-    "printf *": allow
-    "grep": allow
-    "grep *": allow
-    "rg": allow
-    "rg *": allow
-    "head": allow
-    "head *": allow
-    "tail": allow
-    "tail *": allow
-    "tr": allow
-    "tr *": allow
-    "cat": allow
-    "cat *": allow
-    "cut": allow
-    "cut *": allow
-    "comm": allow
-    "comm *": allow
-    "join": allow
-    "join *": allow
-    "paste": allow
-    "paste *": allow
-    "nl": allow
-    "nl *": allow
-    "fold": allow
-    "fold *": allow
-    "fmt": allow
-    "fmt *": allow
-    "expand": allow
-    "expand *": allow
-    "unexpand": allow
-    "unexpand *": allow
-    "find": allow
-    "find *": allow
-    "sort": allow
-    "sort *": allow
-    "uniq": allow
-    "uniq *": allow
-    "wc": allow
-    "wc *": allow
-    "sha256sum *": allow
-    "sha512sum *": allow
-    "md5sum *": allow
-    "cmp *": allow
-    "od *": allow
-    "hexdump *": allow
-    "strings *": allow
-    "readelf *": allow
-    "objdump *": allow
-    "nm *": allow
-    "c++filt *": allow
-    "javap": allow
-    "javap *": allow
-    "jdeps *": allow
-    "jar tf *": allow
-    "jar --list *": allow
-    "jmod list *": allow
-    "jimage info *": allow
-    "jimage list *": allow
-    "jimage verify *": allow
-    "unzip -l *": allow
-    "unzip -p *": allow
-    "zipinfo *": allow
-    "tar -tf *": allow
-    "ar t *": allow
-    "ar p *": allow
-    "file *-C*": deny
-    "file *--compile*": deny
-    "javap *-J*": deny
-    "jdeps *-J*": deny
-    "jdeps *-dotoutput*": deny
-    "jdeps *--dot-output*": deny
-    "jdeps *--generate-module-info*": deny
-    "jar *-J*": deny
-    "tar *--checkpoint-action*": deny
-    "tar *--to-command*": deny
-    "find *-delete*": deny
-    "find *-exec*": deny
-    "find *-ok*": deny
-    "find *-fls*": deny
-    "find *-fprint*": deny
-    "find *-fprintf*": deny
-    "sort *-o*": deny
-    "sort *--output*": deny
-    "sort *--compress-program*": deny
-    "rg *--pre *": deny
-    "rg *--pre=*": deny
-  external_directory:
-    "*": deny
-    "~/.agents/skills": allow
-    "~/.agents/skills/**": allow
-    "~/.config/opencode/skills": allow
-    "~/.config/opencode/skills/**": allow
-    "/tmp": allow
-    "/tmp/**": allow
-    "/private/tmp": allow
-    "/private/tmp/**": allow
-    "~/.m2/repository/**": allow
-    "~/.npm": allow
-    "~/.npm/**": allow
-    "~/.gradle/caches/**": allow
-    "~/.ivy2/cache/**": allow
-    "~/.cache/coursier/**": allow
-    "~/Library/Caches/Coursier/**": allow
-    "~/.config/opencode": allow
-    "~/.config/opencode/**": allow
-    "~/.local/share/opencode": allow
-    "~/.local/share/opencode/**": allow
-    "~/.local/state/opencode": allow
-    "~/.local/state/opencode/**": allow
-    "~/.cache/opencode": allow
-    "~/.cache/opencode/**": allow
-    "~/.opencode": allow
-    "~/.opencode/**": allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  execute: deny
-  question: allow
-  todowrite: deny
-  "mcp*": allow
-  task:
-    "*": deny
+request:
+  body:
+    temperature: 0.2
+permissions:
+  # Workspace mutations.
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: apply_patch
+    resource: "*"
+    effect: deny
+
+  # Shell approval default.
+  - action: shell
+    resource: "*"
+    effect: ask
+
+  # Read-only shell commands.
+  - action: shell
+    resource: "cellar"
+    effect: allow
+  - action: shell
+    resource: "cellar *"
+    effect: allow
+  - action: shell
+    resource: "which *"
+    effect: allow
+  - action: shell
+    resource: "command -v *"
+    effect: allow
+  - action: shell
+    resource: "opencode --version"
+    effect: allow
+  - action: shell
+    resource: "git status*"
+    effect: allow
+  - action: shell
+    resource: "git branch --show-current"
+    effect: allow
+  - action: shell
+    resource: "git branch --list*"
+    effect: allow
+  - action: shell
+    resource: "git log*"
+    effect: allow
+  - action: shell
+    resource: "git diff*"
+    effect: allow
+  - action: shell
+    resource: "git show*"
+    effect: allow
+  - action: shell
+    resource: "git ls-files*"
+    effect: allow
+  - action: shell
+    resource: "git ls-tree*"
+    effect: allow
+  - action: shell
+    resource: "git blame*"
+    effect: allow
+  - action: shell
+    resource: "git grep*"
+    effect: allow
+  - action: shell
+    resource: "git check-ignore*"
+    effect: allow
+  - action: shell
+    resource: "git check-attr*"
+    effect: allow
+  - action: shell
+    resource: "git rev-parse*"
+    effect: allow
+  - action: shell
+    resource: "git rev-list*"
+    effect: allow
+  - action: shell
+    resource: "git describe*"
+    effect: allow
+  - action: shell
+    resource: "git merge-base*"
+    effect: allow
+  - action: shell
+    resource: "git name-rev*"
+    effect: allow
+  - action: shell
+    resource: "git shortlog*"
+    effect: allow
+  - action: shell
+    resource: "git for-each-ref*"
+    effect: allow
+  - action: shell
+    resource: "git cat-file*"
+    effect: allow
+  - action: shell
+    resource: "git tag"
+    effect: allow
+  - action: shell
+    resource: "git tag --list*"
+    effect: allow
+  - action: shell
+    resource: "git remote -v"
+    effect: allow
+  - action: shell
+    resource: "git remote get-url*"
+    effect: allow
+  - action: shell
+    resource: "git worktree list*"
+    effect: allow
+  - action: shell
+    resource: "git stash list*"
+    effect: allow
+  - action: shell
+    resource: "git submodule status*"
+    effect: allow
+  - action: shell
+    resource: "file *"
+    effect: allow
+  - action: shell
+    resource: "stat *"
+    effect: allow
+  - action: shell
+    resource: "readlink *"
+    effect: allow
+  - action: shell
+    resource: "realpath *"
+    effect: allow
+  - action: shell
+    resource: "pwd"
+    effect: allow
+  - action: shell
+    resource: "ps"
+    effect: allow
+  - action: shell
+    resource: "ps *"
+    effect: allow
+  - action: shell
+    resource: "pgrep"
+    effect: allow
+  - action: shell
+    resource: "pgrep *"
+    effect: allow
+  - action: shell
+    resource: "pstree"
+    effect: allow
+  - action: shell
+    resource: "pstree *"
+    effect: allow
+  - action: shell
+    resource: "uptime"
+    effect: allow
+  - action: shell
+    resource: "uptime *"
+    effect: allow
+  - action: shell
+    resource: "free"
+    effect: allow
+  - action: shell
+    resource: "free *"
+    effect: allow
+  - action: shell
+    resource: "lscpu"
+    effect: allow
+  - action: shell
+    resource: "lscpu *"
+    effect: allow
+  - action: shell
+    resource: "nproc"
+    effect: allow
+  - action: shell
+    resource: "nproc *"
+    effect: allow
+  - action: shell
+    resource: "uname"
+    effect: allow
+  - action: shell
+    resource: "uname *"
+    effect: allow
+  - action: shell
+    resource: "getconf"
+    effect: allow
+  - action: shell
+    resource: "getconf *"
+    effect: allow
+  - action: shell
+    resource: "lsblk"
+    effect: allow
+  - action: shell
+    resource: "lsblk *"
+    effect: allow
+  - action: shell
+    resource: "true"
+    effect: allow
+  - action: shell
+    resource: "printf"
+    effect: allow
+  - action: shell
+    resource: "printf *"
+    effect: allow
+  - action: shell
+    resource: "grep"
+    effect: allow
+  - action: shell
+    resource: "grep *"
+    effect: allow
+  - action: shell
+    resource: "rg"
+    effect: allow
+  - action: shell
+    resource: "rg *"
+    effect: allow
+  - action: shell
+    resource: "head"
+    effect: allow
+  - action: shell
+    resource: "head *"
+    effect: allow
+  - action: shell
+    resource: "tail"
+    effect: allow
+  - action: shell
+    resource: "tail *"
+    effect: allow
+  - action: shell
+    resource: "tr"
+    effect: allow
+  - action: shell
+    resource: "tr *"
+    effect: allow
+  - action: shell
+    resource: "cat"
+    effect: allow
+  - action: shell
+    resource: "cat *"
+    effect: allow
+  - action: shell
+    resource: "cut"
+    effect: allow
+  - action: shell
+    resource: "cut *"
+    effect: allow
+  - action: shell
+    resource: "comm"
+    effect: allow
+  - action: shell
+    resource: "comm *"
+    effect: allow
+  - action: shell
+    resource: "join"
+    effect: allow
+  - action: shell
+    resource: "join *"
+    effect: allow
+  - action: shell
+    resource: "paste"
+    effect: allow
+  - action: shell
+    resource: "paste *"
+    effect: allow
+  - action: shell
+    resource: "nl"
+    effect: allow
+  - action: shell
+    resource: "nl *"
+    effect: allow
+  - action: shell
+    resource: "fold"
+    effect: allow
+  - action: shell
+    resource: "fold *"
+    effect: allow
+  - action: shell
+    resource: "fmt"
+    effect: allow
+  - action: shell
+    resource: "fmt *"
+    effect: allow
+  - action: shell
+    resource: "expand"
+    effect: allow
+  - action: shell
+    resource: "expand *"
+    effect: allow
+  - action: shell
+    resource: "unexpand"
+    effect: allow
+  - action: shell
+    resource: "unexpand *"
+    effect: allow
+  - action: shell
+    resource: "find"
+    effect: allow
+  - action: shell
+    resource: "find *"
+    effect: allow
+  - action: shell
+    resource: "sort"
+    effect: allow
+  - action: shell
+    resource: "sort *"
+    effect: allow
+  - action: shell
+    resource: "uniq"
+    effect: allow
+  - action: shell
+    resource: "uniq *"
+    effect: allow
+  - action: shell
+    resource: "wc"
+    effect: allow
+  - action: shell
+    resource: "wc *"
+    effect: allow
+  - action: shell
+    resource: "sha256sum *"
+    effect: allow
+  - action: shell
+    resource: "sha512sum *"
+    effect: allow
+  - action: shell
+    resource: "md5sum *"
+    effect: allow
+  - action: shell
+    resource: "cmp *"
+    effect: allow
+  - action: shell
+    resource: "od *"
+    effect: allow
+  - action: shell
+    resource: "hexdump *"
+    effect: allow
+  - action: shell
+    resource: "strings *"
+    effect: allow
+  - action: shell
+    resource: "readelf *"
+    effect: allow
+  - action: shell
+    resource: "objdump *"
+    effect: allow
+  - action: shell
+    resource: "nm *"
+    effect: allow
+  - action: shell
+    resource: "c++filt *"
+    effect: allow
+  - action: shell
+    resource: "javap"
+    effect: allow
+  - action: shell
+    resource: "javap *"
+    effect: allow
+  - action: shell
+    resource: "jdeps *"
+    effect: allow
+  - action: shell
+    resource: "jar tf *"
+    effect: allow
+  - action: shell
+    resource: "jar --list *"
+    effect: allow
+  - action: shell
+    resource: "jmod list *"
+    effect: allow
+  - action: shell
+    resource: "jimage info *"
+    effect: allow
+  - action: shell
+    resource: "jimage list *"
+    effect: allow
+  - action: shell
+    resource: "jimage verify *"
+    effect: allow
+  - action: shell
+    resource: "unzip -l *"
+    effect: allow
+  - action: shell
+    resource: "unzip -p *"
+    effect: allow
+  - action: shell
+    resource: "zipinfo *"
+    effect: allow
+  - action: shell
+    resource: "tar -tf *"
+    effect: allow
+  - action: shell
+    resource: "ar t *"
+    effect: allow
+  - action: shell
+    resource: "ar p *"
+    effect: allow
+
+  # Shell mutation safeguards.
+  - action: shell
+    resource: "file *-C*"
+    effect: deny
+  - action: shell
+    resource: "file *--compile*"
+    effect: deny
+  - action: shell
+    resource: "javap *-J*"
+    effect: deny
+  - action: shell
+    resource: "jdeps *-J*"
+    effect: deny
+  - action: shell
+    resource: "jdeps *-dotoutput*"
+    effect: deny
+  - action: shell
+    resource: "jdeps *--dot-output*"
+    effect: deny
+  - action: shell
+    resource: "jdeps *--generate-module-info*"
+    effect: deny
+  - action: shell
+    resource: "jar *-J*"
+    effect: deny
+  - action: shell
+    resource: "tar *--checkpoint-action*"
+    effect: deny
+  - action: shell
+    resource: "tar *--to-command*"
+    effect: deny
+  - action: shell
+    resource: "find *-delete*"
+    effect: deny
+  - action: shell
+    resource: "find *-exec*"
+    effect: deny
+  - action: shell
+    resource: "find *-ok*"
+    effect: deny
+  - action: shell
+    resource: "find *-fls*"
+    effect: deny
+  - action: shell
+    resource: "find *-fprint*"
+    effect: deny
+  - action: shell
+    resource: "find *-fprintf*"
+    effect: deny
+  - action: shell
+    resource: "sort *-o*"
+    effect: deny
+  - action: shell
+    resource: "sort *--output*"
+    effect: deny
+  - action: shell
+    resource: "sort *--compress-program*"
+    effect: deny
+  - action: shell
+    resource: "rg *--pre *"
+    effect: deny
+  - action: shell
+    resource: "rg *--pre=*"
+    effect: deny
+
+  # External directory boundaries.
+  - action: external_directory
+    resource: "*"
+    effect: deny
+
+  # Trusted skill directories.
+  - action: external_directory
+    resource: "~/.agents/skills"
+    effect: allow
+  - action: external_directory
+    resource: "~/.agents/skills/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.config/opencode/skills"
+    effect: allow
+  - action: external_directory
+    resource: "~/.config/opencode/skills/**"
+    effect: allow
+
+  # Temporary directories.
+  - action: external_directory
+    resource: "/tmp"
+    effect: allow
+  - action: external_directory
+    resource: "/tmp/**"
+    effect: allow
+  - action: external_directory
+    resource: "/private/tmp"
+    effect: allow
+  - action: external_directory
+    resource: "/private/tmp/**"
+    effect: allow
+
+  # Dependency caches.
+  - action: external_directory
+    resource: "~/.m2/repository/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.npm"
+    effect: allow
+  - action: external_directory
+    resource: "~/.npm/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.gradle/caches/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.ivy2/cache/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.cache/coursier/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/Library/Caches/Coursier/**"
+    effect: allow
+
+  # OpenCode configuration and runtime directories.
+  - action: external_directory
+    resource: "~/.config/opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.config/opencode/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.local/share/opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.local/share/opencode/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.local/state/opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.local/state/opencode/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.cache/opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.cache/opencode/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.opencode"
+    effect: allow
+  - action: external_directory
+    resource: "~/.opencode/**"
+    effect: allow
+
+  # Skills and web access.
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
+
+  # Code Mode and interaction.
+  - action: execute
+    resource: "*"
+    effect: deny
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: todowrite
+    resource: "*"
+    effect: deny
+
+  # MCP tools.
+  - action: "mcp*"
+    resource: "*"
+    effect: allow
+
+  # Subagent delegation.
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 
 You are Explorer - a read-only codebase evidence specialist. The caller owns all reasoning, judgment, diagnosis, and decisions.

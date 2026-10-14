@@ -16,6 +16,7 @@ module imports those packages.
 
 import importlib.util
 import io
+import json
 import subprocess
 import tempfile
 import unittest
@@ -85,21 +86,26 @@ class ResolvePresetTest(unittest.TestCase):
 class AgentTableTest(unittest.TestCase):
     def test_omits_disabled_agents(self) -> None:
         config = {
-            "agent": {
-                "ask": {"disable": True},
+            "agents": {
+                "ask": {"disabled": True},
                 "Orchestrator": {"model": "opencode-go/mimo-v2.6-pro"},
-                "Explorer": {
-                    "model": "opencode-go/deepseek-v4.1-flash",
-                    "variant": "low",
-                },
+                "Explorer": {"model": "opencode-go/deepseek-v4.1-flash#low"},
             }
         }
         table = tool.format_agent_table(config)
         self.assertIsNotNone(table)
         assert table is not None
         self.assertNotIn("ask", table)
-        self.assertIn("Orchestrator", table)
-        self.assertIn("Explorer", table)
+        self.assertNotIn("#", table)
+        self.assertEqual(
+            table,
+            "\n"
+            "  Agent        │ Model                           │ Variant\n"
+            "  ─────────────┼─────────────────────────────────┼────────\n"
+            "  Orchestrator │ opencode-go/mimo-v2.6-pro       │ -\n"
+            "  Explorer     │ opencode-go/deepseek-v4.1-flash │ low\n"
+            "\n",
+        )
 
     def test_without_agents_there_is_no_table(self) -> None:
         self.assertIsNone(
@@ -190,6 +196,147 @@ class ReloadTest(unittest.TestCase):
         self.assertEqual(run.call_count, 2)
         self.assertIn("Could not reload", stderr.getvalue())
         self.assertIn("opencode reload failed", stderr.getvalue())
+
+
+class SwitchTest(unittest.TestCase):
+    def test_switches_native_v2_presets_with_docker_mcp_overrides(self) -> None:
+        common = {
+            "permissions": [
+                {"action": "external_directory", "resource": "*", "effect": "deny"},
+                {
+                    "action": "external_directory",
+                    "resource": "~/.agents/skills/**",
+                    "effect": "allow",
+                },
+            ],
+            "agents": {
+                "ask": {"disabled": True},
+                "build": {"disabled": True},
+            },
+            "mcp": {
+                "servers": {
+                    "mcp-metals": {
+                        "type": "remote",
+                        "url": "http://localhost:8083/mcp",
+                        "disabled": True,
+                        "codemode": False,
+                    },
+                    "mcp-playwright": {
+                        "type": "local",
+                        "command": ["npx", "-y", "@playwright/mcp@latest"],
+                        "disabled": True,
+                        "codemode": False,
+                    },
+                }
+            },
+        }
+        presets = {
+            "base": {
+                "model": "opencode-go/mimo-v2.6-pro",
+                "agents": {
+                    "Orchestrator": {"model": "opencode-go/mimo-v2.6-pro"},
+                    "Junior": {"model": "opencode-go/deepseek-v4.1-flash#high"},
+                },
+            },
+            "w-common": {
+                "common": True,
+                "mcp": {
+                    "servers": {
+                        "mcp-metals": {
+                            "url": "http://host.docker.internal:8083/mcp",
+                            "headers": {"Host": "localhost:8083"},
+                        },
+                        "mcp-playwright": {
+                            "command": [
+                                "npx",
+                                "-y",
+                                "@playwright/mcp@latest",
+                                "--cdp-endpoint=http://host.docker.internal:9222",
+                            ],
+                        },
+                    }
+                },
+            },
+            "w-go": {"extends": ["w-common", "base"]},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp)
+            (config_dir / tool.COMMON_FILE).write_text(
+                json.dumps(common), encoding="utf-8"
+            )
+            (config_dir / tool.PRESETS_FILE).write_text(
+                json.dumps(presets), encoding="utf-8"
+            )
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(tool, "CONFIG_DIR", config_dir),
+                mock.patch.object(tool, "reload_opencode") as reload,
+                mock.patch("sys.stdout", stdout),
+            ):
+                tool.switch("w-go")
+            reload.assert_called_once_with()
+            written = json.loads(
+                (config_dir / tool.OUTPUT_FILE).read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(
+            written["agents"],
+            {
+                "ask": {"disabled": True},
+                "build": {"disabled": True},
+                "Orchestrator": {"model": "opencode-go/mimo-v2.6-pro"},
+                "Junior": {"model": "opencode-go/deepseek-v4.1-flash#high"},
+            },
+        )
+        self.assertEqual(
+            written["permissions"],
+            [
+                {"action": "external_directory", "resource": "*", "effect": "deny"},
+                {
+                    "action": "external_directory",
+                    "resource": "~/.agents/skills/**",
+                    "effect": "allow",
+                },
+            ],
+        )
+        self.assertEqual(written["model"], "opencode-go/mimo-v2.6-pro")
+        self.assertNotIn("common", written)
+        self.assertNotIn("extends", written)
+        self.assertEqual(
+            written["mcp"]["servers"]["mcp-metals"],
+            {
+                "type": "remote",
+                "url": "http://host.docker.internal:8083/mcp",
+                "disabled": True,
+                "codemode": False,
+                "headers": {"Host": "localhost:8083"},
+            },
+        )
+        self.assertEqual(
+            written["mcp"]["servers"]["mcp-playwright"],
+            {
+                "type": "local",
+                "command": [
+                    "npx",
+                    "-y",
+                    "@playwright/mcp@latest",
+                    "--cdp-endpoint=http://host.docker.internal:9222",
+                ],
+                "disabled": True,
+                "codemode": False,
+            },
+        )
+        self.assertEqual(
+            stdout.getvalue(),
+            "✓ Successfully switched to preset: w-go\n"
+            "✓ Generated opencode.jsonc\n"
+            "\n"
+            "  Agent        │ Model                           │ Variant\n"
+            "  ─────────────┼─────────────────────────────────┼────────\n"
+            "  Orchestrator │ opencode-go/mimo-v2.6-pro       │ -\n"
+            "  Junior       │ opencode-go/deepseek-v4.1-flash │ high\n"
+            "\n",
+        )
 
 
 if __name__ == "__main__":

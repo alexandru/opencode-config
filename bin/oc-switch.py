@@ -183,7 +183,7 @@ class AgentRow:
 
 
 def is_disabled(config: Json) -> bool:
-    return isinstance(config, dict) and config.get("disable") is True
+    return isinstance(config, dict) and config.get("disabled") is True
 
 
 def agent_field(config: Json, key: str) -> str:
@@ -192,15 +192,13 @@ def agent_field(config: Json, key: str) -> str:
 
 
 def agent_rows(agents: JsonObject) -> list[AgentRow]:
-    return [
-        AgentRow(
-            name=name,
-            model=agent_field(config, "model"),
-            variant=agent_field(config, "variant"),
-        )
-        for name, config in agents.items()
-        if not is_disabled(config)
-    ]
+    rows: list[AgentRow] = []
+    for name, config in agents.items():
+        if is_disabled(config):
+            continue
+        model, _, variant = agent_field(config, "model").partition("#")
+        rows.append(AgentRow(name=name, model=model, variant=variant or "-"))
+    return rows
 
 
 def column_width(header: str, values: Iterable[str]) -> int:
@@ -209,7 +207,7 @@ def column_width(header: str, values: Iterable[str]) -> int:
 
 def format_agent_table(config: JsonObject) -> str | None:
     """The enabled agents and their model mappings, or None when none are configured."""
-    agents = config.get("agent")
+    agents = config.get("agents")
     if not isinstance(agents, dict):
         return None
     rows = agent_rows(agents)

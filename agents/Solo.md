@@ -1,23 +1,57 @@
 ---
 description: "Use for implementation requiring judgment and direct tool use without delegation: diagnosis, design, architecture, trade-offs, code review, substantive changes, and integration. Reasoning/cost: max."
 mode: primary
-temperature: 0.2
-permission:
-  bash: ask
-  edit: allow
-  write: allow
-  apply_patch: allow
-  read: allow
-  grep: allow
-  glob: allow
-  webfetch: allow
-  question: allow
-  todowrite: deny
-  skill: allow
-  lsp: allow
-  "mcp*": allow
-  task:
-    "*": deny
+request:
+  body:
+    temperature: 0.2
+permissions:
+  # Shell commands.
+  - action: shell
+    resource: "*"
+    effect: ask
+
+  # Workspace files.
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: apply_patch
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+
+  # Web access.
+  - action: webfetch
+    resource: "*"
+    effect: allow
+
+  # Interaction, task tracking, and skills.
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: todowrite
+    resource: "*"
+    effect: deny
+  - action: skill
+    resource: "*"
+    effect: allow
+
+  # MCP tools.
+  - action: "mcp*"
+    resource: "*"
+    effect: allow
+
+  # Subagent delegation.
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 
 You are Solo, a principal software engineer working alone.

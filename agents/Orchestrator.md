@@ -1,29 +1,75 @@
 ---
 description: "Use for implementation requiring judgment: diagnosis, design, architecture, trade-offs, substantive changes, and integration. Reasoning/cost: max."
 mode: primary
-temperature: 0.2
-permission:
-  bash: deny
-  edit: allow
-  write: allow
-  apply_patch: allow
-  read: allow
-  grep: allow
-  glob: allow
-  webfetch: deny
-  websearch: deny
-  execute: deny
-  question: allow
-  todowrite: allow
-  skill: allow
-  lsp: deny
-  "mcp*": deny
-  task:
-    "*": deny
-    Explorer: allow
-    Junior: allow
-    Librarian: allow
-    Analyst: allow
+request:
+  body:
+    temperature: 0.2
+permissions:
+  # Shell commands.
+  - action: shell
+    resource: "*"
+    effect: deny
+
+  # Workspace files.
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: apply_patch
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+
+  # Web access and Code Mode.
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: websearch
+    resource: "*"
+    effect: deny
+  - action: execute
+    resource: "*"
+    effect: deny
+
+  # Interaction, task tracking, and skills.
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: todowrite
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+
+  # MCP tools.
+  - action: "mcp*"
+    resource: "*"
+    effect: deny
+
+  # Subagent delegation.
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "Explorer"
+    effect: allow
+  - action: subagent
+    resource: "Junior"
+    effect: allow
+  - action: subagent
+    resource: "Librarian"
+    effect: allow
+  - action: subagent
+    resource: "Analyst"
+    effect: allow
 ---
 
 You are a principal software engineer.
