@@ -110,7 +110,7 @@ Sub-agents:
 ## Defined commands
 
 - `/grill-me`: stress-test a plan or decision.
-- `/grill-with-docs`: sharpen a plan or design while creating domain documentation (recommended).
+- `/grill-with-docs`: sharpen a plan or design while creating domain documentation.
 - `/handoff`: prepare context for another agent or session.
 - `/implement`: implement work from a specification or set of tickets.
 - `/improve-codebase-architecture`: find and work through codebase architecture improvements.
@@ -133,7 +133,7 @@ Sub-agents:
   - `diagnosing-bugs`: disciplined diagnosis for hard bugs and regressions.
   - `domain-modeling`: domain language and architectural decisions.
   - `grill-me`: user-invoked adapter for `grilling`.
-  - `grill-with-docs`: sharpen a plan or design while creating domain documentation (recommended).
+  - `grill-with-docs`: sharpen a plan or design while creating domain documentation.
   - `grilling`: structured decision-tree interviews.
   - `handoff`: prepare context for another agent or session.
   - `implement`: implement work from a specification or set of tickets.
