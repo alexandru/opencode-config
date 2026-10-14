@@ -26,9 +26,6 @@ cd ~/.config/opencode && make
 The skills are installed under `~/.agents/skills`, where OpenCode, Copilot CLI,
 Codex, and Pi can share them.
 
-The TODO plugin is installed from `alexandru/opencode-todo` into
-`../plugins/opencode-todo-tool` when that directory is missing. In an
-`agents-config` checkout, the existing plugin submodule is used instead.
 </details>
 
 <details>
