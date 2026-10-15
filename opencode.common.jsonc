@@ -8,14 +8,15 @@
   "websearch": { "provider": "brave" },
   "plugins": [
     "opencode-brave-websearch",
+    "opencode-session-todo",
     // {
     //   "package": "opencode-shell-safety",
     //   "options": {
     //     "endpoint": "https://opencode.ai/zen/v1/systemone",
     //     "model": "jev-1.13",
     //     "integration": "opencode",
-    //     "allowProbability": 0.45,
-    //     "violationProbability": 0.4,
+    //     "allowProbability": 0.35,
+    //     "violationProbability": 0.5,
     //     "timeoutMs": 15000,
     //     "maxAttempts": 2,
     //     "retryDelayMs": 250,
@@ -24,11 +25,20 @@
     //       "ttlMs": 300000
     //     },
     //     "agents": {
+    //       "Analyst": {
+    //         "enabled": true,
+    //         "thresholds": {
+    //           "allowProbability": 0.35,
+    //           "violationProbability": 0.55,
+    //         },
+    //       },
     //       "Explorer": {
     //         "enabled": true,
+    //         "allowed_tools": ["cellar"],
     //       },
     //       "Librarian": {
     //         "enabled": true,
+    //         "allowed_tools": ["cellar", "gh", "az", "curl"],
     //         "http": {
     //           "methods": ["GET", "HEAD"],
     //           "credentials": {

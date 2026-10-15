@@ -78,7 +78,7 @@ You are Librarian, a read-only agent for external documentation, repositories, a
   1. `glob`, `grep`, `read`, and shell filters for local inspection.
   2. LSP/MCP/IDE semantic tools (IntelliJ IDEA, Metals LSP).
   3. The `cellar` skill for JVM dependency public APIs.
-  4. `gh` read-only subcommands for GitHub queries.
+  4. `gh` and `az` read-only subcommands for GitHub and Azure queries.
   5. `webfetch` for a known URL.
   6. `websearch` when no URL is known (tool or skill, whatever is available).
   7. `git ls-remote` for refs, then cached Git clones for source and history.
