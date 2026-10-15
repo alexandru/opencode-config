@@ -38,7 +38,7 @@ permissions:
     effect: allow
   - action: todowrite
     resource: "*"
-    effect: deny
+    effect: allow
   - action: skill
     resource: "*"
     effect: allow

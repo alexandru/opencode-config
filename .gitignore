@@ -6,6 +6,7 @@ __pycache__
 package-lock.json
 bun.lock
 /.agents/sessions/
+/.agents/tmp/
 opencode.json*
 plans/
 service.json

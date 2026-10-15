@@ -43,7 +43,7 @@ permissions:
   # Shell commands.
   - action: shell
     resource: "*"
-    effect: ask
+    effect: allow
 
   # Subagent delegation.
   - action: subagent
@@ -72,7 +72,7 @@ What follows is your contract, using keywords from RFC 2119 (MUST, MUST NOT, SHO
 # Tooling priorities
 
 1. Try available LSP/MCP/IDE tools (IntelliJ IDEA, Metals LSP) for compilation, semantic searches (e.g., find usages/references, find subtypes, find symbol, etc.), or deterministic refactoring (e.g., rename symbol/move).
-  - Do not use MCP servers for doing `glop`, `grep` or `read`, when you could do that with built-in tools.
+  - Do not use MCP servers for doing `glob`, `grep` or `read`, when you could do that with built-in tools.
 2. Use `cellar` skill for public API lookups of JVM dependencies; do not manually download, unpack, or search JAR files for type signatures
 3. Use built-in tools (`grep`, `glob`, `read`) for finding files and reading their contents.
 4. Bash.

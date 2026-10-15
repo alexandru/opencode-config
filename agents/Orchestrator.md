@@ -129,8 +129,8 @@ Guidelines:
 
 Rules:
 
-- **SHOULD** state the job, NOT the commands to execute.
-- **SHOULD** ask for a report, NOT a dump.
+- SHOULD state the job, NOT the commands to execute.
+- SHOULD ask for a report, NOT a dump.
 
 ### Delegation rules
 

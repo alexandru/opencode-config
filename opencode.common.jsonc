@@ -7,50 +7,60 @@
   },
   "websearch": { "provider": "brave" },
   "plugins": [
-    "opencode-session-todo",
     "opencode-brave-websearch",
-    {
-      "package": "opencode-shell-safety",
-      "options": {
-        "endpoint": "https://opencode.ai/zen/v1/systemone",
-        "model": "jev-1.13",
-        "integration": "opencode",
-        "allowProbability": 0.45,
-        "violationProbability": 0.4,
-        "timeoutMs": 15000,
-        "maxAttempts": 2,
-        "retryDelayMs": 250,
-        "cache": {
-          "capacity": 256,
-          "ttlMs": 300000
-        },
-        "agents": {
-          "Explorer": {
-            "enabled": true,
-          },
-          "Librarian": {
-            "enabled": true,
-            "http": {
-              "methods": ["GET", "HEAD"],
-            }
-          },
-          "Junior": {
-            "enabled": true,
-            "thresholds": {
-              "allowProbability": 0.35,
-              "violationProbability": 0.55
-            },
-            "http": {
-              "methods": ["GET", "HEAD"],
-            }
-          },
-          "Solo": {
-            "enabled": true,
-            "fallback": "ask"
-          }
-        }
-      },
-    },
+    // {
+    //   "package": "opencode-shell-safety",
+    //   "options": {
+    //     "endpoint": "https://opencode.ai/zen/v1/systemone",
+    //     "model": "jev-1.13",
+    //     "integration": "opencode",
+    //     "allowProbability": 0.45,
+    //     "violationProbability": 0.4,
+    //     "timeoutMs": 15000,
+    //     "maxAttempts": 2,
+    //     "retryDelayMs": 250,
+    //     "cache": {
+    //       "capacity": 256,
+    //       "ttlMs": 300000
+    //     },
+    //     "agents": {
+    //       "Explorer": {
+    //         "enabled": true,
+    //       },
+    //       "Librarian": {
+    //         "enabled": true,
+    //         "http": {
+    //           "methods": ["GET", "HEAD"],
+    //           "credentials": {
+    //             // OS_TK is the Orangesharing authentication environment variable.
+    //             // Use it only in an Authorization header for HTTPS orangesharing.com retrieval;
+    //             // retain the symbolic reference in commands and never print or embed its value.
+    //             "OS_TK": {
+    //               "hosts": ["orangesharing.com"],
+    //               "scheme": "https",
+    //               "header": "Authorization",
+    //               "disclosure": "deny",
+    //             },
+    //           },
+    //         }
+    //       },
+    //       "Junior": {
+    //         "enabled": true,
+    //         "thresholds": {
+    //           "allowProbability": 0.35,
+    //           "violationProbability": 0.55
+    //         },
+    //         "http": {
+    //           "methods": ["GET", "HEAD"],
+    //         }
+    //       },
+    //       "Solo": {
+    //         "enabled": true,
+    //         "fallback": "ask"
+    //       }
+    //     }
+    //   },
+    // },
   ],
   "agents": {
     "ask": { "disabled": true },
