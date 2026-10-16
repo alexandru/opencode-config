@@ -12,63 +12,63 @@
   "plugins": [
     "opencode-brave-websearch",
     "opencode-session-todo",
-    {
-      "package": "opencode-shell-safety",
-      "options": {
-        "endpoint": "https://api.typesafe.ai/v1/systemone",
-        "model": "jev-1.13.0",
-        "apiKeyEnv": "TYPESAFE_API_KEY",
-        "allowProbability": 0.35,
-        "violationProbability": 0.5,
-        "timeoutMs": 15000,
-        "maxAttempts": 2,
-        "retryDelayMs": 250,
-        "cache": {
-          "capacity": 256,
-          "ttlMs": 300000
-        },
-        "agents": {
-          "Analyst": {
-            "enabled": true,
-            "thresholds": {
-              "allowProbability": 0.35,
-              "violationProbability": 0.55,
-            },
-          },
-          "Explorer": {
-            "enabled": true,
-            "allowed_tools": ["cellar"],
-          },
-          "Librarian": {
-            "enabled": true,
-            "allowed_tools": ["cellar", "gh", "az", "curl"],
-            "http": {
-              "methods": ["GET", "HEAD"],
-              "credentials": {
-                // OS_TK is the Orangesharing authentication environment variable.
-                // Use it only in an Authorization header for HTTPS orangesharing.com retrieval;
-                // retain the symbolic reference in commands and never print or embed its value.
-                "OS_TK": ["orangesharing.com"],
-              },
-            }
-          },
-          "Junior": {
-            "enabled": true,
-            "thresholds": {
-              "allowProbability": 0.35,
-              "violationProbability": 0.55
-            },
-            "http": {
-              "methods": ["GET", "HEAD"],
-            }
-          },
-          "Solo": {
-            "enabled": true,
-            "fallback": "ask"
-          }
-        }
-      },
-    },
+    // {
+    //   "package": "opencode-shell-safety",
+    //   "options": {
+    //     "endpoint": "https://api.typesafe.ai/v1/systemone",
+    //     "model": "jev-1.13.0",
+    //     "apiKeyEnv": "TYPESAFE_API_KEY",
+    //     "allowProbability": 0.35,
+    //     "violationProbability": 0.5,
+    //     "timeoutMs": 15000,
+    //     "maxAttempts": 2,
+    //     "retryDelayMs": 250,
+    //     "cache": {
+    //       "capacity": 256,
+    //       "ttlMs": 300000
+    //     },
+    //     "agents": {
+    //       "Analyst": {
+    //         "enabled": true,
+    //         "thresholds": {
+    //           "allowProbability": 0.35,
+    //           "violationProbability": 0.55,
+    //         },
+    //       },
+    //       "Explorer": {
+    //         "enabled": true,
+    //         "allowed_tools": ["cellar"],
+    //       },
+    //       "Librarian": {
+    //         "enabled": true,
+    //         "allowed_tools": ["cellar", "gh", "az", "curl"],
+    //         "http": {
+    //           "methods": ["GET", "HEAD"],
+    //           "credentials": {
+    //             // OS_TK is the Orangesharing authentication environment variable.
+    //             // Use it only in an Authorization header for HTTPS orangesharing.com retrieval;
+    //             // retain the symbolic reference in commands and never print or embed its value.
+    //             "OS_TK": ["orangesharing.com"],
+    //           },
+    //         }
+    //       },
+    //       "Junior": {
+    //         "enabled": true,
+    //         "thresholds": {
+    //           "allowProbability": 0.35,
+    //           "violationProbability": 0.55
+    //         },
+    //         "http": {
+    //           "methods": ["GET", "HEAD"],
+    //         }
+    //       },
+    //       "Solo": {
+    //         "enabled": true,
+    //         "fallback": "ask"
+    //       }
+    //     }
+    //   },
+    // },
   ],
   "agents": {
     "ask": { "disabled": true },
