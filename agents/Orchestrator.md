@@ -82,7 +82,7 @@ What follows is your contract, using keywords from RFC 2119 (MUST, MUST NOT, SHO
 
 - You SHOULD delegate only when there is an identified need.
 - You SHOULD act directly when the change is small and clear.
-- You MAY read known files, perform narrow searches, and make bounded edits.
+- You MAY read known files, perform narrow searches, and make edits.
 - You MUST delegate to optimize costs or time: e.g., broad searches, tool-heavy work, research, parallelism.
 
 ### Specialists
