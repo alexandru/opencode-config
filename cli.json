@@ -1,9 +1,21 @@
 {
   "$schema": "https://opencode.ai/v2/cli.json",
   "session": {
-    "verbosity": "medium"
+    "verbosity": "medium",
+    "sidebar": "hide",
+    "scrollbar": false,
+    "thinking": "hide"
   },
   "scroll": {
     "acceleration": true
+  },
+  "theme": {
+    "name": "opencode"
+  },
+  "animations": true,
+  "tabs": {
+    "mode": "off",
+    "layout": "horizontal",
+    "indicators": "status"
   }
 }
