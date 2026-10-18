@@ -217,6 +217,7 @@ const sessionInfo = (input: {
   readonly revert?: SessionRevert
   readonly directory?: string
   readonly model?: ModelRef
+  readonly tokens?: TokenUsageInfo
 }): SessionInfo => ({
   id: input.id,
   parentID: input.parentID,
@@ -226,7 +227,7 @@ const sessionInfo = (input: {
   title: input.title,
   revert: input.revert,
   cost: input.cost ?? 0,
-  tokens: ZERO_USAGE,
+  tokens: input.tokens ?? ZERO_USAGE,
   time: { created: 0, updated: 0 },
   location: { directory: input.directory ?? DIRECTORY },
 })
@@ -720,7 +721,7 @@ test("/agents-status opens the session panel that reports child agent usage", as
         )
         expect(frame).toContain("Explorer")
         expect(frame).toContain("opencode-go/deepseek-v4.1-flash#high")
-        expect(frame).toContain("Peak context: 1,650 / 10,000 tokens (17%)")
+        expect(frame).toContain("Peak context: 1.65K / 10K tokens (17%)")
         expect(frame).toContain("$0.0123")
         expect(frame).not.toContain("Unrelated")
         expect(frame).not.toContain(COMMAND_TITLE)
@@ -921,8 +922,8 @@ const contextCases: readonly ContextCase[] = [
       ],
     },
     models: DEFAULT_MODELS,
-    contains: ["Peak context: 1,650 / 10,000 tokens (17%)"],
-    missing: ["5,000", "50%"],
+    contains: ["Peak context: 1.65K / 10K tokens (17%)"],
+    missing: ["Peak context: 5K", "50%"],
   },
   {
     name: "absent revert boundary leaves context unknown",
@@ -938,7 +939,7 @@ const contextCases: readonly ContextCase[] = [
     },
     models: DEFAULT_MODELS,
     contains: ["Peak context: unknown"],
-    missing: ["1,650"],
+    missing: ["1.65K"],
   },
   {
     name: "missing model limit falls back to token count",
@@ -952,8 +953,8 @@ const contextCases: readonly ContextCase[] = [
       ses_limitless: [assistantMessage("msg_limitless", CHILD_USAGE, DEEPSEEK, "Limitless")],
     },
     models: [modelInfo("openai", "gpt-6.1-sol", 200000)],
-    contains: ["Peak context: 1,650 tokens (limit unknown)"],
-    missing: ["/ 10,000 tokens", "17%"],
+    contains: ["Peak context: 1.65K tokens (limit unknown)"],
+    missing: ["/ 10K tokens", "17%"],
   },
 ]
 
@@ -1023,7 +1024,7 @@ test(
               candidate.includes("opencode-go/deepseek-v4.1-flash#low"),
             { maxPasses: 20 },
           )
-          expect(initial).toContain("Peak context: 1,650 / 10,000 tokens (17%)")
+          expect(initial).toContain("Peak context: 1.65K / 10K tokens (17%)")
           expect(initial).toContain("Spent: $0.0123")
           expect(initial).toContain("1 running · 1 session")
           expect(initial).toContain("Total reported spend: $0.0223")
@@ -1066,7 +1067,7 @@ test(
               candidate.includes("opencode-go/deepseek-v4.1-flash#high"),
             { maxPasses: 40 },
           )
-          expect(refreshed).toContain("Peak context: 2,000 / 10,000 tokens (20%)")
+          expect(refreshed).toContain("Peak context: 2K / 10K tokens (20%)")
           expect(refreshed).toContain("Spent: $0.0200")
           expect(refreshed).toContain("Spent: $0.0030")
           expect(refreshed).toContain("Reviewer")
@@ -1151,6 +1152,7 @@ const HEADER_FOREIGN: readonly string[] = [
   "Model:",
   "Context:",
   "Peak context:",
+  "Tokens:",
 ]
 const FOOTER_FOREIGN: readonly string[] = [
   "Spent:",
@@ -1160,6 +1162,7 @@ const FOOTER_FOREIGN: readonly string[] = [
   "Peak context:",
 ]
 const FOOTER_SHAPE: RegExp = /^Total[ :]*(?:reported spend)?[ :]*\$/
+const TOKENS_SHAPE: RegExp = /^Tokens[ :]*(?:↑|unavailable)/
 const HELP_TEXTS: readonly string[] = [
   "Refreshes every",
   "Context is the latest",
@@ -1173,7 +1176,12 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
     line.includes("Agents") && line.includes("Sessions")
   )
   const header: string | undefined = headers[0]
-  const footer: string | undefined = lines.find((line: string): boolean => line.includes("Total"))
+  const footerIndex: number = lines.findIndex((line: string): boolean => line.includes("Total"))
+  const headerIndex: number = lines.findIndex((line: string): boolean =>
+    line.includes("Agents") && line.includes("Sessions")
+  )
+  const footer: string | undefined = footerIndex < 0 ? undefined : lines[footerIndex]
+  const tokens: string | undefined = footerIndex < 0 ? undefined : lines[footerIndex + 1]
   const top: string = nonEmpty[0] ?? ""
   const bottom: string = nonEmpty[nonEmpty.length - 1] ?? ""
   const problems: string[] = []
@@ -1185,12 +1193,18 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
   if (header === undefined) {
     problems.push(`${position}: tab header row is missing or overwritten`)
   } else {
-    if (!/Agents\s+\d+/.test(header)) {
-      problems.push(`${position}: Agents tab label or count is missing: ${JSON.stringify(header)}`)
+    if (!header.includes("Agents")) {
+      problems.push(`${position}: Agents tab label is missing: ${JSON.stringify(header)}`)
     }
-    if (!/Sessions\s+\d+/.test(header)) {
+    if (!header.includes("Sessions")) {
+      problems.push(`${position}: Sessions tab label is missing: ${JSON.stringify(header)}`)
+    }
+    if (/\d/.test(header)) {
+      problems.push(`${position}: tab header carries counts: ${JSON.stringify(header)}`)
+    }
+    if (!/▸\s(?:Agents|Sessions)/.test(header)) {
       problems.push(
-        `${position}: Sessions tab label or count is missing: ${JSON.stringify(header)}`,
+        `${position}: active-tab marker is not attached to a label: ${JSON.stringify(header)}`,
       )
     }
     if (!header.includes("← →")) {
@@ -1215,13 +1229,33 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
   if (frame.includes("Agents status")) {
     problems.push(`${position}: panel title 'Agents status' must not be rendered`)
   }
+  if (headerIndex >= 0) {
+    const below: string = lines[headerIndex + 1] ?? ""
+    if (below !== "") {
+      problems.push(
+        `${position}: expected a fixed blank row below the tab header, found ${
+          JSON.stringify(below)
+        }`,
+      )
+    }
+  }
+  if (footerIndex > 0) {
+    const above: string = lines[footerIndex - 1] ?? ""
+    if (above !== "") {
+      problems.push(
+        `${position}: expected a fixed blank row above the spend footer, found ${
+          JSON.stringify(above)
+        }`,
+      )
+    }
+  }
   if (footer === undefined) {
     problems.push(`${position}: footer row containing 'Total' is missing or overwritten`)
   } else {
     if (!FOOTER_SHAPE.test(footer)) {
       problems.push(`${position}: footer row is not intact: ${JSON.stringify(footer)}`)
     }
-    for (const marker of FOOTER_FOREIGN) {
+    for (const marker of [...FOOTER_FOREIGN, "Tokens:"]) {
       if (footer.includes(marker)) {
         problems.push(
           `${position}: footer row carries entry text ${JSON.stringify(marker)}: ${
@@ -1231,16 +1265,67 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
       }
     }
   }
+  if (tokens === undefined || !TOKENS_SHAPE.test(tokens)) {
+    problems.push(
+      `${position}: token totals row is missing directly below the spend footer: ${
+        JSON.stringify(tokens)
+      }`,
+    )
+  } else {
+    for (const marker of FOOTER_FOREIGN) {
+      if (tokens.includes(marker)) {
+        problems.push(
+          `${position}: token totals row carries entry text ${JSON.stringify(marker)}: ${
+            JSON.stringify(tokens)
+          }`,
+        )
+      }
+    }
+  }
   if (!top.includes("Agents") || !top.includes("Sessions")) {
     problems.push(`${position}: top row is not the tab header: ${JSON.stringify(top)}`)
   }
-  if (!bottom.includes("Total")) {
-    problems.push(`${position}: bottom row is not the footer: ${JSON.stringify(bottom)}`)
+  if (!TOKENS_SHAPE.test(bottom)) {
+    problems.push(
+      `${position}: bottom row is not the token totals footer: ${JSON.stringify(bottom)}`,
+    )
   }
   for (const help of HELP_TEXTS) {
     if (frame.includes(help)) {
       problems.push(`${position}: help text still present: ${JSON.stringify(help)}`)
     }
+  }
+  return problems
+}
+
+const trimmedLines = (frame: string): readonly string[] =>
+  frame.split("\n").map((line: string): string => line.replace(/[│█▀▄]/g, " ").trim())
+
+/** Asserts the scrollTop 0 gap: exactly one fixed blank row between the tab header and the first card. */
+const topGapProblems = (frame: string, position: string): readonly string[] => {
+  const lines: readonly string[] = trimmedLines(frame)
+  const headerIndex: number = lines.findIndex((line: string): boolean =>
+    line.includes("Agents") && line.includes("Sessions")
+  )
+  if (headerIndex < 0) {
+    return [`${position}: tab header row is missing`]
+  }
+  const gap: string = lines[headerIndex + 1] ?? ""
+  const first: string = lines[headerIndex + 2] ?? ""
+  const problems: string[] = []
+  if (gap !== "") {
+    problems.push(
+      `${position}: expected one fixed blank row below the tab header, found ${
+        JSON.stringify(gap)
+      }`,
+    )
+  }
+  if (!first.startsWith("● ")) {
+    problems.push(
+      `${position}: expected the first card title right after the gap, found ${
+        JSON.stringify(first)
+      }`,
+    )
   }
   return problems
 }
@@ -1296,7 +1381,8 @@ test(
               (candidate: string): boolean => candidate.includes("Model: openai/gpt-6.1-sol"),
               { maxPasses: 40 },
             )
-            problems.push(...chromeProblems(initial, `${viewport.name} initial`))
+            problems.push(...chromeProblems(initial, `${viewport.name} agents top`))
+            problems.push(...topGapProblems(initial, `${viewport.name} agents top`))
 
             const scrollbox: ScrollBoxLike | undefined = findScrollBox(setup.renderer.root)
             if (scrollbox === undefined) {
@@ -1304,13 +1390,52 @@ test(
                 `${viewport.name}: expected an OpenTUI scrollbox in the rendered panel`,
               )
             }
+            scrollbox.scrollTop = Math.floor(scrollbox.scrollHeight / 2)
+            await setup.renderOnce()
+            problems.push(
+              ...chromeProblems(setup.captureCharFrame(), `${viewport.name} agents middle`),
+            )
+
             scrollbox.scrollTop = scrollbox.scrollHeight
             await setup.renderOnce()
             const scrolled: string = await setup.waitForFrame(
               (candidate: string): boolean => candidate.includes("Agent 3"),
               { maxPasses: 40 },
             )
-            problems.push(...chromeProblems(scrolled, `${viewport.name} bottom-scrolled`))
+            problems.push(...chromeProblems(scrolled, `${viewport.name} agents bottom`))
+
+            const sessionsTab: KeymapCommand | undefined = findCommand(
+              fixture,
+              (candidate: KeymapCommand): boolean => candidate.bind === "s",
+            )
+            if (sessionsTab === undefined) {
+              throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
+            }
+            await sessionsTab.run()
+            scrollbox.scrollTop = 0
+            await setup.renderOnce()
+            const sessionsTop: string = await setup.waitForFrame(
+              (candidate: string): boolean => candidate.includes("● ses_root"),
+              { maxPasses: 40 },
+            )
+            problems.push(...chromeProblems(sessionsTop, `${viewport.name} sessions top`))
+            problems.push(...topGapProblems(sessionsTop, `${viewport.name} sessions top`))
+
+            scrollbox.scrollTop = Math.floor(scrollbox.scrollHeight / 2)
+            await setup.renderOnce()
+            problems.push(
+              ...chromeProblems(setup.captureCharFrame(), `${viewport.name} sessions middle`),
+            )
+
+            scrollbox.scrollTop = scrollbox.scrollHeight
+            await setup.renderOnce()
+            const sessionsBottom: string = await setup.waitForFrame(
+              (candidate: string): boolean => candidate.includes("Spent: $0.0040"),
+              { maxPasses: 40 },
+            )
+            problems.push(
+              ...chromeProblems(sessionsBottom, `${viewport.name} sessions bottom`),
+            )
           },
         )
       })
@@ -1409,10 +1534,10 @@ test("panel isolates an unavailable model catalog to the affected card", async (
         )
         expect(frame).toContain("build · main")
         expect(frame).toContain("0 running · 2 sessions")
-        expect(frame).toContain("Peak context: 1,650 / 10,000 tokens (17%)")
+        expect(frame).toContain("Peak context: 1.65K / 10K tokens (17%)")
         expect(frame).toContain("Model: anthropic/claude-5-opus")
         expect(frame).toContain("Spent: $0.0050")
-        expect(frame).toContain("Peak context: 1,650 tokens (limit unknown)")
+        expect(frame).toContain("Peak context: 1.65K tokens (limit unknown)")
         expect(frame).toContain("Total reported spend: $0.0150")
         expect(frame).not.toContain("Refresh failed (values may be stale)")
 
@@ -1471,13 +1596,13 @@ test("panel paginates message history past the first page to honor a staged reve
       async (setup: TestRendererSetup): Promise<void> => {
         const frame: string = await setup.waitForFrame(
           (candidate: string): boolean =>
-            candidate.includes("Peak context: 1,650 / 10,000 tokens (17%)"),
+            candidate.includes("Peak context: 1.65K / 10K tokens (17%)"),
           { maxPasses: 60 },
         )
         expect(frame).not.toContain("Paged history")
-        expect(frame).toContain("Peak context: 1,650 / 10,000 tokens (17%)")
+        expect(frame).toContain("Peak context: 1.65K / 10K tokens (17%)")
         expect(frame).toContain("Model: anthropic/claude-5-opus")
-        expect(frame).not.toContain("5,000")
+        expect(frame).not.toContain("Peak context: 5K")
 
         const anthropicStart: number = frame.indexOf("Model: anthropic/claude-5-opus")
         const contextStart: number = frame.indexOf(
@@ -1488,14 +1613,14 @@ test("panel paginates message history past the first page to honor a staged reve
 
         const anthropicGroup: string = frame.slice(anthropicStart, contextStart)
         expect(anthropicGroup).toContain("Peak context: unknown")
-        expect(anthropicGroup).not.toContain("1,650")
+        expect(anthropicGroup).not.toContain("1.65K")
         expect(anthropicGroup).not.toContain("17%")
 
         const contextGroup: string = frame.slice(
           contextStart,
           frame.indexOf("Total reported spend"),
         )
-        expect(contextGroup).toMatch(/Peak context:\s*1,650\s*\/\s*10,000 tokens\s*\(17%\)/)
+        expect(contextGroup).toMatch(/Peak context:\s*1\.65K\s*\/\s*10K tokens\s*\(17%\)/)
       },
     )
   })
@@ -1636,15 +1761,14 @@ test("panel picks the highest known context percentage per model across location
       { width: 120, height: 40 },
       async (setup: TestRendererSetup): Promise<void> => {
         const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
-            candidate.includes("Peak context: 5,000 / 10,000 tokens (50%)"),
+          (candidate: string): boolean => candidate.includes("Peak context: 5K / 10K tokens (50%)"),
           { maxPasses: 40 },
         )
         expect(frame).toContain("2 sessions")
         expect(frame).toContain("opencode-go/deepseek-v4.1-flash#high")
-        expect(frame).not.toContain("Peak context: 20,000 / 100,000 tokens (20%)")
-        expect(frame).not.toContain("20,000")
-        expect(frame).not.toContain("25,000")
+        expect(frame).not.toContain("Peak context: 20K / 100K tokens (20%)")
+        expect(frame).not.toContain("20K")
+        expect(frame).not.toContain("25K")
       },
     )
   })
@@ -1729,24 +1853,24 @@ test("focused panel switches between aggregate agents and per-session usage", as
 
         expect(alphaCard).toContain("Explorer")
         expect(alphaCard).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
-        expect(alphaCard).toContain("Peak context: 1,650 / 10,000 tokens (17%)")
+        expect(alphaCard).toContain("Peak context: 1.65K / 10K tokens (17%)")
         expect(alphaCard).toContain("Spent: $0.0123")
         expect(alphaCard).toMatch(/running/i)
         expect(alphaCard).not.toContain("Selected:")
         expect(alphaCard).not.toContain("Beta task")
         expect(alphaCard).not.toContain("claude-5-opus")
-        expect(alphaCard).not.toContain("5,000")
+        expect(alphaCard).not.toContain("Peak context: 5K")
         expect(alphaCard).not.toContain("$0.0020")
         expect(alphaCard).not.toMatch(/idle/i)
 
         expect(betaCard).toContain("Explorer")
         expect(betaCard).toContain("Model: anthropic/claude-5-opus#high")
         expect(betaCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
-        expect(betaCard).toContain("Peak context: 5,000 / 20,000 tokens (25%)")
+        expect(betaCard).toContain("Peak context: 5K / 20K tokens (25%)")
         expect(betaCard).toContain("Spent: $0.0020")
         expect(betaCard).toMatch(/idle/i)
         expect(betaCard).not.toContain("Alpha task")
-        expect(betaCard).not.toContain("1,650")
+        expect(betaCard).not.toContain("1.65K")
         expect(betaCard).not.toContain("$0.0123")
         expect(betaCard).not.toMatch(/running/i)
         expect(sessions).toContain("Total reported spend: $0.0143")
@@ -1848,8 +1972,8 @@ test("panel attributes a usage sample to its own model when the latest assistant
         expect(contextStart).toBeGreaterThan(anthropicStart)
 
         const anthropicGroup: string = frame.slice(anthropicStart, contextStart)
-        expect(anthropicGroup).toMatch(/Peak context:\s*2,000\s*\/\s*200,000 tokens\s*\(1%\)/)
-        expect(anthropicGroup).not.toContain("5,000")
+        expect(anthropicGroup).toMatch(/Peak context:\s*2K\s*\/\s*200K tokens\s*\(1%\)/)
+        expect(anthropicGroup).not.toContain("5K")
         expect(anthropicGroup).not.toContain("50%")
 
         const contextGroup: string = frame.slice(
@@ -1857,7 +1981,7 @@ test("panel attributes a usage sample to its own model when the latest assistant
           frame.indexOf("Total reported spend"),
         )
         expect(contextGroup).toContain("Context model: opencode-go/deepseek-v4.1-flash#high")
-        expect(contextGroup).toMatch(/Peak context:\s*5,000\s*\/\s*10,000 tokens\s*\(50%\)/)
+        expect(contextGroup).toMatch(/Peak context:\s*5K\s*\/\s*10K tokens\s*\(50%\)/)
         expect(contextGroup).not.toContain("session")
 
         expect(frame.split("Spent: $0.0143").length - 1).toBe(1)
@@ -1924,15 +2048,15 @@ test("panel keeps distinct variant rows with per-variant peak context for a main
         expect(lowStart).toBeGreaterThan(highStart)
 
         const highGroup: string = frame.slice(highStart, lowStart)
-        expect(highGroup).toMatch(/Peak context:\s*1,650\s*\/\s*10,000 tokens\s*\(17%\)/)
+        expect(highGroup).toMatch(/Peak context:\s*1\.65K\s*\/\s*10K tokens\s*\(17%\)/)
         expect(highGroup).toContain("1 session")
-        expect(highGroup).not.toContain("2,000")
+        expect(highGroup).not.toContain("2K")
         expect(highGroup).not.toContain("20%")
 
         const lowGroup: string = frame.slice(lowStart, frame.indexOf("Total reported spend"))
-        expect(lowGroup).toMatch(/Peak context:\s*2,000\s*\/\s*10,000 tokens\s*\(20%\)/)
+        expect(lowGroup).toMatch(/Peak context:\s*2K\s*\/\s*10K tokens\s*\(20%\)/)
         expect(lowGroup).toContain("1 session")
-        expect(lowGroup).not.toContain("1,650")
+        expect(lowGroup).not.toContain("1.65K")
         expect(lowGroup).not.toContain("17%")
       },
     )
@@ -2018,9 +2142,15 @@ test("panel groups descendants by agent with combined counts, single-count spend
         expect(group).toMatch(/Spent:\s*\$0\.0173/)
         expect(group).toContain("opencode-go/deepseek-v4.1-flash#high")
         expect(group).toContain("anthropic/claude-5-opus#medium")
-        expect(group).toMatch(/Peak context:\s*5,000\s*\/\s*10,000 tokens\s*\(50%\)/)
-        expect(group).not.toContain("6,650")
+        expect(group).toMatch(/Peak context:\s*5K\s*\/\s*10K tokens\s*\(50%\)/)
+        expect(group).not.toContain("6.65K")
         expect(frame).toContain("Total reported spend: $0.0273")
+
+        const spent: number = group.indexOf("Spent: $0.0173")
+        const secondModel: number = group.indexOf("anthropic/claude-5-opus#medium")
+        const lastContext: number = group.lastIndexOf("Peak context:")
+        expect(spent).toBeGreaterThan(secondModel)
+        expect(spent).toBeGreaterThan(lastContext)
 
         expect(frame).not.toContain("Root grouped task")
         expect(frame).not.toContain("Alpha grouped task")
@@ -2214,7 +2344,7 @@ test("panel stops at the latest eligible assistant and does not fall back to old
           { maxPasses: 20 },
         )
         expect(frame).toContain("Peak context: unknown")
-        expect(frame).not.toContain("5,000")
+        expect(frame).not.toContain("Peak context: 5K")
         expect(frame).toContain("Spent: $0.0123")
         const messageCalls: readonly ApiCall[] = fixture.calls.filter(
           (call: ApiCall): boolean => call.method === "message.list",
@@ -2298,7 +2428,7 @@ test(
           expect(titlelessCard).toContain("Explorer · ses_child_a")
           expect(titlelessCard).toContain("Model: anthropic/claude-5-opus#high")
           expect(titlelessCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
-          expect(titlelessCard).toContain("Peak context: 5,000 / 20,000 tokens (25%)")
+          expect(titlelessCard).toContain("Peak context: 5K / 20K tokens (25%)")
           expect(titlelessCard).toContain("Spent: $0.0123")
           expect(titlelessCard).toContain("Status: running")
           expect(titlelessCard).not.toContain("Beta task")
@@ -2311,7 +2441,7 @@ test(
           expect(unavailableCard).toContain("Spent: $0.0020")
           expect(unavailableCard).toContain("Status: succeeded")
           expect(unavailableCard).not.toContain("claude-5-opus")
-          expect(unavailableCard).not.toContain("5,000")
+          expect(unavailableCard).not.toContain("5K")
           expect(unavailableCard).not.toContain("$0.0123")
           expect(unavailableCard).not.toContain("Status: running")
           expect(sessions).toContain("Total reported spend: $0.0143")
@@ -2336,7 +2466,7 @@ test(
           expect(failedRefresh).toContain("● ses_child_a")
           expect(failedRefresh).toContain("Beta task")
           expect(failedRefresh).not.toContain("● Explorer")
-          expect(failedRefresh).toContain("Peak context: 5,000 / 20,000 tokens (25%)")
+          expect(failedRefresh).toContain("Peak context: 5K / 20K tokens (25%)")
           expect(failedRefresh).toContain("Spent: $0.0123")
           expect(failedRefresh).toContain("Status: idle")
           expect(failedRefresh).toContain("Status: succeeded")
@@ -2663,5 +2793,458 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
         },
       )
     }
+  })
+})
+
+/** Asserts the token line uses plain text symbols, never emoji sequences. */
+const expectPlainTokenSymbols = (frame: string): void => {
+  expect(frame).toContain("↑")
+  expect(frame).toContain("↓")
+  expect(frame).toContain("↺")
+  expect(frame).not.toContain("\uFE0F")
+  expect(frame).not.toContain("⬆")
+  expect(frame).not.toContain("⬇")
+  expect(frame).not.toContain("♻")
+}
+
+test("panel aggregates cumulative tokens per agent card and places spend below the model lines", async (): Promise<void> => {
+  const alphaTokens: TokenUsageInfo = {
+    input: 1000,
+    output: 200,
+    reasoning: 50,
+    cache: { read: 300, write: 100 },
+  }
+  const betaTokens: TokenUsageInfo = {
+    input: 4000,
+    output: 500,
+    reasoning: 100,
+    cache: { read: 300, write: 100 },
+  }
+  const alpha: SessionInfo = sessionInfo({
+    id: "ses_tokens_a",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Alpha task",
+    cost: 0.0123,
+    model: DEEPSEEK,
+    tokens: alphaTokens,
+  })
+  const beta: SessionInfo = sessionInfo({
+    id: "ses_tokens_b",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Beta task",
+    cost: 0.002,
+    model: DEEPSEEK,
+    tokens: betaTokens,
+  })
+  const fixture: Fixture = makeFixture({
+    sessions: [rootSession(), alpha, beta],
+    messages: {
+      ses_tokens_a: [assistantMessage("msg_tokens_a", CHILD_USAGE, DEEPSEEK, "Explorer")],
+      ses_tokens_b: [
+        assistantMessage(
+          "msg_tokens_b",
+          { input: 100, output: 20, reasoning: 0, cache: { read: 0, write: 0 } },
+          DEEPSEEK,
+          "Explorer",
+        ),
+      ],
+    },
+    models: DEFAULT_MODELS,
+  })
+  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        const frame: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("● Explorer"),
+          { maxPasses: 40 },
+        )
+        expect(frame).toContain("2 sessions")
+        expect(frame).toContain("Peak context: 1.65K / 10K tokens (17%)")
+        expect(frame).not.toContain("1.77K")
+
+        const lines: readonly string[] = trimmedLines(frame)
+        const title: string | undefined = lines.find((line: string): boolean =>
+          line.startsWith("● Explorer")
+        )
+        expect(title).toBe("● Explorer")
+        expect(
+          lines.filter((line: string): boolean => line === "Spent: $0.0143 · ↑ 5K · ↓ 700 · ↺ 600")
+            .length,
+        ).toBe(1)
+        expect(frame).toContain("Total reported spend: $0.0143")
+        expect(lines).toContain("Tokens: ↑ 5K · ↓ 700 · ↺ 600")
+        expectPlainTokenSymbols(frame)
+
+        const status: number = frame.indexOf("0 running · 2 sessions")
+        const model: number = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
+        const context: number = frame.indexOf("Peak context: 1.65K / 10K tokens (17%)")
+        const spent: number = frame.indexOf("Spent: $0.0143")
+        expect(status).toBeGreaterThanOrEqual(0)
+        expect(model).toBeGreaterThan(status)
+        expect(context).toBeGreaterThan(model)
+        expect(spent).toBeGreaterThan(context)
+      },
+    )
+  })
+})
+
+test("Sessions cards show each session's own cumulative tokens while the agent card sums them", async (): Promise<void> => {
+  const alphaTokens: TokenUsageInfo = {
+    input: 1000,
+    output: 200,
+    reasoning: 50,
+    cache: { read: 300, write: 100 },
+  }
+  const betaTokens: TokenUsageInfo = {
+    input: 4000,
+    output: 500,
+    reasoning: 100,
+    cache: { read: 300, write: 100 },
+  }
+  const alpha: SessionInfo = sessionInfo({
+    id: "ses_tokens_a",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Alpha task",
+    cost: 0.0123,
+    model: DEEPSEEK,
+    tokens: alphaTokens,
+  })
+  const beta: SessionInfo = sessionInfo({
+    id: "ses_tokens_b",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Beta task",
+    cost: 0.002,
+    model: DEEPSEEK,
+    tokens: betaTokens,
+  })
+  const fixture: Fixture = makeFixture({
+    sessions: [rootSession(), alpha, beta],
+    messages: {},
+    models: DEFAULT_MODELS,
+    statuses: { ses_tokens_a: "running", ses_tokens_b: "idle" },
+  })
+  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        const sessionsTab: KeymapCommand | undefined = findCommand(
+          fixture,
+          (candidate: KeymapCommand): boolean => candidate.bind === "s",
+        )
+        if (sessionsTab === undefined) {
+          throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
+        }
+        await sessionsTab.run()
+        const frame: string = await setup.waitForFrame(
+          (candidate: string): boolean =>
+            candidate.includes("Alpha task") && candidate.includes("Beta task"),
+          { maxPasses: 40 },
+        )
+        const alphaStart: number = frame.indexOf("● Alpha task")
+        const betaStart: number = frame.indexOf("● Beta task")
+        const totalStart: number = frame.indexOf("Total reported spend")
+        expect(alphaStart).toBeGreaterThanOrEqual(0)
+        expect(betaStart).toBeGreaterThan(alphaStart)
+        expect(totalStart).toBeGreaterThan(betaStart)
+        const alphaCard: string = frame.slice(alphaStart, betaStart)
+        const betaCard: string = frame.slice(betaStart, totalStart)
+
+        const alphaStatus: number = alphaCard.indexOf("Status: running")
+        const alphaModel: number = alphaCard.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
+        const alphaContext: number = alphaCard.indexOf("Peak context: unknown")
+        const alphaSpent: number = alphaCard.indexOf(
+          "Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 300",
+        )
+        expect(alphaStatus).toBeGreaterThanOrEqual(0)
+        expect(alphaModel).toBeGreaterThan(alphaStatus)
+        expect(alphaContext).toBeGreaterThan(alphaModel)
+        expect(alphaSpent).toBeGreaterThan(alphaContext)
+        expect(alphaCard).not.toContain("↑ 5K")
+
+        expect(betaCard).toContain("Status: idle")
+        expect(betaCard).toContain("Spent: $0.0020 · ↑ 4K · ↓ 500 · ↺ 300")
+
+        const agentsTab: KeymapCommand | undefined = findCommand(
+          fixture,
+          (candidate: KeymapCommand): boolean => candidate.bind === "a",
+        )
+        if (agentsTab === undefined) {
+          throw new Error("Expected the focused panel to bind 'a' to the Agents tab")
+        }
+        await agentsTab.run()
+        const aggregate: string = await setup.waitForFrame(
+          (candidate: string): boolean =>
+            candidate.includes("Spent: $0.0143 · ↑ 5K · ↓ 700 · ↺ 600"),
+          { maxPasses: 40 },
+        )
+        expect(trimmedLines(aggregate)).toContain("Tokens: ↑ 5K · ↓ 700 · ↺ 600")
+        expect(aggregate).not.toContain("Alpha task")
+        expect(aggregate).not.toContain("Beta task")
+      },
+    )
+  })
+})
+
+test("panel totals tokens across agents in the global footer", async (): Promise<void> => {
+  const explorer: SessionInfo = sessionInfo({
+    id: "ses_global_explorer",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Global explorer task",
+    cost: 0.0123,
+    model: DEEPSEEK,
+    tokens: { input: 1000, output: 200, reasoning: 25, cache: { read: 300, write: 50 } },
+  })
+  const reviewer: SessionInfo = sessionInfo({
+    id: "ses_global_reviewer",
+    parentID: ROOT_SESSION,
+    agent: "Reviewer",
+    title: "Global reviewer task",
+    cost: 0.002,
+    model: DEEPSEEK,
+    tokens: { input: 1000, output: 3000, reasoning: 10, cache: { read: 700, write: 0 } },
+  })
+  const fixture: Fixture = makeFixture({
+    sessions: [rootSession(), explorer, reviewer],
+    messages: {},
+    models: DEFAULT_MODELS,
+  })
+  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        const frame: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("● Reviewer"),
+          { maxPasses: 40 },
+        )
+        const lines: readonly string[] = trimmedLines(frame)
+        expect(lines).toContain("Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(lines).toContain("Spent: $0.0020 · ↑ 1K · ↓ 3K · ↺ 700")
+        expect(lines).toContain("Tokens: ↑ 2K · ↓ 3.2K · ↺ 1K")
+        expect(frame).toContain("Total reported spend: $0.0143")
+        const spend: number = frame.indexOf("Total reported spend: $0.0143")
+        const tokens: number = frame.indexOf("Tokens: ↑ 2K · ↓ 3.2K · ↺ 1K")
+        expect(tokens).toBeGreaterThan(spend)
+      },
+    )
+  })
+})
+
+test("panel reports a reported zero token count as known usage", async (): Promise<void> => {
+  const zero: SessionInfo = sessionInfo({
+    id: "ses_zero_tokens",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Zero token task",
+    cost: 0.002,
+    model: DEEPSEEK,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  })
+  const fixture: Fixture = makeFixture({
+    sessions: [rootSession(), zero],
+    messages: {},
+    models: DEFAULT_MODELS,
+  })
+  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        const frame: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("● Explorer"),
+          { maxPasses: 40 },
+        )
+        const lines: readonly string[] = trimmedLines(frame)
+        expect(lines).toContain("Spent: $0.0020 · ↑ 0 · ↓ 0 · ↺ 0")
+        expect(lines).toContain("Tokens: ↑ 0 · ↓ 0 · ↺ 0")
+        expect(frame).not.toContain("tokens unavailable")
+        expect(frame).not.toContain("Tokens: unavailable")
+        expectPlainTokenSymbols(frame)
+      },
+    )
+  })
+})
+
+test("panel marks tokens unavailable instead of inventing zero when a session omits them", async (): Promise<void> => {
+  const known: SessionInfo = sessionInfo({
+    id: "ses_known_tokens",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Known token task",
+    cost: 0.0123,
+    model: DEEPSEEK,
+    tokens: { input: 1000, output: 200, reasoning: 0, cache: { read: 300, write: 0 } },
+  })
+  const { tokens: _absent, ...tokenlessShape } = sessionInfo({
+    id: "ses_tokenless",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Tokenless task",
+    cost: 0.003,
+    model: DEEPSEEK,
+  })
+  const tokenless: SessionInfo = tokenlessShape as SessionInfo
+  const fixture: Fixture = makeFixture({
+    sessions: [rootSession(), known, tokenless],
+    messages: {},
+    models: DEFAULT_MODELS,
+  })
+  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        const agents: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("● Explorer"),
+          { maxPasses: 40 },
+        )
+        const agentLines: readonly string[] = trimmedLines(agents)
+        expect(agentLines).toContain("Spent: $0.0153 · tokens unavailable")
+        expect(agentLines).toContain("Spent: $0.0000 · ↑ 0 · ↓ 0 · ↺ 0")
+        expect(agentLines).toContain("Tokens: unavailable")
+        expect(agents).not.toContain("Tokens: ↑")
+
+        const sessionsTab: KeymapCommand | undefined = findCommand(
+          fixture,
+          (candidate: KeymapCommand): boolean => candidate.bind === "s",
+        )
+        if (sessionsTab === undefined) {
+          throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
+        }
+        await sessionsTab.run()
+        const sessions: string = await setup.waitForFrame(
+          (candidate: string): boolean =>
+            candidate.includes("Known token task") && candidate.includes("Tokenless task"),
+          { maxPasses: 40 },
+        )
+        const sessionsLines: readonly string[] = trimmedLines(sessions)
+        expect(sessionsLines).toContain("Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(sessionsLines).toContain("Spent: $0.0030 · tokens unavailable")
+        expect(sessionsLines).toContain("Tokens: unavailable")
+      },
+    )
+  })
+})
+
+test(
+  "panel re-reads cumulative tokens on refresh without double-counting",
+  async (): Promise<void> => {
+    const initial: SessionInfo = sessionInfo({
+      id: "ses_tokens_refresh",
+      parentID: ROOT_SESSION,
+      agent: "Explorer",
+      title: "Refresh task",
+      cost: 0.0123,
+      model: DEEPSEEK,
+      tokens: { input: 1000, output: 200, reasoning: 0, cache: { read: 100, write: 0 } },
+    })
+    const refreshed: SessionInfo = sessionInfo({
+      id: "ses_tokens_refresh",
+      parentID: ROOT_SESSION,
+      agent: "Explorer",
+      title: "Refresh task",
+      cost: 0.02,
+      model: DEEPSEEK,
+      tokens: { input: 3000, output: 500, reasoning: 0, cache: { read: 300, write: 0 } },
+    })
+    const fixture: Fixture = makeFixture({
+      sessions: [rootSession(), initial],
+      messages: {},
+      models: DEFAULT_MODELS,
+    })
+    await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+      await withPanel(
+        render,
+        makePanelInput(PANEL_NAME),
+        { width: 120, height: 40 },
+        async (setup: TestRendererSetup): Promise<void> => {
+          const before: string = await setup.waitForFrame(
+            (candidate: string): boolean =>
+              candidate.includes("Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 100"),
+            { maxPasses: 40 },
+          )
+          expect(trimmedLines(before)).toContain("Tokens: ↑ 1K · ↓ 200 · ↺ 100")
+
+          fixture.setSessions([rootSession(), refreshed])
+          await Bun.sleep(2200)
+          const after: string = await setup.waitForFrame(
+            (candidate: string): boolean =>
+              candidate.includes("Spent: $0.0200 · ↑ 3K · ↓ 500 · ↺ 300"),
+            { maxPasses: 40 },
+          )
+          const lines: readonly string[] = trimmedLines(after)
+          expect(lines).toContain("Tokens: ↑ 3K · ↓ 500 · ↺ 300")
+          expect(after).not.toContain("↑ 4K")
+          expect(after).not.toContain("↓ 700")
+          expect(after).not.toContain("↺ 400")
+          setup.renderer.destroy()
+        },
+      )
+    })
+  },
+  15000,
+)
+
+test("panel formats cumulative token counts compactly at rounding thresholds", async (): Promise<void> => {
+  const large: SessionInfo = sessionInfo({
+    id: "ses_tokens_large",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Large totals",
+    cost: 0.0123,
+    model: DEEPSEEK,
+    tokens: {
+      input: 1234567,
+      output: 12345,
+      reasoning: 7654,
+      cache: { read: 1500000, write: 7654321 },
+    },
+  })
+  const small: SessionInfo = sessionInfo({
+    id: "ses_tokens_small",
+    parentID: ROOT_SESSION,
+    agent: "Reviewer",
+    title: "Small totals",
+    cost: 0.001,
+    model: DEEPSEEK,
+    tokens: { input: 999, output: 1000, reasoning: 0, cache: { read: 0, write: 0 } },
+  })
+  const fixture: Fixture = makeFixture({
+    sessions: [rootSession(), large, small],
+    messages: {},
+    models: DEFAULT_MODELS,
+  })
+  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        const frame: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("● Reviewer"),
+          { maxPasses: 40 },
+        )
+        const lines: readonly string[] = trimmedLines(frame)
+        expect(lines).toContain("Spent: $0.0123 · ↑ 1.23M · ↓ 12.35K · ↺ 1.5M")
+        expect(lines).toContain("Spent: $0.0010 · ↑ 999 · ↓ 1K · ↺ 0")
+        expect(lines).toContain("Tokens: ↑ 1.24M · ↓ 13.35K · ↺ 1.5M")
+        expect(frame).not.toContain("7.65M")
+        expect(frame).not.toContain("7.65K")
+        expectPlainTokenSymbols(frame)
+      },
+    )
   })
 })

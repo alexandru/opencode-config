@@ -53,6 +53,7 @@ export interface Observation {
   readonly selected: Option.Option<ModelRef>
   readonly outcome: Option.Option<NonNullable<SessionInfo["outcome"]>>
   readonly cost: number
+  readonly tokens: Option.Option<TokenUsageInfo>
   readonly reading: Result.Result<Reading, RequestFailure>
 }
 
@@ -79,6 +80,7 @@ export interface AgentSummary {
   readonly sessions: Arr.NonEmptyReadonlyArray<string>
   readonly role: Observation["role"]
   readonly cost: number
+  readonly tokens: Option.Option<TokenUsageInfo>
   readonly failed: number
   readonly succeeded: number
   readonly models: ReadonlyArray<ModelSummary>
@@ -88,6 +90,7 @@ export interface Snapshot {
   readonly agents: ReadonlyArray<AgentSummary>
   readonly sessions: ReadonlyArray<SessionSummary>
   readonly cost: number
+  readonly tokens: Option.Option<TokenUsageInfo>
 }
 
 export interface SessionSummary extends AgentSummary {
@@ -223,8 +226,43 @@ export const observe = (
   selected: Option.fromUndefinedOr(session.model),
   outcome: Option.fromUndefinedOr(session.outcome),
   cost: session.cost,
+  tokens: Option.fromUndefinedOr(session.tokens),
   reading: value,
 })
+
+interface TokenTotals {
+  usage: TokenUsageInfo
+  known: boolean
+}
+
+const zeroTokens: TokenUsageInfo = {
+  input: 0,
+  output: 0,
+  reasoning: 0,
+  cache: { read: 0, write: 0 },
+}
+
+const tokenTotals = (): TokenTotals => ({ usage: zeroTokens, known: true })
+
+const addTokens = (totals: TokenTotals, tokens: Option.Option<TokenUsageInfo>): void => {
+  if (Option.isNone(tokens)) {
+    totals.known = false
+    return
+  }
+  const value: TokenUsageInfo = tokens.value
+  totals.usage = {
+    input: totals.usage.input + value.input,
+    output: totals.usage.output + value.output,
+    reasoning: totals.usage.reasoning + value.reasoning,
+    cache: {
+      read: totals.usage.cache.read + value.cache.read,
+      write: totals.usage.cache.write + value.cache.write,
+    },
+  }
+}
+
+const knownTokens = (totals: TokenTotals): Option.Option<TokenUsageInfo> =>
+  totals.known ? Option.some(totals.usage) : Option.none()
 
 interface SessionBuilder {
   count: SessionCount
@@ -242,6 +280,7 @@ interface AgentBuilder {
   readonly sessions: Arr.NonEmptyArray<string>
   role: Observation["role"]
   cost: number
+  readonly tokens: TokenTotals
   failed: number
   succeeded: number
   readonly models: Map<ModelKey, SessionBuilder>
@@ -327,6 +366,7 @@ const projectAgent = (agent: AgentBuilder): AgentSummary => {
     sessions: agent.sessions,
     role: agent.role,
     cost: agent.cost,
+    tokens: knownTokens(agent.tokens),
     failed: agent.failed,
     succeeded: agent.succeeded,
     models,
@@ -338,6 +378,7 @@ const newAgent = (observation: Observation): AgentBuilder => ({
   sessions: [observation.id],
   role: observation.role,
   cost: 0,
+  tokens: tokenTotals(),
   failed: 0,
   succeeded: 0,
   models: new Map(),
@@ -346,6 +387,7 @@ const newAgent = (observation: Observation): AgentBuilder => ({
 
 const record = (agent: AgentBuilder, observation: Observation): void => {
   agent.cost += observation.cost
+  addTokens(agent.tokens, observation.tokens)
   if (Option.isSome(observation.outcome)) {
     const outcome: NonNullable<SessionInfo["outcome"]> = observation.outcome.value
     if (outcome === "failed" || outcome === "interrupted") agent.failed++
@@ -377,6 +419,7 @@ export const summarize = (observations: ReadonlyArray<Observation>): Snapshot =>
   const agents: Map<string, AgentBuilder> = new Map()
   const sessions: Array<SessionSummary> = []
   let cost: number = 0
+  const tokens: TokenTotals = tokenTotals()
   for (const observation of observations) {
     const existing: AgentBuilder | undefined = agents.get(observation.agent)
     const agent: AgentBuilder = existing ?? newAgent(observation)
@@ -395,6 +438,12 @@ export const summarize = (observations: ReadonlyArray<Observation>): Snapshot =>
       outcome: observation.outcome,
     })
     cost += observation.cost
+    addTokens(tokens, observation.tokens)
   }
-  return { agents: Array.from(agents.values(), projectAgent), sessions, cost }
+  return {
+    agents: Array.from(agents.values(), projectAgent),
+    sessions,
+    cost,
+    tokens: knownTokens(tokens),
+  }
 }

@@ -1,4 +1,5 @@
 /** @jsxImportSource @opentui/solid */
+import type { TokenUsageInfo } from "@opencode/client"
 import { Plugin } from "@opencode/plugin/tui"
 import type { Context, KeymapLayer, PanelInput } from "@opencode/plugin/tui/context"
 import type { ResolvedTheme } from "@opencode/theme/tui"
@@ -37,7 +38,10 @@ type View =
 
 type StatusTab = "agents" | "sessions"
 
-const number: Intl.NumberFormat = new Intl.NumberFormat("en-US")
+const compact: Intl.NumberFormat = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 2,
+})
 const money: Intl.NumberFormat = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -45,14 +49,26 @@ const money: Intl.NumberFormat = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 4,
 })
 
+const tokensLabel = (
+  tokens: Option.Option<TokenUsageInfo>,
+  unavailable: string,
+): string =>
+  Option.match(tokens, {
+    onNone: (): string => unavailable,
+    onSome: (value: TokenUsageInfo): string =>
+      `↑ ${compact.format(value.input)} · ↓ ${compact.format(value.output)} · ↺ ${
+        compact.format(value.cache.read)
+      }`,
+  })
+
 const usageLabel = (usage: Option.Option<Utilization>): string =>
   Option.match(usage, {
     onNone: (): string => "unknown",
     onSome: (value: Utilization): string =>
       Option.match(value.limit, {
-        onNone: (): string => `${number.format(value.tokens)} tokens (limit unknown)`,
+        onNone: (): string => `${compact.format(value.tokens)} tokens (limit unknown)`,
         onSome: (limit: Positive): string =>
-          `${number.format(value.tokens)} / ${number.format(limit)} tokens (${
+          `${compact.format(value.tokens)} / ${compact.format(limit)} tokens (${
             contextPercent(value.tokens, limit)
           }%)`,
       }),
@@ -127,6 +143,7 @@ const AgentCard = (
     readonly agent: AgentSummary
     readonly theme: ResolvedTheme
     readonly status: Context["data"]["session"]["status"]
+    readonly first: boolean
     readonly session?: SessionSummary
   },
 ): JSX.Element => {
@@ -148,36 +165,31 @@ const AgentCard = (
     <box
       flexDirection="column"
       flexShrink={0}
-      marginTop={1}
+      marginTop={props.first ? 0 : 1}
       border={["left"]}
       borderColor={color()}
       paddingLeft={1}
       paddingRight={1}
     >
-      <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
-        <Show
-          when={props.session}
-          fallback={
-            <text fg={props.theme.text.base}>
-              <span style={{ fg: color() }}>{"● "}</span>
-              <b>{props.agent.name}</b>
-              <span style={{ fg: props.theme.text.muted }}>
-                {props.agent.role === "primary" ? " · main" : ""}
-              </span>
-            </text>
-          }
-        >
-          {(session: Accessor<SessionSummary>): JSX.Element => (
-            <text fg={props.theme.text.base}>
-              <span style={{ fg: color() }}>{"● "}</span>
-              <b>{Option.getOrElse(session().title, (): string => session().id)}</b>
-            </text>
-          )}
-        </Show>
-        <text fg={props.theme.text.muted} flexShrink={0}>
-          Spent: {money.format(props.agent.cost)}
-        </text>
-      </box>
+      <Show
+        when={props.session}
+        fallback={
+          <text fg={props.theme.text.base}>
+            <span style={{ fg: color() }}>{"● "}</span>
+            <b>{props.agent.name}</b>
+            <span style={{ fg: props.theme.text.muted }}>
+              {props.agent.role === "primary" ? " · main" : ""}
+            </span>
+          </text>
+        }
+      >
+        {(session: Accessor<SessionSummary>): JSX.Element => (
+          <text fg={props.theme.text.base}>
+            <span style={{ fg: color() }}>{"● "}</span>
+            <b>{Option.getOrElse(session().title, (): string => session().id)}</b>
+          </text>
+        )}
+      </Show>
       <Show
         when={props.session}
         fallback={
@@ -207,6 +219,10 @@ const AgentCard = (
           <ModelCard model={model} theme={props.theme} multiple={props.agent.models.length > 1} />
         )}
       </For>
+      <text fg={props.theme.text.muted}>
+        Spent: {money.format(props.agent.cost)} ·{" "}
+        {tokensLabel(props.agent.tokens, "tokens unavailable")}
+      </text>
     </box>
   )
 }
@@ -222,7 +238,9 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
   }
   const snapshot: Accessor<Snapshot> = (): Snapshot => {
     const current: View = view()
-    return current._tag === "Ready" ? current.snapshot : { agents: [], sessions: [], cost: 0 }
+    return current._tag === "Ready"
+      ? current.snapshot
+      : { agents: [], sessions: [], cost: 0, tokens: Option.none() }
   }
   const error: Accessor<Option.Option<RequestFailure>> = (): Option.Option<RequestFailure> => {
     const current: View = view()
@@ -311,8 +329,8 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
                   selectable={false}
                 >
                   {tab() === name ? "▸ " : "  "}
-                  <b>{name === "agents" ? "Agents" : "Sessions"}</b>{"  "}
-                  {name === "agents" ? snapshot().agents.length : snapshot().sessions.length}
+                  <b>{name === "agents" ? "Agents" : "Sessions"}</b>
+                  {"  "}
                 </text>
               </box>
             )}
@@ -323,7 +341,14 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
           <text fg={ctx.theme.text.muted} onMouseDown={props.close}>×</text>
         </box>
       </box>
-      <scrollbox flexGrow={1} flexBasis={0} minHeight={0} focused={props.focused}>
+      <scrollbox
+        marginTop={1}
+        marginBottom={1}
+        flexGrow={1}
+        flexBasis={0}
+        minHeight={0}
+        focused={props.focused}
+      >
         <Show when={view()._tag === "Loading"}>
           <text fg={ctx.theme.text.muted}>Loading agents…</text>
         </Show>
@@ -338,21 +363,35 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
           when={tab() === "agents"}
           fallback={
             <For each={snapshot().sessions}>
-              {(session: SessionSummary): JSX.Element => (
-                <AgentCard agent={session} session={session} theme={ctx.theme} status={status} />
+              {(session: SessionSummary, index: Accessor<number>): JSX.Element => (
+                <AgentCard
+                  agent={session}
+                  session={session}
+                  theme={ctx.theme}
+                  status={status}
+                  first={index() === 0}
+                />
               )}
             </For>
           }
         >
           <For each={snapshot().agents}>
-            {(agent: AgentSummary): JSX.Element => (
-              <AgentCard agent={agent} theme={ctx.theme} status={status} />
+            {(agent: AgentSummary, index: Accessor<number>): JSX.Element => (
+              <AgentCard
+                agent={agent}
+                theme={ctx.theme}
+                status={status}
+                first={index() === 0}
+              />
             )}
           </For>
         </Show>
       </scrollbox>
       <text fg={ctx.theme.text.base} flexShrink={0} height={1}>
         Total reported spend: {money.format(snapshot().cost)}
+      </text>
+      <text fg={ctx.theme.text.muted} flexShrink={0} height={1}>
+        Tokens: {tokensLabel(snapshot().tokens, "unavailable")}
       </text>
     </box>
   )
