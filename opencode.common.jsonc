@@ -11,7 +11,7 @@
   "websearch": { "provider": "brave" },
   "plugins": [
     "opencode-brave-websearch",
-    // "opencode-session-todo",
+    "opencode-session-todo",
     // {
     //   "package": "opencode-shell-safety",
     //   "options": {
