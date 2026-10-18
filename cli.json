@@ -17,5 +17,9 @@
     "mode": "off",
     "layout": "horizontal",
     "indicators": "status"
+  },
+  "attention": {
+    "sound": true,
+    "notifications": true
   }
 }

@@ -8,7 +8,7 @@ permissions:
   # Shell commands.
   - action: shell
     resource: "*"
-    effect: deny
+    effect: allow
 
   # Workspace files.
   - action: edit
@@ -30,13 +30,13 @@ permissions:
   # Web access and Code Mode.
   - action: webfetch
     resource: "*"
-    effect: deny
+    effect: allow
   - action: websearch
     resource: "*"
-    effect: deny
+    effect: allow
   - action: execute
     resource: "*"
-    effect: deny
+    effect: allow
 
   # Interaction, task tracking, and skills.
   - action: question
@@ -52,7 +52,7 @@ permissions:
   # MCP tools.
   - action: "mcp*"
     resource: "*"
-    effect: deny
+    effect: allow
 
   # Subagent delegation.
   - action: subagent
