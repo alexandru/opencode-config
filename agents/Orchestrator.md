@@ -171,7 +171,6 @@ The following applies for specialist agents (i.e., Explorer, Librarian, Junior, 
 
 **Code reviews:**
 
-- SHOULD delegate code reviews.
 - MUST delegate code analysis requiring fresh context or fresh eyes.
 - MUST relay findings intact; state disagreements separately.
 
