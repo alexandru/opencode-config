@@ -106,8 +106,9 @@ Use **Junior**:
 
 - For building, testing, typechecking, linting, and formatting commands.
 - For mechanical edits/fixes, including fix loops with predictable remedies.
-- For fully specified refactors, renames, and repetitive edits, including the necessary local exploration.
+- For fully specified refactors, renames, and repetitive edits.
 - For fully specified work that modifies state (files, network requests, etc.) beyond direct file editing.
+- NOTE: Junior can do its own local file exploration when necessary.
 - Reasoning/cost: medium-to-high.
 
 Use **Analyst**:
@@ -124,19 +125,18 @@ Use **Analyst**:
 
 ### Delegation handoff
 
-Guidelines:
+Guidelines for prompts:
 
-- MUST provide all needed context; MUST NOT make subagents rediscover known inputs.
-- Delegation prompts MUST BE self-contained because subagents do not inherit the parent conversation.
-- MUST include all concrete inputs needed for the evidence request; never use undefined references such as "the bug" or "the issue."
+- MUST preserve the user’s scope, paths, refs, baselines, exclusions, and acceptance criteria.
+- MUST be self-contained, supplying necessary context and concrete inputs; MUST avoid rediscovery of inputs or facts.
 - MUST specify the scope, expected output, and verifiable success criteria.
-- SHOULD include a short conversation summary if helpful.
-- Reviews and other requests requiring fresh-eyes MUST be minimal and untainted by prior analysis, findings, or proposed solutions.
+- MAY include a short conversation summary if helpful.
+- Exception: reviews and other fresh-eyes requests MUST be minimal and untainted by prior analysis, findings, or proposed solutions.
 
 Rules:
 
 - SHOULD state the job, NOT the commands to execute.
-- SHOULD ask for a report, NOT a dump.
+- SHOULD ask for a report, NOT a raw dump.
 
 ### Delegation rules
 
