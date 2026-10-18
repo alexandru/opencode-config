@@ -2,7 +2,7 @@
   // ----------------------------------------------------------------------------------
   // The default preset
   "default": {
-    "extends": ["p-go"],
+    "extends": ["p-deepseek"],
   },
   // ----------------------------------------------------------------------------------
   // Pure OpenAI / ChatGPT
@@ -16,7 +16,7 @@
         "model": "openai/gpt-6.1-sol#medium",
       },
       "Analyst": {
-        "model": "openai/gpt-6.1-sol#xhigh",
+        "model": "openai/gpt-6.1-sol#high",
       },
       "Junior": {
         "model": "openai/gpt-6-luna#xhigh",
@@ -30,8 +30,8 @@
     },
   },
   // ----------------------------------------------------------------------------------
-  // OpenAI + DeepSeek
-  "p-mix-go": {
+  // OpenAI + OpenCode Go (DeepSeek)
+  "p-openai-go": {
     "extends": ["p-openai"],
     "agents": {
       "Junior": {
@@ -46,7 +46,7 @@
     },
   },
   // ----------------------------------------------------------------------------------
-  // Mistral
+  // Mistral + DeepSeek
   "p-mistral-deep": {
     "model": "mistral/zai-glm-5-3",
     "agents": {
@@ -60,7 +60,7 @@
         "model": "mistral/zai-glm-5-3#max",
       },
       "Junior": {
-        "model": "opencode-go/deepseek-v4.1-flash#high",
+        "model": "opencode-go/deepseek-v4.1-flash#max",
       },
       "Explorer": {
         "model": "opencode-go/deepseek-v4.1-flash#low",
@@ -71,29 +71,14 @@
     },
   },
   // ----------------------------------------------------------------------------------
-  // Go mixture
-  "p-go": {
-    "model": "opencode-go/mimo-v2.6-pro",
+  // Mistral + OpenAI + DeepSeek
+  "p-mix": {
+    "extends": ["p-mistral-deep"],
     "agents": {
-      "Orchestrator": {
-        "model": "opencode-go/mimo-v2.6-pro",
-      },
-      "Solo": {
-        "model": "opencode-go/mimo-v2.6-pro",
-      },
       "Analyst": {
-        "model": "opencode-go/mimo-v2.6-pro",
-      },
-      "Junior": {
-        "model": "opencode-go/deepseek-v4.1-flash#high",
-      },
-      "Explorer": {
-        "model": "opencode-go/deepseek-v4.1-flash#low",
-      },
-      "Librarian": {
-        "model": "opencode-go/deepseek-v4.1-flash#low",
-      },
-    },
+        "model": "openai/gpt-6.1-sol#high"
+      }
+    }
   },
   // ----------------------------------------------------------------------------------
   // Pure DeepSeek
@@ -191,16 +176,16 @@
   "w-openai": {
     "extends": ["w-common", "p-openai"],
   },
-  "w-mix-go": {
-    "extends": ["w-common", "p-mix-go"],
+  "w-openai-go": {
+    "extends": ["w-common", "p-openai-go"],
   },
-  "w-go": {
-    "extends": ["w-common", "p-go"],
-  },
-  "w-deepseek": {
-    "extends": ["w-common", "p-deepseek"],
+  "w-mix": {
+    "extends": ["w-common", "p-mix"],
   },
   "w-mistral-deep": {
     "extends": ["w-common", "p-mistral-deep"],
+  },
+  "w-deepseek": {
+    "extends": ["w-common", "p-deepseek"],
   },
 }
