@@ -16,7 +16,7 @@
         "model": "openai/gpt-6.1-sol#medium",
       },
       "Analyst": {
-        "model": "openai/gpt-6.1-sol#high",
+        "model": "openai/gpt-6.1-sol#xhigh",
       },
       "Junior": {
         "model": "openai/gpt-6-luna#xhigh",

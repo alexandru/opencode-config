@@ -144,10 +144,8 @@ The following applies for specialist agents (i.e., Explorer, Librarian, Junior, 
 
 **Decision ownership:**
 
-- You MUST BE the judge and the decision maker; specialist agents gather evidence, and you interpret it.
-- **MUST NOT** delegate diagnosis, root-cause analysis, bug finding, correctness judgments, solution discovery, architecture, tradeoffs, code review, or open-ended requests such as “investigate and fix this.”
-- MUST NOT ask for an “inconsistency explaining the bug,” a root cause, an intended behavior, or a recommendation.
-- A specialist agent MAY report factual differences between code paths, but MUST NOT decide which difference is a bug or whether it explains one.
+- You MUST retain responsibility for implementation decisions and integration.
+- You MAY delegate judgment only when the recipient’s role explicitly permits it.
 
 **Unknown behavior:**
 
