@@ -723,6 +723,7 @@ test("/agents-status opens the session panel that reports child agent usage", as
         expect(frame).toContain("Peak context: 1,650 / 10,000 tokens (17%)")
         expect(frame).toContain("$0.0123")
         expect(frame).not.toContain("Unrelated")
+        expect(frame).not.toContain(COMMAND_TITLE)
       },
     )
   })
@@ -1168,16 +1169,39 @@ const HELP_TEXTS: readonly string[] = [
 const chromeProblems = (frame: string, position: string): readonly string[] => {
   const lines: readonly string[] = frame.split("\n").map((line: string): string => line.trim())
   const nonEmpty: readonly string[] = lines.filter((line: string): boolean => line.length > 0)
-  const header: string | undefined = lines.find((line: string): boolean =>
-    line.includes("Agents status")
+  const headers: readonly string[] = lines.filter((line: string): boolean =>
+    line.includes("Agents") && line.includes("Sessions")
   )
+  const header: string | undefined = headers[0]
   const footer: string | undefined = lines.find((line: string): boolean => line.includes("Total"))
   const top: string = nonEmpty[0] ?? ""
   const bottom: string = nonEmpty[nonEmpty.length - 1] ?? ""
   const problems: string[] = []
+  if (headers.length !== 1) {
+    problems.push(
+      `${position}: expected one row containing both tab labels, found ${headers.length}`,
+    )
+  }
   if (header === undefined) {
-    problems.push(`${position}: header row containing 'Agents status' is missing or overwritten`)
+    problems.push(`${position}: tab header row is missing or overwritten`)
   } else {
+    if (!/Agents\s+\d+/.test(header)) {
+      problems.push(`${position}: Agents tab label or count is missing: ${JSON.stringify(header)}`)
+    }
+    if (!/Sessions\s+\d+/.test(header)) {
+      problems.push(
+        `${position}: Sessions tab label or count is missing: ${JSON.stringify(header)}`,
+      )
+    }
+    if (!header.includes("← →")) {
+      problems.push(`${position}: arrow-key hint is missing from the tab header`)
+    }
+    if (!header.includes("×")) {
+      problems.push(`${position}: close control is missing from the tab header`)
+    }
+    if ((header.match(/▸/g) ?? []).length !== 1) {
+      problems.push(`${position}: expected one active-tab marker: ${JSON.stringify(header)}`)
+    }
     for (const marker of HEADER_FOREIGN) {
       if (header.includes(marker)) {
         problems.push(
@@ -1187,6 +1211,9 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
         )
       }
     }
+  }
+  if (frame.includes("Agents status")) {
+    problems.push(`${position}: panel title 'Agents status' must not be rendered`)
   }
   if (footer === undefined) {
     problems.push(`${position}: footer row containing 'Total' is missing or overwritten`)
@@ -1204,8 +1231,8 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
       }
     }
   }
-  if (!top.includes("Agents status")) {
-    problems.push(`${position}: top row is not the header: ${JSON.stringify(top)}`)
+  if (!top.includes("Agents") || !top.includes("Sessions")) {
+    problems.push(`${position}: top row is not the tab header: ${JSON.stringify(top)}`)
   }
   if (!bottom.includes("Total")) {
     problems.push(`${position}: bottom row is not the footer: ${JSON.stringify(bottom)}`)
@@ -1623,6 +1650,132 @@ test("panel picks the highest known context percentage per model across location
   })
 })
 
+test("focused panel switches between aggregate agents and per-session usage", async (): Promise<void> => {
+  const actualBeta: ModelRef = { providerID: "anthropic", id: "claude-5-opus", variant: "high" }
+  const betaUsage: TokenUsageInfo = {
+    input: 4000,
+    output: 500,
+    reasoning: 100,
+    cache: { read: 300, write: 100 },
+  }
+  const alpha: SessionInfo = sessionInfo({
+    id: "ses_child_a",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Alpha task",
+    cost: 0.0123,
+    model: DEEPSEEK,
+  })
+  const beta: SessionInfo = sessionInfo({
+    id: "ses_child_b",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Beta task",
+    cost: 0.002,
+    model: DEEPSEEK,
+  })
+  const fixture: Fixture = makeFixture({
+    sessions: [rootSession(), alpha, beta, unrelatedSession],
+    messages: {
+      ses_child_a: [assistantMessage("msg_alpha", CHILD_USAGE, DEEPSEEK, "Explorer")],
+      ses_child_b: [assistantMessage("msg_beta", betaUsage, actualBeta, "Explorer")],
+    },
+    models: [
+      modelInfo("opencode-go", "deepseek-v4.1-flash", 10000),
+      modelInfo("anthropic", "claude-5-opus", 20000),
+    ],
+    statuses: { ses_child_a: "running", ses_child_b: "idle" },
+  })
+
+  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 65 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        const aggregate: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("Total reported spend: $0.0143"),
+          { maxPasses: 40 },
+        )
+        expect(aggregate.split("● Explorer").length - 1).toBe(1)
+        expect(aggregate).toContain("2 sessions")
+        expect(aggregate).toContain("Spent: $0.0143")
+        expect(aggregate).not.toContain("Alpha task")
+        expect(aggregate).not.toContain("Beta task")
+        expect(aggregate).not.toContain("Unrelated")
+
+        const sessionsTab: KeymapCommand | undefined = findCommand(
+          fixture,
+          (candidate: KeymapCommand): boolean => candidate.bind === "s",
+        )
+        if (sessionsTab === undefined) {
+          throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
+        }
+        await sessionsTab.run()
+
+        const sessions: string = await setup.waitForFrame(
+          (candidate: string): boolean =>
+            candidate.includes("Alpha task") && candidate.includes("Beta task"),
+          { maxPasses: 40 },
+        )
+        const alphaStart: number = sessions.indexOf("Alpha task")
+        const betaStart: number = sessions.indexOf("Beta task")
+        const totalStart: number = sessions.indexOf("Total reported spend")
+        expect(alphaStart).toBeGreaterThanOrEqual(0)
+        expect(betaStart).toBeGreaterThan(alphaStart)
+        expect(totalStart).toBeGreaterThan(betaStart)
+        const alphaCard: string = sessions.slice(alphaStart, betaStart)
+        const betaCard: string = sessions.slice(betaStart, totalStart)
+
+        expect(alphaCard).toContain("Explorer")
+        expect(alphaCard).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
+        expect(alphaCard).toContain("Peak context: 1,650 / 10,000 tokens (17%)")
+        expect(alphaCard).toContain("Spent: $0.0123")
+        expect(alphaCard).toMatch(/running/i)
+        expect(alphaCard).not.toContain("Selected:")
+        expect(alphaCard).not.toContain("Beta task")
+        expect(alphaCard).not.toContain("claude-5-opus")
+        expect(alphaCard).not.toContain("5,000")
+        expect(alphaCard).not.toContain("$0.0020")
+        expect(alphaCard).not.toMatch(/idle/i)
+
+        expect(betaCard).toContain("Explorer")
+        expect(betaCard).toContain("Model: anthropic/claude-5-opus#high")
+        expect(betaCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
+        expect(betaCard).toContain("Peak context: 5,000 / 20,000 tokens (25%)")
+        expect(betaCard).toContain("Spent: $0.0020")
+        expect(betaCard).toMatch(/idle/i)
+        expect(betaCard).not.toContain("Alpha task")
+        expect(betaCard).not.toContain("1,650")
+        expect(betaCard).not.toContain("$0.0123")
+        expect(betaCard).not.toMatch(/running/i)
+        expect(sessions).toContain("Total reported spend: $0.0143")
+        expect(sessions).not.toContain("Unrelated")
+
+        const agentsTab: KeymapCommand | undefined = findCommand(
+          fixture,
+          (candidate: KeymapCommand): boolean => candidate.bind === "a",
+        )
+        if (agentsTab === undefined) {
+          throw new Error("Expected the focused panel to bind 'a' to the Agents tab")
+        }
+        await agentsTab.run()
+
+        const restoredAggregate: string = await setup.waitForFrame(
+          (candidate: string): boolean =>
+            candidate.includes("Total reported spend: $0.0143")
+            && !candidate.includes("Alpha task")
+            && !candidate.includes("Beta task"),
+          { maxPasses: 40 },
+        )
+        expect(restoredAggregate.split("● Explorer").length - 1).toBe(1)
+        expect(restoredAggregate).toContain("2 sessions")
+        expect(restoredAggregate).toContain("Spent: $0.0143")
+      },
+    )
+  })
+})
+
 test("panel attributes a usage sample to its own model when the latest assistant has no tokens", async (): Promise<void> => {
   const anthropic: ModelRef = { providerID: "anthropic", id: "claude-5-opus" }
   const switchedUsage: TokenUsageInfo = {
@@ -1911,9 +2064,13 @@ test("panel repaints card text when the theme changes without a data refresh", a
           { maxPasses: 20 },
         )
         expect(frame).toContain("Spent: $0.0123")
+        expect(frame).not.toContain(COMMAND_TITLE)
 
         const before: CapturedFrame = setup.captureSpans()
-        expect(capturedForegrounds(before, "Agents status")).toEqual([THEME_A.text.base.toInts()])
+        expect(capturedForegrounds(before, "Agents")).toEqual([
+          THEME_A.text.action.primary.base.toInts(),
+        ])
+        expect(capturedForegrounds(before, "Sessions")).toEqual([THEME_A.text.muted.toInts()])
         expect(capturedForegrounds(before, "Explorer")).toEqual([THEME_A.text.base.toInts()])
         expect(capturedForegrounds(before, "Spent: $0.0123")).toEqual([THEME_A.text.muted.toInts()])
 
@@ -1927,9 +2084,15 @@ test("panel repaints card text when the theme changes without a data refresh", a
         expect(afterFrame).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
         expect(afterFrame).toContain("Spent: $0.0123")
         expect(afterFrame).toContain("Total reported spend: $0.0123")
+        expect(afterFrame).toContain("▸ Agents")
+        expect(afterFrame).toContain("Sessions")
+        expect(afterFrame).not.toContain(COMMAND_TITLE)
         expect(afterFrame).not.toContain("Refresh failed")
 
-        expect(capturedForegrounds(after, "Agents status")).toEqual([THEME_B.text.base.toInts()])
+        expect(capturedForegrounds(after, "Agents")).toEqual([
+          THEME_B.text.action.primary.base.toInts(),
+        ])
+        expect(capturedForegrounds(after, "Sessions")).toEqual([THEME_B.text.muted.toInts()])
         expect(capturedForegrounds(after, "Explorer")).toEqual([THEME_B.text.base.toInts()])
         expect(
           capturedForegrounds(after, "Model: opencode-go/deepseek-v4.1-flash#high"),
@@ -2059,5 +2222,446 @@ test("panel stops at the latest eligible assistant and does not fall back to old
         expect(messageCalls.length).toBe(2)
       },
     )
+  })
+})
+
+test(
+  "Sessions cards isolate failures, fall back to IDs, and keep live status through refresh errors",
+  async (): Promise<void> => {
+    const actual: ModelRef = { providerID: "anthropic", id: "claude-5-opus", variant: "high" }
+    const usage: TokenUsageInfo = {
+      input: 4000,
+      output: 500,
+      reasoning: 100,
+      cache: { read: 300, write: 100 },
+    }
+    const titleless: SessionInfo = sessionInfo({
+      id: "ses_child_a",
+      parentID: ROOT_SESSION,
+      agent: "Explorer",
+      cost: 0.0123,
+      model: DEEPSEEK,
+    })
+    const unavailable: SessionInfo = {
+      ...sessionInfo({
+        id: "ses_child_b",
+        parentID: ROOT_SESSION,
+        agent: "Reviewer",
+        title: "Beta task",
+        cost: 0.002,
+        model: DEEPSEEK,
+      }),
+      outcome: "succeeded",
+    }
+    const fixture: Fixture = makeFixture({
+      sessions: [rootSession(), titleless, unavailable],
+      messages: {
+        ses_child_a: [assistantMessage("msg_titleless", usage, actual, "Explorer")],
+      },
+      messageFailures: { ses_child_b: "message history unavailable" },
+      models: [
+        modelInfo("opencode-go", "deepseek-v4.1-flash", 10000),
+        modelInfo("anthropic", "claude-5-opus", 20000),
+      ],
+      statuses: { ses_child_a: "running", ses_child_b: "idle" },
+    })
+
+    await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+      await withPanel(
+        render,
+        makePanelInput(PANEL_NAME),
+        { width: 120, height: 65 },
+        async (setup: TestRendererSetup): Promise<void> => {
+          const sessionsTab: KeymapCommand | undefined = findCommand(
+            fixture,
+            (candidate: KeymapCommand): boolean => candidate.bind === "s",
+          )
+          if (sessionsTab === undefined) {
+            throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
+          }
+          await sessionsTab.run()
+
+          const sessions: string = await setup.waitForFrame(
+            (candidate: string): boolean =>
+              candidate.includes("● ses_child_a") && candidate.includes("Beta task"),
+            { maxPasses: 40 },
+          )
+          const titlelessStart: number = sessions.indexOf("● ses_child_a")
+          const unavailableStart: number = sessions.indexOf("Beta task")
+          const totalStart: number = sessions.indexOf("Total reported spend")
+          expect(titlelessStart).toBeGreaterThanOrEqual(0)
+          expect(unavailableStart).toBeGreaterThan(titlelessStart)
+          expect(totalStart).toBeGreaterThan(unavailableStart)
+          const titlelessCard: string = sessions.slice(titlelessStart, unavailableStart)
+          const unavailableCard: string = sessions.slice(unavailableStart, totalStart)
+
+          expect(titlelessCard).toContain("Explorer · ses_child_a")
+          expect(titlelessCard).toContain("Model: anthropic/claude-5-opus#high")
+          expect(titlelessCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
+          expect(titlelessCard).toContain("Peak context: 5,000 / 20,000 tokens (25%)")
+          expect(titlelessCard).toContain("Spent: $0.0123")
+          expect(titlelessCard).toContain("Status: running")
+          expect(titlelessCard).not.toContain("Beta task")
+          expect(titlelessCard).not.toContain("Context data unavailable")
+
+          expect(unavailableCard).toContain("Reviewer · ses_child_b")
+          expect(unavailableCard).toContain("Model: unknown")
+          expect(unavailableCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
+          expect(unavailableCard).toContain("Context data unavailable")
+          expect(unavailableCard).toContain("Spent: $0.0020")
+          expect(unavailableCard).toContain("Status: succeeded")
+          expect(unavailableCard).not.toContain("claude-5-opus")
+          expect(unavailableCard).not.toContain("5,000")
+          expect(unavailableCard).not.toContain("$0.0123")
+          expect(unavailableCard).not.toContain("Status: running")
+          expect(sessions).toContain("Total reported spend: $0.0143")
+
+          fixture.setStatus("ses_child_a", "idle")
+          await setup.renderOnce()
+          const updated: string = setup.captureCharFrame()
+          expect(updated).toContain("● ses_child_a")
+          expect(updated).toContain("Beta task")
+          expect(updated).not.toContain("● Explorer")
+          expect(updated).toContain("Status: idle")
+          expect(updated).toContain("Status: succeeded")
+          expect(updated).not.toContain("Status: running")
+
+          fixture.failWith("refresh exploded")
+          await Bun.sleep(2200)
+          const failedRefresh: string = await setup.waitForFrame(
+            (candidate: string): boolean => candidate.includes("Refresh failed"),
+            { maxPasses: 40 },
+          )
+          expect(failedRefresh).toContain("Refresh failed (values may be stale): refresh exploded")
+          expect(failedRefresh).toContain("● ses_child_a")
+          expect(failedRefresh).toContain("Beta task")
+          expect(failedRefresh).not.toContain("● Explorer")
+          expect(failedRefresh).toContain("Peak context: 5,000 / 20,000 tokens (25%)")
+          expect(failedRefresh).toContain("Spent: $0.0123")
+          expect(failedRefresh).toContain("Status: idle")
+          expect(failedRefresh).toContain("Status: succeeded")
+          expect(failedRefresh).toContain("Total reported spend: $0.0143")
+        },
+      )
+    })
+  },
+  15000,
+)
+
+test("focused panel switches tabs with wrapping left and right arrows", async (): Promise<void> => {
+  const child: SessionInfo = sessionInfo({
+    id: "ses_child_arrow",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Arrow navigation task",
+    cost: 0.0123,
+    model: DEEPSEEK,
+  })
+  const fixture: Fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_child_arrow: [assistantMessage("msg_arrow", CHILD_USAGE, DEEPSEEK, "Explorer")],
+    },
+    models: DEFAULT_MODELS,
+    statuses: { ses_child_arrow: "running" },
+  })
+
+  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        const initial: string = await setup.waitForFrame(
+          (candidate: string): boolean =>
+            candidate.includes("Total reported spend: $0.0123")
+            && candidate.includes("● Explorer"),
+          { maxPasses: 40 },
+        )
+        expect(initial.split("● Explorer").length - 1).toBe(1)
+        expect(initial).not.toContain("Arrow navigation task")
+        expect(initial).toContain("Total reported spend: $0.0123")
+
+        const right: KeymapCommand | undefined = findCommand(
+          fixture,
+          (candidate: KeymapCommand): boolean => candidate.bind === "right",
+        )
+        if (right === undefined) {
+          throw new Error("Expected the focused panel to bind 'right' to the next tab")
+        }
+        const left: KeymapCommand | undefined = findCommand(
+          fixture,
+          (candidate: KeymapCommand): boolean => candidate.bind === "left",
+        )
+        if (left === undefined) {
+          throw new Error("Expected the focused panel to bind 'left' to the previous tab")
+        }
+        const focusedArrowLayer: KeymapLayer | undefined = fixture.layers.find(
+          (layer: KeymapLayer): boolean =>
+            (layer.commands ?? []).includes(left) && (layer.commands ?? []).includes(right),
+        )
+        if (focusedArrowLayer === undefined) {
+          throw new Error("Expected both arrow commands in the focused panel's keymap layer")
+        }
+        expect(focusedArrowLayer.enabled).toBe(true)
+
+        await right.run()
+        const sessionsFromRight: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("Arrow navigation task"),
+          { maxPasses: 40 },
+        )
+        expect(sessionsFromRight).toContain("● Arrow navigation task")
+        expect(sessionsFromRight).toContain("Explorer · ses_child_arrow")
+        expect(sessionsFromRight).not.toContain("● Explorer")
+        expect(sessionsFromRight).toContain("Total reported spend: $0.0123")
+
+        await right.run()
+        const agentsFromRight: string = await setup.waitForFrame(
+          (candidate: string): boolean =>
+            candidate.includes("● Explorer") && !candidate.includes("Arrow navigation task"),
+          { maxPasses: 40 },
+        )
+        expect(agentsFromRight.split("● Explorer").length - 1).toBe(1)
+        expect(agentsFromRight).toContain("Total reported spend: $0.0123")
+
+        await left.run()
+        const sessionsFromLeft: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("Arrow navigation task"),
+          { maxPasses: 40 },
+        )
+        expect(sessionsFromLeft).toContain("● Arrow navigation task")
+        expect(sessionsFromLeft).not.toContain("● Explorer")
+        expect(sessionsFromLeft).toContain("Total reported spend: $0.0123")
+
+        await left.run()
+        const agentsFromLeft: string = await setup.waitForFrame(
+          (candidate: string): boolean =>
+            candidate.includes("● Explorer") && !candidate.includes("Arrow navigation task"),
+          { maxPasses: 40 },
+        )
+        expect(agentsFromLeft.split("● Explorer").length - 1).toBe(1)
+        expect(agentsFromLeft).toContain("Total reported spend: $0.0123")
+      },
+    )
+  })
+
+  const unfocusedFixture: Fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_child_arrow: [assistantMessage("msg_arrow", CHILD_USAGE, DEEPSEEK, "Explorer")],
+    },
+    models: DEFAULT_MODELS,
+    statuses: { ses_child_arrow: "running" },
+  })
+  await withPlugin(unfocusedFixture, async (render: PanelRenderer): Promise<void> => {
+    const input: PanelInput = { ...makePanelInput(PANEL_NAME), focused: false }
+    await withPanel(
+      render,
+      input,
+      { width: 120, height: 40 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("● Explorer"),
+          { maxPasses: 40 },
+        )
+        const right: KeymapCommand | undefined = findCommand(
+          unfocusedFixture,
+          (candidate: KeymapCommand): boolean => candidate.bind === "right",
+        )
+        if (right === undefined) {
+          throw new Error("Expected the unfocused panel to register the 'right' command")
+        }
+        const left: KeymapCommand | undefined = findCommand(
+          unfocusedFixture,
+          (candidate: KeymapCommand): boolean => candidate.bind === "left",
+        )
+        if (left === undefined) {
+          throw new Error("Expected the unfocused panel to register the 'left' command")
+        }
+        const unfocusedArrowLayer: KeymapLayer | undefined = unfocusedFixture.layers.find(
+          (layer: KeymapLayer): boolean =>
+            (layer.commands ?? []).includes(left) && (layer.commands ?? []).includes(right),
+        )
+        if (unfocusedArrowLayer === undefined) {
+          throw new Error("Expected both arrow commands in the unfocused panel's keymap layer")
+        }
+        expect(unfocusedArrowLayer.enabled).toBe(false)
+      },
+    )
+  })
+})
+
+test("mouse clicks switch tab pills and refocus the panel", async (): Promise<void> => {
+  const child: SessionInfo = sessionInfo({
+    id: "ses_child_click",
+    parentID: ROOT_SESSION,
+    agent: "Explorer",
+    title: "Click navigation task",
+    cost: 0.0123,
+    model: DEEPSEEK,
+  })
+  const fixture: Fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_child_click: [assistantMessage("msg_click", CHILD_USAGE, DEEPSEEK, "Explorer")],
+    },
+    models: DEFAULT_MODELS,
+    statuses: { ses_child_click: "running" },
+  })
+  let focusCalls: number = 0
+  const input: PanelInput = {
+    ...makePanelInput(PANEL_NAME),
+    focus: (): void => {
+      focusCalls += 1
+    },
+  }
+
+  const tabForegrounds = (
+    frame: CapturedFrame,
+    label: string,
+  ): ReadonlyArray<readonly [number, number, number, number]> => capturedForegrounds(frame, label)
+  const hasColor = (
+    colors: ReadonlyArray<readonly [number, number, number, number]>,
+    expected: readonly [number, number, number, number],
+  ): boolean =>
+    colors.some((color: readonly [number, number, number, number]): boolean =>
+      color.every((channel: number, index: number): boolean => channel === expected[index])
+    )
+  const tabRow = (frame: string): { readonly line: string; readonly y: number } => {
+    const lines: readonly string[] = frame.split("\n")
+    const y: number = lines.findIndex((line: string): boolean =>
+      line.includes("Agents") && line.includes("Sessions")
+    )
+    if (y < 0) throw new Error("Expected both tab pill labels in one rendered row")
+    return { line: lines[y] ?? "", y }
+  }
+  const verifyChrome = (frame: string): void => {
+    expect(chromeProblems(frame, "mouse panel")).toEqual([])
+  }
+  const clickTab = async (
+    setup: TestRendererSetup,
+    label: "Agents" | "Sessions",
+  ): Promise<string> => {
+    const frame: string = setup.captureCharFrame()
+    const tabs: { readonly line: string; readonly y: number } = tabRow(frame)
+    const column: number = tabs.line.indexOf(label)
+    if (column < 0) throw new Error(`Expected the ${label} tab pill to be visible`)
+    await setup.mockMouse.click(column + Math.floor(label.length / 2), tabs.y)
+    await setup.renderOnce()
+    return setup.captureCharFrame()
+  }
+
+  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPanel(
+      render,
+      input,
+      { width: 120, height: 40 },
+      async (setup: TestRendererSetup): Promise<void> => {
+        const initial: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("● Explorer"),
+          { maxPasses: 40 },
+        )
+        expect(initial).not.toContain("Click navigation task")
+        expect(initial).toContain("Total reported spend: $0.0123")
+
+        const initialStyles: CapturedFrame = setup.captureSpans()
+        expect(
+          hasColor(tabForegrounds(initialStyles, "Sessions"), THEME_A.text.muted.toInts()),
+        ).toBe(true)
+        fixture.setTheme(THEME_B)
+        await setup.renderOnce()
+        const themedAgents: CapturedFrame = setup.captureSpans()
+        expect(
+          hasColor(
+            tabForegrounds(themedAgents, "Agents"),
+            THEME_B.text.action.primary.base.toInts(),
+          ),
+        ).toBe(true)
+        expect(
+          hasColor(tabForegrounds(themedAgents, "Sessions"), THEME_B.text.muted.toInts()),
+        ).toBe(true)
+
+        const sessions: string = await clickTab(setup, "Sessions")
+        const sessionsFrame: string = await setup.waitForFrame(
+          (candidate: string): boolean => candidate.includes("Click navigation task"),
+          { maxPasses: 40 },
+        )
+        expect(sessionsFrame).toContain("● Click navigation task")
+        expect(sessionsFrame).toContain("Explorer · ses_child_click")
+        expect(sessionsFrame).not.toContain("● Explorer")
+        expect(sessionsFrame).toContain("Total reported spend: $0.0123")
+        expect(focusCalls).toBe(1)
+        expect(
+          hasColor(
+            tabForegrounds(setup.captureSpans(), "Sessions"),
+            THEME_B.text.action.primary.base.toInts(),
+          ),
+        ).toBe(true)
+        expect(
+          hasColor(tabForegrounds(setup.captureSpans(), "Agents"), THEME_B.text.muted.toInts()),
+        ).toBe(true)
+        expect(sessions).toContain("Click navigation task")
+
+        const agents: string = await clickTab(setup, "Agents")
+        const agentsFrame: string = await setup.waitForFrame(
+          (candidate: string): boolean =>
+            candidate.includes("● Explorer") && !candidate.includes("Click navigation task"),
+          { maxPasses: 40 },
+        )
+        expect(agentsFrame.split("● Explorer").length - 1).toBe(1)
+        expect(agentsFrame).toContain("Total reported spend: $0.0123")
+        expect(focusCalls).toBe(2)
+        expect(agents).not.toContain("Click navigation task")
+      },
+    )
+
+    const viewports: readonly {
+      readonly name: string
+      readonly width: number
+      readonly height: number
+    }[] = [
+      { name: "42x22", width: 42, height: 22 },
+      { name: "76x12", width: 76, height: 12 },
+    ]
+    for (const viewport of viewports) {
+      await withPanel(
+        render,
+        input,
+        { width: viewport.width, height: viewport.height },
+        async (setup: TestRendererSetup): Promise<void> => {
+          const smallAgents: string = await setup.waitForFrame(
+            (candidate: string): boolean => candidate.includes("Total reported spend: $0.0123"),
+            { maxPasses: 40 },
+          )
+          verifyChrome(smallAgents)
+          expect(
+            hasColor(
+              tabForegrounds(setup.captureSpans(), "Agents"),
+              THEME_B.text.action.primary.base.toInts(),
+            ),
+          ).toBe(true)
+
+          const smallSessions: string = await clickTab(setup, "Sessions")
+          verifyChrome(smallSessions)
+          expect(
+            hasColor(
+              tabForegrounds(setup.captureSpans(), "Sessions"),
+              THEME_B.text.action.primary.base.toInts(),
+            ),
+          ).toBe(true)
+          expect(focusCalls).toBe(viewport.name === "42x22" ? 3 : 5)
+
+          const smallAgentsRestored: string = await clickTab(setup, "Agents")
+          verifyChrome(smallAgentsRestored)
+          expect(
+            hasColor(
+              tabForegrounds(setup.captureSpans(), "Agents"),
+              THEME_B.text.action.primary.base.toInts(),
+            ),
+          ).toBe(true)
+          expect(focusCalls).toBe(viewport.name === "42x22" ? 4 : 6)
+        },
+      )
+    }
   })
 })

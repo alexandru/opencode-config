@@ -47,6 +47,7 @@ export interface Reading {
 
 export interface Observation {
   readonly id: string
+  readonly title: Option.Option<string>
   readonly agent: string
   readonly role: "primary" | "subagent"
   readonly selected: Option.Option<ModelRef>
@@ -85,7 +86,14 @@ export interface AgentSummary {
 
 export interface Snapshot {
   readonly agents: ReadonlyArray<AgentSummary>
+  readonly sessions: ReadonlyArray<SessionSummary>
   readonly cost: number
+}
+
+export interface SessionSummary extends AgentSummary {
+  readonly id: string
+  readonly title: Option.Option<string>
+  readonly outcome: Observation["outcome"]
 }
 
 export type SessionCount = number & Brand.Brand<"AgentsStatus.SessionCount">
@@ -209,6 +217,7 @@ export const observe = (
   value: Result.Result<Reading, RequestFailure>,
 ): Observation => ({
   id: session.id,
+  title: Option.fromUndefinedOr(session.title),
   agent: session.agent ?? "Unknown agent",
   role: session.id === rootID ? "primary" : "subagent",
   selected: Option.fromUndefinedOr(session.model),
@@ -324,53 +333,68 @@ const projectAgent = (agent: AgentBuilder): AgentSummary => {
   }
 }
 
+const newAgent = (observation: Observation): AgentBuilder => ({
+  name: observation.agent,
+  sessions: [observation.id],
+  role: observation.role,
+  cost: 0,
+  failed: 0,
+  succeeded: 0,
+  models: new Map(),
+  contexts: new Map(),
+})
+
+const record = (agent: AgentBuilder, observation: Observation): void => {
+  agent.cost += observation.cost
+  if (Option.isSome(observation.outcome)) {
+    const outcome: NonNullable<SessionInfo["outcome"]> = observation.outcome.value
+    if (outcome === "failed" || outcome === "interrupted") agent.failed++
+    if (outcome === "succeeded") agent.succeeded++
+  }
+  if (Result.isFailure(observation.reading)) {
+    addModel(agent, Option.none(), observation.selected, Option.none(), true)
+  } else {
+    const value: Reading = observation.reading.success
+    const primary: Option.Option<ModelRef> = Option.isSome(value.actual)
+      ? value.actual
+      : observation.selected
+    const selected: Option.Option<ModelRef> =
+      Option.isSome(value.actual) && Option.isSome(observation.selected)
+        && canonicalModelKey(value.actual.value) !== canonicalModelKey(observation.selected.value)
+        ? observation.selected
+        : Option.none()
+    addModel(
+      agent,
+      primary,
+      selected,
+      value.usage,
+      Result.isFailure(value.catalog),
+    )
+  }
+}
+
 export const summarize = (observations: ReadonlyArray<Observation>): Snapshot => {
   const agents: Map<string, AgentBuilder> = new Map()
+  const sessions: Array<SessionSummary> = []
   let cost: number = 0
   for (const observation of observations) {
     const existing: AgentBuilder | undefined = agents.get(observation.agent)
-    const agent: AgentBuilder = existing ?? {
-      name: observation.agent,
-      sessions: [observation.id],
-      role: observation.role,
-      cost: 0,
-      failed: 0,
-      succeeded: 0,
-      models: new Map(),
-      contexts: new Map(),
-    }
+    const agent: AgentBuilder = existing ?? newAgent(observation)
     if (existing !== undefined) {
       agent.sessions.push(observation.id)
       if (observation.role === "primary") agent.role = "primary"
     }
-    agent.cost += observation.cost
-    cost += observation.cost
-    if (Option.isSome(observation.outcome)) {
-      const outcome: NonNullable<SessionInfo["outcome"]> = observation.outcome.value
-      if (outcome === "failed" || outcome === "interrupted") agent.failed++
-      if (outcome === "succeeded") agent.succeeded++
-    }
-    if (Result.isFailure(observation.reading)) {
-      addModel(agent, Option.none(), observation.selected, Option.none(), true)
-    } else {
-      const value: Reading = observation.reading.success
-      const primary: Option.Option<ModelRef> = Option.isSome(value.actual)
-        ? value.actual
-        : observation.selected
-      const selected: Option.Option<ModelRef> =
-        Option.isSome(value.actual) && Option.isSome(observation.selected)
-          && canonicalModelKey(value.actual.value) !== canonicalModelKey(observation.selected.value)
-          ? observation.selected
-          : Option.none()
-      addModel(
-        agent,
-        primary,
-        selected,
-        value.usage,
-        Result.isFailure(value.catalog),
-      )
-    }
+    record(agent, observation)
     agents.set(observation.agent, agent)
+    const individual: AgentBuilder = newAgent(observation)
+    record(individual, observation)
+    sessions.push({
+      ...projectAgent(individual),
+      id: observation.id,
+      title: observation.title,
+      outcome: observation.outcome,
+    })
+    cost += observation.cost
   }
-  return { agents: Array.from(agents.values(), projectAgent), cost }
+  return { agents: Array.from(agents.values(), projectAgent), sessions, cost }
 }

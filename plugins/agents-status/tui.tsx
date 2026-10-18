@@ -20,6 +20,7 @@ import {
   type ModelSummary,
   type Positive,
   type RequestFailure,
+  type SessionSummary,
   type Snapshot,
   usagePercent,
   type Utilization,
@@ -33,6 +34,8 @@ type View =
     readonly snapshot: Snapshot
     readonly error: Option.Option<RequestFailure>
   }
+
+type StatusTab = "agents" | "sessions"
 
 const number: Intl.NumberFormat = new Intl.NumberFormat("en-US")
 const money: Intl.NumberFormat = new Intl.NumberFormat("en-US", {
@@ -124,6 +127,7 @@ const AgentCard = (
     readonly agent: AgentSummary
     readonly theme: ResolvedTheme
     readonly status: Context["data"]["session"]["status"]
+    readonly session?: SessionSummary
   },
 ): JSX.Element => {
   const running: Accessor<number> = createMemo((): number =>
@@ -151,22 +155,53 @@ const AgentCard = (
       paddingRight={1}
     >
       <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
-        <text fg={props.theme.text.base}>
-          <span style={{ fg: color() }}>{"● "}</span>
-          <b>{props.agent.name}</b>
-          <span style={{ fg: props.theme.text.muted }}>
-            {props.agent.role === "primary" ? " · main" : ""}
-          </span>
-        </text>
+        <Show
+          when={props.session}
+          fallback={
+            <text fg={props.theme.text.base}>
+              <span style={{ fg: color() }}>{"● "}</span>
+              <b>{props.agent.name}</b>
+              <span style={{ fg: props.theme.text.muted }}>
+                {props.agent.role === "primary" ? " · main" : ""}
+              </span>
+            </text>
+          }
+        >
+          {(session: Accessor<SessionSummary>): JSX.Element => (
+            <text fg={props.theme.text.base}>
+              <span style={{ fg: color() }}>{"● "}</span>
+              <b>{Option.getOrElse(session().title, (): string => session().id)}</b>
+            </text>
+          )}
+        </Show>
         <text fg={props.theme.text.muted} flexShrink={0}>
           Spent: {money.format(props.agent.cost)}
         </text>
       </box>
-      <text fg={color()}>
-        {running()} running · {props.agent.sessions.length}{" "}
-        {props.agent.sessions.length === 1 ? "session" : "sessions"}
-        {props.agent.failed > 0 ? ` · ${props.agent.failed} failed/interrupted` : ""}
-      </text>
+      <Show
+        when={props.session}
+        fallback={
+          <text fg={color()}>
+            {running()} running · {props.agent.sessions.length}{" "}
+            {props.agent.sessions.length === 1 ? "session" : "sessions"}
+            {props.agent.failed > 0 ? ` · ${props.agent.failed} failed/interrupted` : ""}
+          </text>
+        }
+      >
+        {(session: Accessor<SessionSummary>): JSX.Element => (
+          <>
+            <text fg={props.theme.text.muted}>
+              {session().name}
+              {session().role === "primary" ? " · main" : ""} · {session().id}
+            </text>
+            <text fg={color()}>
+              Status: {running() > 0
+                ? "running"
+                : Option.getOrElse(session().outcome, (): string => "idle")}
+            </text>
+          </>
+        )}
+      </Show>
       <For each={props.agent.models}>
         {(model: ModelSummary): JSX.Element => (
           <ModelCard model={model} theme={props.theme} multiple={props.agent.models.length > 1} />
@@ -181,9 +216,13 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
   const status: Context["data"]["session"]["status"] = (id: string): "running" | "idle" =>
     ctx.data.session.status(id)
   const [view, setView] = createSignal<View>({ _tag: "Loading" })
+  const [tab, setTab] = createSignal<StatusTab>("agents")
+  const switchTab = (): void => {
+    setTab((current: StatusTab): StatusTab => current === "agents" ? "sessions" : "agents")
+  }
   const snapshot: Accessor<Snapshot> = (): Snapshot => {
     const current: View = view()
-    return current._tag === "Ready" ? current.snapshot : { agents: [], cost: 0 }
+    return current._tag === "Ready" ? current.snapshot : { agents: [], sessions: [], cost: 0 }
   }
   const error: Accessor<Option.Option<RequestFailure>> = (): Option.Option<RequestFailure> => {
     const current: View = view()
@@ -199,7 +238,25 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
   ctx.keymap.layer((): KeymapLayer => ({
     mode: "global",
     enabled: props.focused,
-    commands: [{ bind: "escape", title: "Close agents status", run: props.close }],
+    commands: [
+      { bind: "escape", title: "Close agents status", run: props.close },
+      { bind: "left", title: "Previous status tab", run: switchTab },
+      { bind: "right", title: "Next status tab", run: switchTab },
+      {
+        bind: "a",
+        title: "Show agent totals",
+        run: (): void => {
+          setTab("agents")
+        },
+      },
+      {
+        bind: "s",
+        title: "Show agent sessions",
+        run: (): void => {
+          setTab("sessions")
+        },
+      },
+    ],
   }))
   createEffect((): void => {
     setView({ _tag: "Loading" })
@@ -231,10 +288,40 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
   return (
     <box flexDirection="column" flexGrow={1} minHeight={0} padding={1}>
       <box flexDirection="row" justifyContent="space-between" height={1} flexShrink={0}>
-        <text fg={ctx.theme.text.base}>
-          <b>Agents status</b>
-        </text>
-        <text fg={ctx.theme.text.muted} onMouseDown={props.close}>×</text>
+        <box flexDirection="row" height={1} gap={1}>
+          <For each={["agents", "sessions"] as const}>
+            {(name: StatusTab): JSX.Element => (
+              <box
+                flexShrink={0}
+                paddingLeft={1}
+                paddingRight={1}
+                height={1}
+                backgroundColor={tab() === name
+                  ? ctx.theme.background.action.primary.base
+                  : ctx.theme.background.raised.base}
+                alignItems="center"
+                justifyContent="center"
+                onMouseDown={(): void => {
+                  props.focus()
+                  setTab(name)
+                }}
+              >
+                <text
+                  fg={tab() === name ? ctx.theme.text.action.primary.base : ctx.theme.text.muted}
+                  selectable={false}
+                >
+                  {tab() === name ? "▸ " : "  "}
+                  <b>{name === "agents" ? "Agents" : "Sessions"}</b>{"  "}
+                  {name === "agents" ? snapshot().agents.length : snapshot().sessions.length}
+                </text>
+              </box>
+            )}
+          </For>
+        </box>
+        <box flexDirection="row" gap={2} flexShrink={0}>
+          <text fg={ctx.theme.text.muted}>← →</text>
+          <text fg={ctx.theme.text.muted} onMouseDown={props.close}>×</text>
+        </box>
       </box>
       <scrollbox flexGrow={1} flexBasis={0} minHeight={0} focused={props.focused}>
         <Show when={view()._tag === "Loading"}>
@@ -247,11 +334,22 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
             </text>
           )}
         </Show>
-        <For each={snapshot().agents}>
-          {(agent: AgentSummary): JSX.Element => (
-            <AgentCard agent={agent} theme={ctx.theme} status={status} />
-          )}
-        </For>
+        <Show
+          when={tab() === "agents"}
+          fallback={
+            <For each={snapshot().sessions}>
+              {(session: SessionSummary): JSX.Element => (
+                <AgentCard agent={session} session={session} theme={ctx.theme} status={status} />
+              )}
+            </For>
+          }
+        >
+          <For each={snapshot().agents}>
+            {(agent: AgentSummary): JSX.Element => (
+              <AgentCard agent={agent} theme={ctx.theme} status={status} />
+            )}
+          </For>
+        </Show>
       </scrollbox>
       <text fg={ctx.theme.text.base} flexShrink={0} height={1}>
         Total reported spend: {money.format(snapshot().cost)}

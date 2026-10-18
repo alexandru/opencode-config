@@ -23,6 +23,18 @@ permissions:
   - action: skill
     resource: "*"
     effect: allow
+  - action: external_directory
+    resource: "~/.agents/skills"
+    effect: allow
+  - action: external_directory
+    resource: "~/.agents/skills/**"
+    effect: allow
+  - action: external_directory
+    resource: "~/.config/opencode/skills"
+    effect: allow
+  - action: external_directory
+    resource: "~/.config/opencode/skills/**"
+    effect: allow
 
   # Shell commands.
   - action: shell
