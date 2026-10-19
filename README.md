@@ -94,7 +94,7 @@ Then install Cellar via Coursier:
 
 Main agents:
 
-- [Orchestrator](./agents/Orchestrator.md) (default agent): designs and implements changes; delegates judgment, evidence, research, and checks.
+- [Orchestrator](./agents/Orchestrator.md) (default agent): designs and implements changes; delegates evidence, research, and checks.
 - [Solo](./agents/Solo.md): designs and implements changes with direct tool use and no delegation.
 
 Sub-agents:
