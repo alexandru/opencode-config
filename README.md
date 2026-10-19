@@ -99,7 +99,6 @@ Main agents:
 
 Sub-agents:
 
-- [Analyst](./agents/Analyst.md): reads code and evidence, exercises judgment, and advises without making changes.
 - [Junior](./agents/Junior.md): bounded execution, mechanical work.
 - [Explorer](./agents/Explorer.md): read-only codebase evidence gathering.
 - [Librarian](./agents/Librarian.md): read-only external documentation and dependency-source research.

@@ -8,7 +8,7 @@ permissions:
   # Shell commands.
   - action: shell
     resource: "*"
-    effect: ask
+    effect: allow
 
   # Workspace files.
   - action: edit

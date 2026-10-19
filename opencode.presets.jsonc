@@ -15,9 +15,6 @@
       "Solo": {
         "model": "openai/gpt-6.1-sol#medium",
       },
-      "Analyst": {
-        "model": "openai/gpt-6.1-sol#high",
-      },
       "Junior": {
         "model": "openai/gpt-6-luna#xhigh",
       },
@@ -35,7 +32,7 @@
     "extends": ["p-openai"],
     "agents": {
       "Junior": {
-        "model": "opencode-go/deepseek-v4.1-flash#max",
+        "model": "opencode-go/deepseek-v4.1-flash#high",
       },
       "Explorer": {
         "model": "opencode-go/deepseek-v4.1-flash#high",
@@ -44,41 +41,6 @@
         "model": "opencode-go/deepseek-v4.1-flash#high",
       },
     },
-  },
-  // ----------------------------------------------------------------------------------
-  // Mistral + DeepSeek
-  "p-mistral-deep": {
-    "model": "mistral/zai-glm-5-3",
-    "agents": {
-      "Orchestrator": {
-        "model": "mistral/zai-glm-5-3#max",
-      },
-      "Solo": {
-        "model": "mistral/zai-glm-5-3#max",
-      },
-      "Analyst": {
-        "model": "mistral/zai-glm-5-3#max",
-      },
-      "Junior": {
-        "model": "opencode-go/deepseek-v4.1-flash#max",
-      },
-      "Explorer": {
-        "model": "opencode-go/deepseek-v4.1-flash#low",
-      },
-      "Librarian": {
-        "model": "opencode-go/deepseek-v4.1-flash#low",
-      },
-    },
-  },
-  // ----------------------------------------------------------------------------------
-  // Mistral + OpenAI + DeepSeek
-  "p-mix": {
-    "extends": ["p-mistral-deep"],
-    "agents": {
-      "Analyst": {
-        "model": "openai/gpt-6.1-sol#high"
-      }
-    }
   },
   // ----------------------------------------------------------------------------------
   // Pure DeepSeek
@@ -89,9 +51,6 @@
         "model": "opencode-go/deepseek-v4.1-flash#max",
       },
       "Solo": {
-        "model": "opencode-go/deepseek-v4.1-flash#max",
-      },
-      "Analyst": {
         "model": "opencode-go/deepseek-v4.1-flash#max",
       },
       "Junior": {
@@ -154,16 +113,13 @@
     "model": "github-copilot/claude-sonnet-5",
     "agents": {
       "Orchestrator": {
-        "model": "github-copilot/claude-sonnet-5#high",
+        "model": "github-copilot/claude-sonnet-5#medium",
       },
       "Solo": {
-        "model": "github-copilot/claude-sonnet-5#high",
-      },
-      "Analyst": {
-        "model": "github-copilot/claude-sonnet-5#high",
+        "model": "github-copilot/claude-sonnet-5#medium",
       },
       "Junior": {
-        "model": "github-copilot/claude-sonnet-5#low",
+        "model": "github-copilot/gpt-5.3-codex#medium",
       },
       "Explorer": {
         "model": "github-copilot/claude-haiku-4.5",

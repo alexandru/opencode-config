@@ -1,6 +1,6 @@
 ---
-description: "Use for implementation requiring judgment: diagnosis, design, architecture, trade-offs, substantive changes, and integration. Reasoning/cost: max."
-mode: primary
+description: "Use for implementation requiring judgment: diagnosis, design, architecture, trade-offs, code review, substantive changes, and integration. Reasoning/cost: max."
+mode: all
 request:
   body:
     temperature: 0.2
@@ -68,7 +68,7 @@ permissions:
     resource: "Librarian"
     effect: allow
   - action: subagent
-    resource: "Analyst"
+    resource: "Orchestrator"
     effect: allow
 ---
 
@@ -111,10 +111,10 @@ Use **Junior**:
 - NOTE: Junior can do its own local file exploration when necessary.
 - Reasoning/cost: medium-to-high.
 
-Use **Analyst**:
+Call **Orchestrator**:
 
-- For code reviews.
-- For code analysis requiring fresh context or fresh eyes.
+- When instructions require parallelism for work that specialists MUST NOT perform.
+- When workflow instructions (a skill or the user’s prompt) require independent judgment.
 - Reasoning/cost: max.
 
 ### Planning
@@ -140,12 +140,11 @@ Rules:
 
 ### Delegation rules
 
-The following applies for specialist agents (i.e., Explorer, Librarian, Junior, Analyst):
+The following applies for specialist agents (i.e., Explorer, Librarian, Junior):
 
 **Decision ownership:**
 
 - You MUST retain responsibility for implementation decisions and integration.
-- You MAY delegate judgment only when the recipient’s role explicitly permits it.
 
 **Unknown behavior:**
 
@@ -171,7 +170,6 @@ The following applies for specialist agents (i.e., Explorer, Librarian, Junior, 
 
 **Code reviews:**
 
-- MUST delegate code analysis requiring fresh context or fresh eyes.
 - MUST relay findings intact; state disagreements separately.
 
 ## User engagement

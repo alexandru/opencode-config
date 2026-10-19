@@ -28,13 +28,6 @@
     //       "ttlMs": 300000
     //     },
     //     "agents": {
-    //       "Analyst": {
-    //         "enabled": true,
-    //         "thresholds": {
-    //           "allowProbability": 0.35,
-    //           "violationProbability": 0.55,
-    //         },
-    //       },
     //       "Explorer": {
     //         "enabled": true,
     //         "allowed_tools": ["cellar"],
