@@ -157,9 +157,6 @@
   "w-openai-go": {
     "extends": ["w-common", "p-openai-go"],
   },
-  "w-mix": {
-    "extends": ["w-common", "p-mix"],
-  },
   "w-mistral-glm": {
     "extends": ["w-common", "p-mistral-glm"],
   },
