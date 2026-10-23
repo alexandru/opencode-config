@@ -64,6 +64,28 @@
       },
     },
   },
+  // ----------------------------------------------------------------------------------
+  // Mistral / GLM
+  "p-mistral-glm": {
+    "model": "mistral/zai-glm-5-3#max",
+    "agents": {
+      "Orchestrator": {
+        "model": "mistral/zai-glm-5-3#max",
+      },
+      "Solo": {
+        "model": "mistral/zai-glm-5-3#max",
+      },
+      "Junior": {
+        "model": "mistral/zai-glm-5-3-flash#max",
+      },
+      "Explorer": {
+        "model": "mistral/zai-glm-5-3-flash#high",
+      },
+      "Librarian": {
+        "model": "mistral/zai-glm-5-3-flash#high",
+      },
+    },
+  },
   // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Presets meant for usage inside of a Docker container
   // ----------------------------------------------------------------------------------
@@ -138,8 +160,8 @@
   "w-mix": {
     "extends": ["w-common", "p-mix"],
   },
-  "w-mistral-deep": {
-    "extends": ["w-common", "p-mistral-deep"],
+  "w-mistral-glm": {
+    "extends": ["w-common", "p-mistral-glm"],
   },
   "w-deepseek": {
     "extends": ["w-common", "p-deepseek"],
