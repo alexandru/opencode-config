@@ -10,9 +10,12 @@
     "model": "openai/gpt-6.1-sol#high",
     "agents": {
       "Orchestrator": {
-        "model": "openai/gpt-6.1-sol#high",
+        "model": "openai/gpt-6.1-sol#medium",
       },
       "Solo": {
+        "model": "openai/gpt-6.1-sol#medium",
+      },
+      "Analyst": {
         "model": "openai/gpt-6.1-sol#high",
       },
       "Junior": {
@@ -53,6 +56,9 @@
       "Solo": {
         "model": "opencode-go/deepseek-v4.1-flash#max",
       },
+      "Analyst": {
+        "model": "opencode-go/deepseek-v4.1-flash#max",
+      },
       "Junior": {
         "model": "opencode-go/deepseek-v4.1-flash#high",
       },
@@ -74,6 +80,9 @@
       },
       "Solo": {
         "model": "mistral/zai-glm-5-3#max",
+      },
+      "Analyst": {
+        "model": "mistral/zai-glm-5-3-flash#max",
       },
       "Junior": {
         "model": "mistral/zai-glm-5-3-flash#max",
@@ -139,6 +148,9 @@
       },
       "Solo": {
         "model": "github-copilot/claude-sonnet-5#medium",
+      },
+      "Analyst": {
+        "model": "github-copilot/claude-opus-5#medium",
       },
       "Junior": {
         "model": "github-copilot/gpt-5.3-codex#medium",
