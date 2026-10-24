@@ -7,13 +7,13 @@
   // ----------------------------------------------------------------------------------
   // Pure OpenAI / ChatGPT
   "p-openai": {
-    "model": "openai/gpt-6.1-sol",
+    "model": "openai/gpt-6.1-sol#high",
     "agents": {
       "Orchestrator": {
-        "model": "openai/gpt-6.1-sol#medium",
+        "model": "openai/gpt-6.1-sol#high",
       },
       "Solo": {
-        "model": "openai/gpt-6.1-sol#medium",
+        "model": "openai/gpt-6.1-sol#high",
       },
       "Junior": {
         "model": "openai/gpt-6-luna#xhigh",
@@ -32,7 +32,7 @@
     "extends": ["p-openai"],
     "agents": {
       "Junior": {
-        "model": "opencode-go/deepseek-v4.1-flash#high",
+        "model": "opencode-go/deepseek-v4.1-flash#max",
       },
       "Explorer": {
         "model": "opencode-go/deepseek-v4.1-flash#high",
