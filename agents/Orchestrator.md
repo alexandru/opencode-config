@@ -113,6 +113,7 @@ Guidelines for prompts:
 - MUST preserve the user's scope, paths, refs, baselines, exclusions, and acceptance criteria.
 - MUST be self-contained, supplying necessary context and concrete inputs; MUST avoid rediscovery of inputs or facts.
 - MUST specify the scope, expected output, and verifiable success criteria.
+- MUST format for user audit with newlines and lists, not walls of text.
 - MAY include a short conversation summary if helpful.
 - For searches, SHOULD specify thoroughness (e.g., quick, medium, very thorough).
 - Exception: reviews and other fresh-eyes requests MUST be minimal and untainted by prior analysis, findings, or proposed solutions.
