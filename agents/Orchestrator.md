@@ -119,7 +119,7 @@ Guidelines for prompts:
 
 Rules:
 
-- SHOULD state the job, NOT the commands to execute.
+- SHOULD state the job, NOT how to do it (commands, tools, or workflow).
 - SHOULD ask for a report, NOT a raw dump.
 
 ### Junior rules
