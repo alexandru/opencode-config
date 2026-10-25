@@ -4,6 +4,8 @@
   "default_agent": "Orchestrator",
   "policies": [
     { "action": "provider.use", "resource": "opencode", "effect": "deny" },
+    { "action": "tool.use", "resource": "edit:*.agents/skills", "effect": "deny" },
+    { "action": "tool.use", "resource": "edit:*.agents/skills/*", "effect": "deny" },
   ],
   "experimental": {
     "subagent_depth": 16,
@@ -108,6 +110,10 @@
   },
   "permissions": [
     { "action": "external_directory", "resource": "*", "effect": "deny" },
+    { "action": "external_directory", "resource": "~/.agents/librarian", "effect": "allow" },
+    { "action": "external_directory", "resource": "~/.agents/librarian/**", "effect": "allow" },
+    { "action": "external_directory", "resource": "~/.agents/sessions/opencode", "effect": "allow" },
+    { "action": "external_directory", "resource": "~/.agents/sessions/opencode/**", "effect": "allow" },
     { "action": "external_directory", "resource": "~/.agents/skills", "effect": "allow" },
     { "action": "external_directory", "resource": "~/.agents/skills/**", "effect": "allow" },
     { "action": "external_directory", "resource": "~/.config/opencode/skills", "effect": "allow" },
