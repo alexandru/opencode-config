@@ -30,20 +30,21 @@
     //       "ttlMs": 300000
     //     },
     //     "agents": {
-    //       "Analyst": {
+    //       "Orchestrator": {
     //         "enabled": true,
-    //         "thresholds": {
-    //           "allowProbability": 0.35,
-    //           "violationProbability": 0.55,
-    //         },
+    //         "fallback": "ask"
     //       },
-    //       "Explorer": {
+    //       "Solo": {
     //         "enabled": true,
-    //         "allowed_tools": ["cellar"],
+    //         "fallback": "ask"
     //       },
-    //       "Librarian": {
+    //       "Junior": {
     //         "enabled": true,
     //         "allowed_tools": ["cellar", "gh", "az", "curl"],
+    //         "thresholds": {
+    //           "allowProbability": 0.35,
+    //           "violationProbability": 0.55
+    //         },
     //         "http": {
     //           "methods": ["GET", "HEAD"],
     //           "credentials": {
@@ -53,20 +54,6 @@
     //             "OS_TK": ["orangesharing.com"],
     //           },
     //         }
-    //       },
-    //       "Junior": {
-    //         "enabled": true,
-    //         "thresholds": {
-    //           "allowProbability": 0.35,
-    //           "violationProbability": 0.55
-    //         },
-    //         "http": {
-    //           "methods": ["GET", "HEAD"],
-    //         }
-    //       },
-    //       "Solo": {
-    //         "enabled": true,
-    //         "fallback": "ask"
     //       }
     //     }
     //   },

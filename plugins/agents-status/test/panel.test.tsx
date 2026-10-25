@@ -273,7 +273,7 @@ const userMessage = (id: string, text: string): SessionMessageInfo => ({
 const explorerSession: SessionInfo = sessionInfo({
   id: CHILD_SESSION,
   parentID: ROOT_SESSION,
-  agent: "Explorer",
+  agent: "Junior",
   cost: 0.0123,
   model: DEEPSEEK,
 })
@@ -289,7 +289,7 @@ const explorerUsage: SessionMessageAssistant = assistantMessage(
   "msg_explorer_assistant",
   CHILD_USAGE,
   DEEPSEEK,
-  "Explorer",
+  "Junior",
 )
 
 const rootSession = (): SessionInfo =>
@@ -716,10 +716,10 @@ test("/agents-status opens the session panel that reports child agent usage", as
       { width: 120, height: 24 },
       async (setup: TestRendererSetup): Promise<void> => {
         const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Explorer"),
+          (candidate: string): boolean => candidate.includes("Junior"),
           { maxPasses: 20 },
         )
-        expect(frame).toContain("Explorer")
+        expect(frame).toContain("Junior")
         expect(frame).toContain("opencode-go/deepseek-v4.1-flash#high")
         expect(frame).toContain("Peak context: 1.65K / 10K tokens (17%)")
         expect(frame).toContain("$0.0123")
@@ -753,7 +753,7 @@ test("command toggles the panel, Escape closes it when focused, and unrelated pa
         await otherSetup.flush()
         const otherFrame: string = otherSetup.captureCharFrame()
         expect(otherFrame).not.toContain("Total reported spend")
-        expect(otherFrame).not.toContain("Explorer")
+        expect(otherFrame).not.toContain("Junior")
         expect(fixture.calls).toEqual([])
       },
     )
@@ -767,7 +767,7 @@ test("command toggles the panel, Escape closes it when focused, and unrelated pa
       { width: 120, height: 24 },
       async (focusedSetup: TestRendererSetup): Promise<void> => {
         await focusedSetup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Explorer"),
+          (candidate: string): boolean => candidate.includes("Junior"),
           { maxPasses: 20 },
         )
         const escape: KeymapCommand | undefined = findCommand(
@@ -799,7 +799,7 @@ test("panel walks paginated descendants once, keeps same-agent sessions, and exc
   const alpha: SessionInfo = sessionInfo({
     id: "ses_child_a",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Alpha task",
     cost: 0.0123,
     model: DEEPSEEK,
@@ -807,7 +807,7 @@ test("panel walks paginated descendants once, keeps same-agent sessions, and exc
   const beta: SessionInfo = sessionInfo({
     id: "ses_child_b",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Beta task",
     cost: 0.002,
     model: DEEPSEEK,
@@ -815,7 +815,7 @@ test("panel walks paginated descendants once, keeps same-agent sessions, and exc
   const gamma: SessionInfo = sessionInfo({
     id: "ses_child_c",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Gamma task",
     cost: 0.004,
   })
@@ -854,7 +854,7 @@ test("panel walks paginated descendants once, keeps same-agent sessions, and exc
           (candidate: string): boolean => candidate.includes("Architect"),
           { maxPasses: 20 },
         )
-        expect(frame.split("● Explorer").length - 1).toBe(1)
+        expect(frame.split("● Junior").length - 1).toBe(1)
         expect(frame).toContain("3 sessions")
         expect(frame).toContain("Spent: $0.0183")
         expect(frame).toContain("● Architect")
@@ -1001,14 +1001,14 @@ test(
     const childA: SessionInfo = sessionInfo({
       id: "ses_child_a",
       parentID: ROOT_SESSION,
-      agent: "Explorer",
+      agent: "Junior",
       title: "Alpha task",
       cost: 0.0123,
       model: low,
     })
     const fixture: Fixture = makeFixture({
       sessions: [root, childA],
-      messages: { ses_child_a: [assistantMessage("msg_a_initial", CHILD_USAGE, low, "Explorer")] },
+      messages: { ses_child_a: [assistantMessage("msg_a_initial", CHILD_USAGE, low, "Junior")] },
       statuses: { ses_child_a: "running" },
     })
     await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
@@ -1049,7 +1049,7 @@ test(
             sessionInfo({
               id: "ses_child_a",
               parentID: ROOT_SESSION,
-              agent: "Explorer",
+              agent: "Junior",
               title: "Alpha task",
               cost: 0.02,
               model: high,
@@ -1057,7 +1057,7 @@ test(
             childB,
           ])
           fixture.setMessages("ses_child_a", [
-            assistantMessage("msg_a_refreshed", refreshedUsage, high, "Explorer"),
+            assistantMessage("msg_a_refreshed", refreshedUsage, high, "Junior"),
           ])
           fixture.setStatus("ses_child_a", "idle")
 
@@ -1102,7 +1102,7 @@ test("panel warns with stale values when a refresh fails", async (): Promise<voi
           (candidate: string): boolean => candidate.includes("Spent: $0.0123"),
           { maxPasses: 20 },
         )
-        expect(initial).toContain("Explorer")
+        expect(initial).toContain("Junior")
         expect(initial).not.toContain("Refresh failed")
 
         fixture.failWith("refresh exploded")
@@ -1112,7 +1112,7 @@ test("panel warns with stale values when a refresh fails", async (): Promise<voi
           { maxPasses: 40 },
         )
         expect(failed).toContain("Refresh failed (values may be stale): refresh exploded")
-        expect(failed).toContain("Explorer")
+        expect(failed).toContain("Junior")
         expect(failed).toContain("Spent: $0.0123")
         expect(failed).toContain("Total reported spend: $0.0123")
 
@@ -1458,7 +1458,7 @@ test("panel shows the executing assistant model as primary and the selected mode
   const child: SessionInfo = sessionInfo({
     id: "ses_child_divergent",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Divergent model",
     cost: 0.0123,
     model: selected,
@@ -1466,7 +1466,7 @@ test("panel shows the executing assistant model as primary and the selected mode
   const fixture: Fixture = makeFixture({
     sessions: [rootSession(), child],
     messages: {
-      ses_child_divergent: [assistantMessage("msg_divergent", CHILD_USAGE, executing, "Explorer")],
+      ses_child_divergent: [assistantMessage("msg_divergent", CHILD_USAGE, executing, "Junior")],
     },
   })
   await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
@@ -1499,7 +1499,7 @@ test("panel isolates an unavailable model catalog to the affected card", async (
   const childOk: SessionInfo = sessionInfo({
     id: "ses_child_ok",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Accessible child",
     cost: 0.002,
     model: DEEPSEEK,
@@ -1507,7 +1507,7 @@ test("panel isolates an unavailable model catalog to the affected card", async (
   const childGone: SessionInfo = sessionInfo({
     id: "ses_child_gone",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Deleted location child",
     cost: 0.003,
     directory: deletedDirectory,
@@ -1516,8 +1516,8 @@ test("panel isolates an unavailable model catalog to the affected card", async (
   const fixture: Fixture = makeFixture({
     sessions: [root, childOk, childGone],
     messages: {
-      ses_child_ok: [assistantMessage("msg_ok", CHILD_USAGE, DEEPSEEK, "Explorer")],
-      ses_child_gone: [assistantMessage("msg_gone", CHILD_USAGE, failedModel, "Explorer")],
+      ses_child_ok: [assistantMessage("msg_ok", CHILD_USAGE, DEEPSEEK, "Junior")],
+      ses_child_gone: [assistantMessage("msg_gone", CHILD_USAGE, failedModel, "Junior")],
     },
     models: DEFAULT_MODELS,
     catalogFailures: { [deletedDirectory]: "catalog unavailable for deleted location" },
@@ -1561,7 +1561,7 @@ test("panel paginates message history past the first page to honor a staged reve
     cache: { read: 0, write: 0 },
   }
   const history: SessionMessageInfo[] = [
-    assistantMessage("msg_early_assistant", CHILD_USAGE, DEEPSEEK, "Explorer"),
+    assistantMessage("msg_early_assistant", CHILD_USAGE, DEEPSEEK, "Junior"),
     userMessage(boundary, "stage revert here"),
   ]
   for (let index = 0; index < 110; index++) {
@@ -1572,13 +1572,13 @@ test("panel paginates message history past the first page to honor a staged reve
       "msg_late_assistant",
       lateUsage,
       { providerID: "anthropic", id: "claude-5-opus" },
-      "Explorer",
+      "Junior",
     ),
   )
   const child: SessionInfo = sessionInfo({
     id: "ses_child_paged",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Paged history",
     cost: 0.0123,
     revert: { messageID: boundary },
@@ -1637,7 +1637,7 @@ test("panel does not report the selected model as actual when message history is
   const child: SessionInfo = sessionInfo({
     id: "ses_child_lost",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Lost history",
     cost: 0.003,
     model: DEEPSEEK,
@@ -1658,7 +1658,7 @@ test("panel does not report the selected model as actual when message history is
             candidate.includes("Selected: opencode-go/deepseek-v4.1-flash#high"),
           { maxPasses: 40 },
         )
-        const cardStart: number = frame.indexOf("● Explorer")
+        const cardStart: number = frame.indexOf("● Junior")
         const cardEnd: number = frame.indexOf("Total reported spend")
         expect(cardStart).toBeGreaterThanOrEqual(0)
         expect(cardEnd).toBeGreaterThan(cardStart)
@@ -1730,7 +1730,7 @@ test("panel picks the highest known context percentage per model across location
   const first: SessionInfo = sessionInfo({
     id: "ses_limit_a",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.0123,
     directory: locationA,
     model: DEEPSEEK,
@@ -1738,7 +1738,7 @@ test("panel picks the highest known context percentage per model across location
   const second: SessionInfo = sessionInfo({
     id: "ses_limit_b",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.002,
     directory: locationB,
     model: DEEPSEEK,
@@ -1746,8 +1746,8 @@ test("panel picks the highest known context percentage per model across location
   const fixture: Fixture = makeFixture({
     sessions: [rootSession(), first, second],
     messages: {
-      ses_limit_a: [assistantMessage("msg_limit_a", smallUsage, DEEPSEEK, "Explorer")],
-      ses_limit_b: [assistantMessage("msg_limit_b", largeUsage, DEEPSEEK, "Explorer")],
+      ses_limit_a: [assistantMessage("msg_limit_a", smallUsage, DEEPSEEK, "Junior")],
+      ses_limit_b: [assistantMessage("msg_limit_b", largeUsage, DEEPSEEK, "Junior")],
     },
     modelsByDirectory: {
       [locationA]: [modelInfo("opencode-go", "deepseek-v4.1-flash", 10000)],
@@ -1785,7 +1785,7 @@ test("focused panel switches between aggregate agents and per-session usage", as
   const alpha: SessionInfo = sessionInfo({
     id: "ses_child_a",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Alpha task",
     cost: 0.0123,
     model: DEEPSEEK,
@@ -1793,7 +1793,7 @@ test("focused panel switches between aggregate agents and per-session usage", as
   const beta: SessionInfo = sessionInfo({
     id: "ses_child_b",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Beta task",
     cost: 0.002,
     model: DEEPSEEK,
@@ -1801,8 +1801,8 @@ test("focused panel switches between aggregate agents and per-session usage", as
   const fixture: Fixture = makeFixture({
     sessions: [rootSession(), alpha, beta, unrelatedSession],
     messages: {
-      ses_child_a: [assistantMessage("msg_alpha", CHILD_USAGE, DEEPSEEK, "Explorer")],
-      ses_child_b: [assistantMessage("msg_beta", betaUsage, actualBeta, "Explorer")],
+      ses_child_a: [assistantMessage("msg_alpha", CHILD_USAGE, DEEPSEEK, "Junior")],
+      ses_child_b: [assistantMessage("msg_beta", betaUsage, actualBeta, "Junior")],
     },
     models: [
       modelInfo("opencode-go", "deepseek-v4.1-flash", 10000),
@@ -1821,7 +1821,7 @@ test("focused panel switches between aggregate agents and per-session usage", as
           (candidate: string): boolean => candidate.includes("Total reported spend: $0.0143"),
           { maxPasses: 40 },
         )
-        expect(aggregate.split("● Explorer").length - 1).toBe(1)
+        expect(aggregate.split("● Junior").length - 1).toBe(1)
         expect(aggregate).toContain("2 sessions")
         expect(aggregate).toContain("Spent: $0.0143")
         expect(aggregate).not.toContain("Alpha task")
@@ -1851,7 +1851,7 @@ test("focused panel switches between aggregate agents and per-session usage", as
         const alphaCard: string = sessions.slice(alphaStart, betaStart)
         const betaCard: string = sessions.slice(betaStart, totalStart)
 
-        expect(alphaCard).toContain("Explorer")
+        expect(alphaCard).toContain("Junior")
         expect(alphaCard).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
         expect(alphaCard).toContain("Peak context: 1.65K / 10K tokens (17%)")
         expect(alphaCard).toContain("Spent: $0.0123")
@@ -1863,7 +1863,7 @@ test("focused panel switches between aggregate agents and per-session usage", as
         expect(alphaCard).not.toContain("$0.0020")
         expect(alphaCard).not.toMatch(/idle/i)
 
-        expect(betaCard).toContain("Explorer")
+        expect(betaCard).toContain("Junior")
         expect(betaCard).toContain("Model: anthropic/claude-5-opus#high")
         expect(betaCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
         expect(betaCard).toContain("Peak context: 5K / 20K tokens (25%)")
@@ -1892,7 +1892,7 @@ test("focused panel switches between aggregate agents and per-session usage", as
             && !candidate.includes("Beta task"),
           { maxPasses: 40 },
         )
-        expect(restoredAggregate.split("● Explorer").length - 1).toBe(1)
+        expect(restoredAggregate.split("● Junior").length - 1).toBe(1)
         expect(restoredAggregate).toContain("2 sessions")
         expect(restoredAggregate).toContain("Spent: $0.0143")
       },
@@ -1918,7 +1918,7 @@ test("panel attributes a usage sample to its own model when the latest assistant
     "msg_switch_anthropic",
     ZERO_USAGE,
     anthropic,
-    "Explorer",
+    "Junior",
   )
   const root: SessionInfo = sessionInfo({
     id: ROOT_SESSION,
@@ -1929,14 +1929,14 @@ test("panel attributes a usage sample to its own model when the latest assistant
   const switched: SessionInfo = sessionInfo({
     id: "ses_switch_a",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.0123,
     model: anthropic,
   })
   const current: SessionInfo = sessionInfo({
     id: "ses_switch_b",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.002,
     model: anthropic,
   })
@@ -1944,11 +1944,11 @@ test("panel attributes a usage sample to its own model when the latest assistant
     sessions: [root, switched, current],
     messages: {
       ses_switch_a: [
-        assistantMessage("msg_switch_deepseek", switchedUsage, DEEPSEEK, "Explorer"),
+        assistantMessage("msg_switch_deepseek", switchedUsage, DEEPSEEK, "Junior"),
         anthropicNoTokens,
       ],
       ses_switch_b: [
-        assistantMessage("msg_switch_anthropic_usage", anthropicUsage, anthropic, "Explorer"),
+        assistantMessage("msg_switch_anthropic_usage", anthropicUsage, anthropic, "Junior"),
       ],
     },
     models: [...DEFAULT_MODELS, modelInfo("anthropic", "claude-5-opus", 200000)],
@@ -1963,7 +1963,7 @@ test("panel attributes a usage sample to its own model when the latest assistant
           (candidate: string): boolean => candidate.includes("Model: anthropic/claude-5-opus"),
           { maxPasses: 40 },
         )
-        expect(frame.split("● Explorer").length - 1).toBe(1)
+        expect(frame.split("● Junior").length - 1).toBe(1)
         expect(frame).toContain("2 sessions")
 
         const anthropicStart: number = frame.indexOf("Model: anthropic/claude-5-opus")
@@ -2007,22 +2007,22 @@ test("panel keeps distinct variant rows with per-variant peak context for a main
   }
   const root: SessionInfo = sessionInfo({
     id: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.0123,
     model: DEEPSEEK,
   })
   const child: SessionInfo = sessionInfo({
     id: "ses_variant_low",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.002,
     model: low,
   })
   const fixture: Fixture = makeFixture({
     sessions: [root, child],
     messages: {
-      [ROOT_SESSION]: [assistantMessage("msg_variant_high", mainUsage, DEEPSEEK, "Explorer")],
-      ses_variant_low: [assistantMessage("msg_variant_low", childUsage, low, "Explorer")],
+      [ROOT_SESSION]: [assistantMessage("msg_variant_high", mainUsage, DEEPSEEK, "Junior")],
+      ses_variant_low: [assistantMessage("msg_variant_low", childUsage, low, "Junior")],
     },
     models: DEFAULT_MODELS,
   })
@@ -2037,8 +2037,8 @@ test("panel keeps distinct variant rows with per-variant peak context for a main
             candidate.includes("Model: opencode-go/deepseek-v4.1-flash#low"),
           { maxPasses: 40 },
         )
-        expect(frame.split("● Explorer").length - 1).toBe(1)
-        expect(frame).toContain("● Explorer · main")
+        expect(frame.split("● Junior").length - 1).toBe(1)
+        expect(frame).toContain("● Junior · main")
         expect(frame).toContain("2 sessions")
         expect(frame.split("Spent: $0.0143").length - 1).toBe(1)
 
@@ -2087,7 +2087,7 @@ test("panel groups descendants by agent with combined counts, single-count spend
   const alpha: SessionInfo = sessionInfo({
     id: "ses_grouped_alpha",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Alpha grouped task",
     cost: 0.0123,
     model: DEEPSEEK,
@@ -2095,7 +2095,7 @@ test("panel groups descendants by agent with combined counts, single-count spend
   const beta: SessionInfo = sessionInfo({
     id: "ses_grouped_beta",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Beta grouped task",
     cost: 0.002,
     model: DEEPSEEK,
@@ -2103,7 +2103,7 @@ test("panel groups descendants by agent with combined counts, single-count spend
   const nested: SessionInfo = sessionInfo({
     id: "ses_grouped_nested",
     parentID: alpha.id,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Nested grouped task",
     cost: 0.003,
     model: alternate,
@@ -2111,10 +2111,10 @@ test("panel groups descendants by agent with combined counts, single-count spend
   const fixture: Fixture = makeFixture({
     sessions: [root, alpha, beta, nested, unrelatedSession],
     messages: {
-      ses_grouped_alpha: [assistantMessage("msg_grouped_alpha", CHILD_USAGE, DEEPSEEK, "Explorer")],
-      ses_grouped_beta: [assistantMessage("msg_grouped_beta", peakUsage, DEEPSEEK, "Explorer")],
+      ses_grouped_alpha: [assistantMessage("msg_grouped_alpha", CHILD_USAGE, DEEPSEEK, "Junior")],
+      ses_grouped_beta: [assistantMessage("msg_grouped_beta", peakUsage, DEEPSEEK, "Junior")],
       ses_grouped_nested: [
-        assistantMessage("msg_grouped_nested", nestedUsage, alternate, "Explorer"),
+        assistantMessage("msg_grouped_nested", nestedUsage, alternate, "Junior"),
       ],
     },
     models: [...DEFAULT_MODELS, modelInfo("anthropic", "claude-5-opus", 200000)],
@@ -2127,13 +2127,13 @@ test("panel groups descendants by agent with combined counts, single-count spend
       { width: 120, height: 40 },
       async (setup: TestRendererSetup): Promise<void> => {
         const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Explorer"),
+          (candidate: string): boolean => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
-        const headings: number = frame.split("● Explorer").length - 1
+        const headings: number = frame.split("● Junior").length - 1
         expect(headings).toBe(1)
 
-        const groupStart: number = frame.indexOf("● Explorer")
+        const groupStart: number = frame.indexOf("● Junior")
         const groupEnd: number = frame.indexOf("Total reported spend")
         expect(groupEnd).toBeGreaterThan(groupStart)
         const group: string = frame.slice(groupStart, groupEnd)
@@ -2164,7 +2164,7 @@ test("panel groups descendants by agent with combined counts, single-count spend
         await setup.renderOnce()
         const updated: string = setup.captureCharFrame()
         expect(updated).toContain("3 running · 3 sessions")
-        expect(updated.split("● Explorer").length - 1).toBe(1)
+        expect(updated.split("● Junior").length - 1).toBe(1)
       },
     )
   })
@@ -2190,7 +2190,7 @@ test("panel repaints card text when the theme changes without a data refresh", a
       { width: 120, height: 40 },
       async (setup: TestRendererSetup): Promise<void> => {
         const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Explorer"),
+          (candidate: string): boolean => candidate.includes("Junior"),
           { maxPasses: 20 },
         )
         expect(frame).toContain("Spent: $0.0123")
@@ -2201,7 +2201,7 @@ test("panel repaints card text when the theme changes without a data refresh", a
           THEME_A.text.action.primary.base.toInts(),
         ])
         expect(capturedForegrounds(before, "Sessions")).toEqual([THEME_A.text.muted.toInts()])
-        expect(capturedForegrounds(before, "Explorer")).toEqual([THEME_A.text.base.toInts()])
+        expect(capturedForegrounds(before, "Junior")).toEqual([THEME_A.text.base.toInts()])
         expect(capturedForegrounds(before, "Spent: $0.0123")).toEqual([THEME_A.text.muted.toInts()])
 
         fixture.failWith("refresh blocked")
@@ -2210,7 +2210,7 @@ test("panel repaints card text when the theme changes without a data refresh", a
         const after: CapturedFrame = setup.captureSpans()
         const afterFrame: string = setup.captureCharFrame()
 
-        expect(afterFrame).toContain("Explorer")
+        expect(afterFrame).toContain("Junior")
         expect(afterFrame).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
         expect(afterFrame).toContain("Spent: $0.0123")
         expect(afterFrame).toContain("Total reported spend: $0.0123")
@@ -2223,7 +2223,7 @@ test("panel repaints card text when the theme changes without a data refresh", a
           THEME_B.text.action.primary.base.toInts(),
         ])
         expect(capturedForegrounds(after, "Sessions")).toEqual([THEME_B.text.muted.toInts()])
-        expect(capturedForegrounds(after, "Explorer")).toEqual([THEME_B.text.base.toInts()])
+        expect(capturedForegrounds(after, "Junior")).toEqual([THEME_B.text.base.toInts()])
         expect(
           capturedForegrounds(after, "Model: opencode-go/deepseek-v4.1-flash#high"),
         ).toEqual([THEME_B.text.base.toInts()])
@@ -2241,41 +2241,41 @@ test("panel groups canonical-equivalent model references into one row without a 
   const hashSession: SessionInfo = sessionInfo({
     id: "ses_canon_hash",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.0100,
     model: hashRef,
   })
   const variantSession: SessionInfo = sessionInfo({
     id: "ses_canon_variant",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.0020,
     model: variantRef,
   })
   const plainSession: SessionInfo = sessionInfo({
     id: "ses_canon_plain",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.0004,
     model: plainRef,
   })
   const emptyVariantSession: SessionInfo = sessionInfo({
     id: "ses_canon_empty",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.0006,
     model: emptyVariantRef,
   })
   const fixture: Fixture = makeFixture({
     sessions: [rootSession(), hashSession, variantSession, plainSession, emptyVariantSession],
     messages: {
-      ses_canon_hash: [assistantMessage("msg_canon_hash", CHILD_USAGE, hashRef, "Explorer")],
+      ses_canon_hash: [assistantMessage("msg_canon_hash", CHILD_USAGE, hashRef, "Junior")],
       ses_canon_variant: [
-        assistantMessage("msg_canon_variant", CHILD_USAGE, variantRef, "Explorer"),
+        assistantMessage("msg_canon_variant", CHILD_USAGE, variantRef, "Junior"),
       ],
-      ses_canon_plain: [assistantMessage("msg_canon_plain", CHILD_USAGE, plainRef, "Explorer")],
+      ses_canon_plain: [assistantMessage("msg_canon_plain", CHILD_USAGE, plainRef, "Junior")],
       ses_canon_empty: [
-        assistantMessage("msg_canon_empty", CHILD_USAGE, emptyVariantRef, "Explorer"),
+        assistantMessage("msg_canon_empty", CHILD_USAGE, emptyVariantRef, "Junior"),
       ],
     },
     models: [],
@@ -2293,7 +2293,7 @@ test("panel groups canonical-equivalent model references into one row without a 
         const lines: readonly string[] = frame.split("\n").map((line: string): string =>
           line.replace(/[│█]/g, " ").trim()
         )
-        expect(frame.split("● Explorer").length - 1).toBe(1)
+        expect(frame.split("● Junior").length - 1).toBe(1)
         expect(frame).toContain("0 running · 4 sessions")
         expect(lines.filter((line: string): boolean => line === "Model: acme/model#high").length)
           .toBe(1)
@@ -2315,16 +2315,16 @@ test("panel stops at the latest eligible assistant and does not fall back to old
     cache: { read: 100, write: 0 },
   }
   const history: SessionMessageInfo[] = [
-    assistantMessage("msg_older_usage", olderUsage, DEEPSEEK, "Explorer"),
+    assistantMessage("msg_older_usage", olderUsage, DEEPSEEK, "Junior"),
   ]
   for (let index = 0; index < 150; index++) {
     history.push(userMessage(`msg_noise_${String(index).padStart(3, "0")}`, `noise ${index}`))
   }
-  history.push(assistantMessage("msg_latest_zero", ZERO_USAGE, DEEPSEEK, "Explorer"))
+  history.push(assistantMessage("msg_latest_zero", ZERO_USAGE, DEEPSEEK, "Junior"))
   const child: SessionInfo = sessionInfo({
     id: CHILD_SESSION,
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     cost: 0.0123,
     model: DEEPSEEK,
   })
@@ -2368,7 +2368,7 @@ test(
     const titleless: SessionInfo = sessionInfo({
       id: "ses_child_a",
       parentID: ROOT_SESSION,
-      agent: "Explorer",
+      agent: "Junior",
       cost: 0.0123,
       model: DEEPSEEK,
     })
@@ -2386,7 +2386,7 @@ test(
     const fixture: Fixture = makeFixture({
       sessions: [rootSession(), titleless, unavailable],
       messages: {
-        ses_child_a: [assistantMessage("msg_titleless", usage, actual, "Explorer")],
+        ses_child_a: [assistantMessage("msg_titleless", usage, actual, "Junior")],
       },
       messageFailures: { ses_child_b: "message history unavailable" },
       models: [
@@ -2425,7 +2425,7 @@ test(
           const titlelessCard: string = sessions.slice(titlelessStart, unavailableStart)
           const unavailableCard: string = sessions.slice(unavailableStart, totalStart)
 
-          expect(titlelessCard).toContain("Explorer · ses_child_a")
+          expect(titlelessCard).toContain("Junior · ses_child_a")
           expect(titlelessCard).toContain("Model: anthropic/claude-5-opus#high")
           expect(titlelessCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
           expect(titlelessCard).toContain("Peak context: 5K / 20K tokens (25%)")
@@ -2451,7 +2451,7 @@ test(
           const updated: string = setup.captureCharFrame()
           expect(updated).toContain("● ses_child_a")
           expect(updated).toContain("Beta task")
-          expect(updated).not.toContain("● Explorer")
+          expect(updated).not.toContain("● Junior")
           expect(updated).toContain("Status: idle")
           expect(updated).toContain("Status: succeeded")
           expect(updated).not.toContain("Status: running")
@@ -2465,7 +2465,7 @@ test(
           expect(failedRefresh).toContain("Refresh failed (values may be stale): refresh exploded")
           expect(failedRefresh).toContain("● ses_child_a")
           expect(failedRefresh).toContain("Beta task")
-          expect(failedRefresh).not.toContain("● Explorer")
+          expect(failedRefresh).not.toContain("● Junior")
           expect(failedRefresh).toContain("Peak context: 5K / 20K tokens (25%)")
           expect(failedRefresh).toContain("Spent: $0.0123")
           expect(failedRefresh).toContain("Status: idle")
@@ -2482,7 +2482,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
   const child: SessionInfo = sessionInfo({
     id: "ses_child_arrow",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Arrow navigation task",
     cost: 0.0123,
     model: DEEPSEEK,
@@ -2490,7 +2490,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
   const fixture: Fixture = makeFixture({
     sessions: [rootSession(), child],
     messages: {
-      ses_child_arrow: [assistantMessage("msg_arrow", CHILD_USAGE, DEEPSEEK, "Explorer")],
+      ses_child_arrow: [assistantMessage("msg_arrow", CHILD_USAGE, DEEPSEEK, "Junior")],
     },
     models: DEFAULT_MODELS,
     statuses: { ses_child_arrow: "running" },
@@ -2505,10 +2505,10 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
         const initial: string = await setup.waitForFrame(
           (candidate: string): boolean =>
             candidate.includes("Total reported spend: $0.0123")
-            && candidate.includes("● Explorer"),
+            && candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
-        expect(initial.split("● Explorer").length - 1).toBe(1)
+        expect(initial.split("● Junior").length - 1).toBe(1)
         expect(initial).not.toContain("Arrow navigation task")
         expect(initial).toContain("Total reported spend: $0.0123")
 
@@ -2541,17 +2541,17 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
           { maxPasses: 40 },
         )
         expect(sessionsFromRight).toContain("● Arrow navigation task")
-        expect(sessionsFromRight).toContain("Explorer · ses_child_arrow")
-        expect(sessionsFromRight).not.toContain("● Explorer")
+        expect(sessionsFromRight).toContain("Junior · ses_child_arrow")
+        expect(sessionsFromRight).not.toContain("● Junior")
         expect(sessionsFromRight).toContain("Total reported spend: $0.0123")
 
         await right.run()
         const agentsFromRight: string = await setup.waitForFrame(
           (candidate: string): boolean =>
-            candidate.includes("● Explorer") && !candidate.includes("Arrow navigation task"),
+            candidate.includes("● Junior") && !candidate.includes("Arrow navigation task"),
           { maxPasses: 40 },
         )
-        expect(agentsFromRight.split("● Explorer").length - 1).toBe(1)
+        expect(agentsFromRight.split("● Junior").length - 1).toBe(1)
         expect(agentsFromRight).toContain("Total reported spend: $0.0123")
 
         await left.run()
@@ -2560,16 +2560,16 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
           { maxPasses: 40 },
         )
         expect(sessionsFromLeft).toContain("● Arrow navigation task")
-        expect(sessionsFromLeft).not.toContain("● Explorer")
+        expect(sessionsFromLeft).not.toContain("● Junior")
         expect(sessionsFromLeft).toContain("Total reported spend: $0.0123")
 
         await left.run()
         const agentsFromLeft: string = await setup.waitForFrame(
           (candidate: string): boolean =>
-            candidate.includes("● Explorer") && !candidate.includes("Arrow navigation task"),
+            candidate.includes("● Junior") && !candidate.includes("Arrow navigation task"),
           { maxPasses: 40 },
         )
-        expect(agentsFromLeft.split("● Explorer").length - 1).toBe(1)
+        expect(agentsFromLeft.split("● Junior").length - 1).toBe(1)
         expect(agentsFromLeft).toContain("Total reported spend: $0.0123")
       },
     )
@@ -2578,7 +2578,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
   const unfocusedFixture: Fixture = makeFixture({
     sessions: [rootSession(), child],
     messages: {
-      ses_child_arrow: [assistantMessage("msg_arrow", CHILD_USAGE, DEEPSEEK, "Explorer")],
+      ses_child_arrow: [assistantMessage("msg_arrow", CHILD_USAGE, DEEPSEEK, "Junior")],
     },
     models: DEFAULT_MODELS,
     statuses: { ses_child_arrow: "running" },
@@ -2591,7 +2591,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
       { width: 120, height: 40 },
       async (setup: TestRendererSetup): Promise<void> => {
         await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Explorer"),
+          (candidate: string): boolean => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         const right: KeymapCommand | undefined = findCommand(
@@ -2625,7 +2625,7 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
   const child: SessionInfo = sessionInfo({
     id: "ses_child_click",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Click navigation task",
     cost: 0.0123,
     model: DEEPSEEK,
@@ -2633,7 +2633,7 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
   const fixture: Fixture = makeFixture({
     sessions: [rootSession(), child],
     messages: {
-      ses_child_click: [assistantMessage("msg_click", CHILD_USAGE, DEEPSEEK, "Explorer")],
+      ses_child_click: [assistantMessage("msg_click", CHILD_USAGE, DEEPSEEK, "Junior")],
     },
     models: DEFAULT_MODELS,
     statuses: { ses_child_click: "running" },
@@ -2688,7 +2688,7 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
       { width: 120, height: 40 },
       async (setup: TestRendererSetup): Promise<void> => {
         const initial: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Explorer"),
+          (candidate: string): boolean => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         expect(initial).not.toContain("Click navigation task")
@@ -2717,8 +2717,8 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
           { maxPasses: 40 },
         )
         expect(sessionsFrame).toContain("● Click navigation task")
-        expect(sessionsFrame).toContain("Explorer · ses_child_click")
-        expect(sessionsFrame).not.toContain("● Explorer")
+        expect(sessionsFrame).toContain("Junior · ses_child_click")
+        expect(sessionsFrame).not.toContain("● Junior")
         expect(sessionsFrame).toContain("Total reported spend: $0.0123")
         expect(focusCalls).toBe(1)
         expect(
@@ -2735,10 +2735,10 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
         const agents: string = await clickTab(setup, "Agents")
         const agentsFrame: string = await setup.waitForFrame(
           (candidate: string): boolean =>
-            candidate.includes("● Explorer") && !candidate.includes("Click navigation task"),
+            candidate.includes("● Junior") && !candidate.includes("Click navigation task"),
           { maxPasses: 40 },
         )
-        expect(agentsFrame.split("● Explorer").length - 1).toBe(1)
+        expect(agentsFrame.split("● Junior").length - 1).toBe(1)
         expect(agentsFrame).toContain("Total reported spend: $0.0123")
         expect(focusCalls).toBe(2)
         expect(agents).not.toContain("Click navigation task")
@@ -2823,7 +2823,7 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
   const alpha: SessionInfo = sessionInfo({
     id: "ses_tokens_a",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Alpha task",
     cost: 0.0123,
     model: DEEPSEEK,
@@ -2832,7 +2832,7 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
   const beta: SessionInfo = sessionInfo({
     id: "ses_tokens_b",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Beta task",
     cost: 0.002,
     model: DEEPSEEK,
@@ -2841,13 +2841,13 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
   const fixture: Fixture = makeFixture({
     sessions: [rootSession(), alpha, beta],
     messages: {
-      ses_tokens_a: [assistantMessage("msg_tokens_a", CHILD_USAGE, DEEPSEEK, "Explorer")],
+      ses_tokens_a: [assistantMessage("msg_tokens_a", CHILD_USAGE, DEEPSEEK, "Junior")],
       ses_tokens_b: [
         assistantMessage(
           "msg_tokens_b",
           { input: 100, output: 20, reasoning: 0, cache: { read: 0, write: 0 } },
           DEEPSEEK,
-          "Explorer",
+          "Junior",
         ),
       ],
     },
@@ -2860,7 +2860,7 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
       { width: 120, height: 40 },
       async (setup: TestRendererSetup): Promise<void> => {
         const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Explorer"),
+          (candidate: string): boolean => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         expect(frame).toContain("2 sessions")
@@ -2869,9 +2869,9 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
 
         const lines: readonly string[] = trimmedLines(frame)
         const title: string | undefined = lines.find((line: string): boolean =>
-          line.startsWith("● Explorer")
+          line.startsWith("● Junior")
         )
-        expect(title).toBe("● Explorer")
+        expect(title).toBe("● Junior")
         expect(
           lines.filter((line: string): boolean => line === "Spent: $0.0143 · ↑ 5K · ↓ 700 · ↺ 600")
             .length,
@@ -2909,7 +2909,7 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
   const alpha: SessionInfo = sessionInfo({
     id: "ses_tokens_a",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Alpha task",
     cost: 0.0123,
     model: DEEPSEEK,
@@ -2918,7 +2918,7 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
   const beta: SessionInfo = sessionInfo({
     id: "ses_tokens_b",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Beta task",
     cost: 0.002,
     model: DEEPSEEK,
@@ -2998,7 +2998,7 @@ test("panel totals tokens across agents in the global footer", async (): Promise
   const explorer: SessionInfo = sessionInfo({
     id: "ses_global_explorer",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Global explorer task",
     cost: 0.0123,
     model: DEEPSEEK,
@@ -3045,7 +3045,7 @@ test("panel reports a reported zero token count as known usage", async (): Promi
   const zero: SessionInfo = sessionInfo({
     id: "ses_zero_tokens",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Zero token task",
     cost: 0.002,
     model: DEEPSEEK,
@@ -3063,7 +3063,7 @@ test("panel reports a reported zero token count as known usage", async (): Promi
       { width: 120, height: 40 },
       async (setup: TestRendererSetup): Promise<void> => {
         const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Explorer"),
+          (candidate: string): boolean => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         const lines: readonly string[] = trimmedLines(frame)
@@ -3081,7 +3081,7 @@ test("panel marks tokens unavailable instead of inventing zero when a session om
   const known: SessionInfo = sessionInfo({
     id: "ses_known_tokens",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Known token task",
     cost: 0.0123,
     model: DEEPSEEK,
@@ -3090,7 +3090,7 @@ test("panel marks tokens unavailable instead of inventing zero when a session om
   const { tokens: _absent, ...tokenlessShape } = sessionInfo({
     id: "ses_tokenless",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Tokenless task",
     cost: 0.003,
     model: DEEPSEEK,
@@ -3108,7 +3108,7 @@ test("panel marks tokens unavailable instead of inventing zero when a session om
       { width: 120, height: 40 },
       async (setup: TestRendererSetup): Promise<void> => {
         const agents: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Explorer"),
+          (candidate: string): boolean => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         const agentLines: readonly string[] = trimmedLines(agents)
@@ -3145,7 +3145,7 @@ test(
     const initial: SessionInfo = sessionInfo({
       id: "ses_tokens_refresh",
       parentID: ROOT_SESSION,
-      agent: "Explorer",
+      agent: "Junior",
       title: "Refresh task",
       cost: 0.0123,
       model: DEEPSEEK,
@@ -3154,7 +3154,7 @@ test(
     const refreshed: SessionInfo = sessionInfo({
       id: "ses_tokens_refresh",
       parentID: ROOT_SESSION,
-      agent: "Explorer",
+      agent: "Junior",
       title: "Refresh task",
       cost: 0.02,
       model: DEEPSEEK,
@@ -3202,7 +3202,7 @@ test("panel formats cumulative token counts compactly at rounding thresholds", a
   const large: SessionInfo = sessionInfo({
     id: "ses_tokens_large",
     parentID: ROOT_SESSION,
-    agent: "Explorer",
+    agent: "Junior",
     title: "Large totals",
     cost: 0.0123,
     model: DEEPSEEK,

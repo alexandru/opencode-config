@@ -89,7 +89,7 @@ class AgentTableTest(unittest.TestCase):
             "agents": {
                 "ask": {"disabled": True},
                 "Orchestrator": {"model": "opencode-go/mimo-v2.6-pro"},
-                "Explorer": {"model": "opencode-go/deepseek-v4.1-flash#low"},
+                "Junior": {"model": "opencode-go/deepseek-v4.1-flash#low"},
             }
         }
         table = tool.format_agent_table(config)
@@ -103,7 +103,7 @@ class AgentTableTest(unittest.TestCase):
             "  Agent        │ Model                           │ Variant\n"
             "  ─────────────┼─────────────────────────────────┼────────\n"
             "  Orchestrator │ opencode-go/mimo-v2.6-pro       │ -\n"
-            "  Explorer     │ opencode-go/deepseek-v4.1-flash │ low\n"
+            "  Junior       │ opencode-go/deepseek-v4.1-flash │ low\n"
             "\n",
         )
 

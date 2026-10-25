@@ -15,17 +15,8 @@
       "Solo": {
         "model": "openai/gpt-6.1-sol#medium",
       },
-      "Analyst": {
-        "model": "openai/gpt-6.1-sol#high",
-      },
       "Junior": {
         "model": "openai/gpt-6-luna#xhigh",
-      },
-      "Explorer": {
-        "model": "openai/gpt-6-luna#high",
-      },
-      "Librarian": {
-        "model": "openai/gpt-6-luna#high",
       },
     },
   },
@@ -36,12 +27,6 @@
     "agents": {
       "Junior": {
         "model": "opencode-go/deepseek-v4.1-flash#max",
-      },
-      "Explorer": {
-        "model": "opencode-go/deepseek-v4.1-flash#high",
-      },
-      "Librarian": {
-        "model": "opencode-go/deepseek-v4.1-flash#high",
       },
     },
   },
@@ -56,17 +41,8 @@
       "Solo": {
         "model": "opencode-go/deepseek-v4.1-flash#max",
       },
-      "Analyst": {
-        "model": "opencode-go/deepseek-v4.1-flash#max",
-      },
       "Junior": {
         "model": "opencode-go/deepseek-v4.1-flash#high",
-      },
-      "Explorer": {
-        "model": "opencode-go/deepseek-v4.1-flash#low",
-      },
-      "Librarian": {
-        "model": "opencode-go/deepseek-v4.1-flash#low",
       },
     },
   },
@@ -81,17 +57,8 @@
       "Solo": {
         "model": "mistral/zai-glm-5-3#max",
       },
-      "Analyst": {
-        "model": "mistral/zai-glm-5-3-flash#max",
-      },
       "Junior": {
         "model": "mistral/zai-glm-5-3-flash#max",
-      },
-      "Explorer": {
-        "model": "mistral/zai-glm-5-3-flash#high",
-      },
-      "Librarian": {
-        "model": "mistral/zai-glm-5-3-flash#high",
       },
     },
   },
@@ -149,17 +116,8 @@
       "Solo": {
         "model": "github-copilot/claude-sonnet-5#medium",
       },
-      "Analyst": {
-        "model": "github-copilot/claude-opus-5#medium",
-      },
       "Junior": {
         "model": "github-copilot/gpt-5.3-codex#medium",
-      },
-      "Explorer": {
-        "model": "github-copilot/claude-haiku-4.5",
-      },
-      "Librarian": {
-        "model": "github-copilot/claude-haiku-4.5",
       },
     },
   },

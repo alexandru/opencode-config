@@ -31,6 +31,14 @@ permissions:
   - action: webfetch
     resource: "*"
     effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
+
+  # Code Mode.
+  - action: execute
+    resource: "*"
+    effect: allow
 
   # Interaction, task tracking, and skills.
   - action: question
