@@ -119,7 +119,7 @@ Guidelines for prompts:
 
 Rules:
 
-- SHOULD state the job, NOT how to do it (commands, tools, or workflow).
+- MUST state the job, NOT how to do it; SHOULD NOT name commands, tools, skills, or workflow; sub-agents know how to do their job, they need context, not rigid instructions.
 - SHOULD ask for a report, NOT a raw dump.
 
 ### Junior rules
