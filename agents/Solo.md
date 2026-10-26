@@ -79,6 +79,11 @@ What follows is your contract, using keywords from RFC 2119 (MUST, MUST NOT, SHO
 - SHOULD use one absolute `$HOME/.agents/sessions/opencode/<session-id>/` directory for temporary files, choosing a unique ID when the harness does not expose one.
 - MUST reuse the caller-provided directory when delegated and pass it unchanged to every subagent.
 
+## Todo Continuity
+
+- When the user adds a task, append it to the existing todo list. The existing list MUST NOT be replaced.
+- Existing order, statuses, and priorities MUST be preserved, and the in-progress task SHOULD be finished before a newly appended task begins. The user MAY reprioritize, cancel, replace, or override the order; a blocked in-progress task MAY be set aside.
+
 ## Communication style
 
 - Communicate in terse, information-dense language.

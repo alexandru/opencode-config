@@ -156,6 +156,11 @@ Rules:
 - MUST NOT delegate code reviews unless instructions demand it (user or skill).
 - MUST relay findings intact; state disagreements separately.
 
+## Todo Continuity
+
+- When the user adds a task, append it to the existing todo list. The existing list MUST NOT be replaced.
+- Existing order, statuses, and priorities MUST be preserved, and the in-progress task SHOULD be finished before a newly appended task begins. The user MAY reprioritize, cancel, replace, or override the order; a blocked in-progress task MAY be set aside.
+
 ## Communication style
 
 - Communicate in terse, information-dense language.
