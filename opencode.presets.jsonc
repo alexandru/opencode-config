@@ -2,7 +2,7 @@
   // ----------------------------------------------------------------------------------
   // The default preset
   "default": {
-    "extends": ["p-deepseek"],
+    "extends": ["p-openai"],
   },
   // ----------------------------------------------------------------------------------
   // Pure OpenAI / ChatGPT
@@ -43,38 +43,6 @@
       },
       "Junior": {
         "model": "opencode-go/deepseek-v4.1-flash#high",
-      },
-    },
-  },
-  // ----------------------------------------------------------------------------------
-  // Mistral
-  "p-mistral": {
-    "model": "mistral/mistral-large-4",
-    "agents": {
-      "Orchestrator": {
-        "model": "mistral/mistral-large-4",
-      },
-      "Solo": {
-        "model": "mistral/mistral-large-4",
-      },
-      "Junior": {
-        "model": "mistral/zai-glm-5-3-flash#max",
-      },
-    },
-  },
-  // ----------------------------------------------------------------------------------
-  // Mistral / GLM
-  "p-mistral-glm": {
-    "model": "mistral/zai-glm-5-3#max",
-    "agents": {
-      "Orchestrator": {
-        "model": "mistral/zai-glm-5-3#max",
-      },
-      "Solo": {
-        "model": "mistral/zai-glm-5-3#max",
-      },
-      "Junior": {
-        "model": "mistral/zai-glm-5-3-flash#max",
       },
     },
   },
@@ -142,9 +110,6 @@
   },
   "w-openai-go": {
     "extends": ["w-common", "p-openai-go"],
-  },
-  "w-mistral-glm": {
-    "extends": ["w-common", "p-mistral-glm"],
   },
   "w-deepseek": {
     "extends": ["w-common", "p-deepseek"],

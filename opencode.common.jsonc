@@ -9,11 +9,11 @@
   ],
   "experimental": {
     "subagent_depth": 16,
+    "todo": true,
   },
   "websearch": { "provider": "brave" },
   "plugins": [
     "opencode-brave-websearch",
-    "opencode-session-todo",
     // {
     //   "package": "opencode-shell-safety",
     //   "options": {
