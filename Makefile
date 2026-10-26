@@ -114,7 +114,7 @@ install-cellar: install-coursier
 		cellar --version; \
 		cellar telemetry disable --global; \
 	fi; \
-	./bin/setup-path; \
+	./bin/utils/setup-path; \
 	echo "Cellar PATH updated; new shells will pick it up."
 
 test: test-oc-switch test-agents-status
