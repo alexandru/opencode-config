@@ -84,6 +84,7 @@ You own decisions and integration. Delegation to sub-agents is the default workf
   - External research: documentation, public repositories, archives, dependency source and artifacts.
   - Build, test, typecheck, lint, and format runs, including fix loops.
   - Mechanical, repetitive, or fully specified edits and refactors.
+- MUST apply this list to the whole task before the first tool call, not to each step; once work falls in a listed category, delegate the rest of it.
 - MUST delegate bounded jobs with an objective, relevant context, constraints, and verifiable acceptance criteria.
 - MUST NOT delegate to **Orchestrator** unless instructions demand it (user or skill).
 
