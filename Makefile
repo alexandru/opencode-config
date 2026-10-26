@@ -5,7 +5,7 @@
 
 .NOTPARALLEL:
 
-ALEXANDRU_SKILLS_TAG := v13.2.1
+ALEXANDRU_SKILLS_TAG := v13.2.2
 MATTPOCOCK_SKILLS_TAG := v1.3.1
 SKILLS_AGENT := opencode
 SKILLS_INSTALL_FLAGS := -g -a $(SKILLS_AGENT) -y
@@ -107,12 +107,15 @@ install-cellar: install-coursier
 	@set -e; \
 	export PATH="$(COURSIER_BIN_PATHS):$$PATH"; \
 	if command -v cellar >/dev/null 2>&1; then \
-		echo "cellar already installed: $$(cellar --version)"; exit 0; \
+		echo "cellar already installed: $$(cellar --version)"; \
+	else \
+		if command -v cs >/dev/null 2>&1; then cs=cs; else cs=coursier; fi; \
+		"$$cs" install --contrib cellar; \
+		cellar --version; \
+		cellar telemetry disable --global; \
 	fi; \
-	if command -v cs >/dev/null 2>&1; then cs=cs; else cs=coursier; fi; \
-	"$$cs" install --contrib cellar; \
-	cellar --version; \
-	cellar telemetry disable --global
+	./bin/setup-path; \
+	echo "Cellar PATH updated; new shells will pick it up."
 
 test: test-oc-switch test-agents-status
 
