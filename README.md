@@ -5,31 +5,20 @@ Part of [alexandru/agents-config](https://github.com/alexandru/agents-config).
 ## Installation
 
 <details>
-<summary>STEP 1 — Clone the repository</summary>
+<summary>STEP 1 — Install</summary>
 
-### Clone the repository
+### Install
 
-```sh
-git clone https://github.com/alexandru/opencode-config.git ~/.config/opencode
-```
-</details>
-
-<details>
-<summary>STEP 2 — Install dependencies</summary>
-
-### Install dependencies
-
-```sh
-cd ~/.config/opencode && make
+```bash
+curl -fsSL https://alexandru.github.io/opencode-config/install.sh | bash
 ```
 
 The skills are installed under `~/.agents/skills`, where OpenCode, Copilot CLI,
 Codex, and Pi can share them.
-
 </details>
 
 <details>
-<summary>STEP 3 — Choose a configuration preset (optional)</summary>
+<summary>STEP 2 — Choose a configuration preset (optional)</summary>
 
 ### Choose a configuration preset (optional)
 
@@ -37,7 +26,7 @@ The [oc-switch](./bin/oc-switch.py) utility is for quickly switching between mul
 
 ```sh
 # Example
-./bin/oc-switch p-openai
+~/.config/opencode/bin/oc-switch p-openai
 ```
 
 The switcher generates `opencode.jsonc` (OpenCode's configuration file) from:
@@ -47,7 +36,7 @@ The switcher generates `opencode.jsonc` (OpenCode's configuration file) from:
 </details>
 
 <details>
-<summary>STEP 4 — Install Cellar (optional)</summary>
+<summary>STEP 3 — Install Cellar (optional)</summary>
 
 ### Install Cellar (optional)
 

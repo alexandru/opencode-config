@@ -1,0 +1,38 @@
+# Publishes bin/utils/install.sh at <GitHub Pages URL>/install.sh.
+name: Publish installer
+
+on:
+  push:
+    paths:
+      - bin/utils/install.sh
+      - .github/workflows/publish-installer.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}install.sh
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v6
+      - name: Stage installer
+        run: |
+          mkdir site
+          cp bin/utils/install.sh site/install.sh
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -9,32 +9,64 @@ ALEXANDRU_SKILLS_TAG := v13.2.2
 MATTPOCOCK_SKILLS_TAG := v1.3.1
 SKILLS_AGENT := opencode
 SKILLS_INSTALL_FLAGS := -g -a $(SKILLS_AGENT) -y
+# Node.js required by the skills CLI's engines field.
+SKILLS_NODE_MINIMUM := 22.20.0
+# pipx 1.4.0 added `pipx run` support for inline script metadata.
+PIPX_MINIMUM := 1.4.0
+# Packages come only from Homebrew on macOS and the distro's apt repositories on Linux.
+APT_GET := $(if $(filter 0,$(shell id -u)),,sudo )apt-get
 COURSIER_LINUX_X86_64_URL := https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz
 COURSIER_LINUX_AARCH64_URL := https://github.com/VirtusLab/coursier-m1/releases/latest/download/cs-aarch64-pc-linux.gz
 # Coursier installs launchers outside the default PATH of a non-login shell.
 COURSIER_BIN_PATHS := $(HOME)/.local/bin:$(HOME)/.local/share/coursier/bin:$(HOME)/Library/Application Support/Coursier/bin
 
-.PHONY: all install-pipx generate-config check-mattpocock-skills-tag install-skills update-skills install-coursier install-cellar test test-oc-switch test-agents-status
+.PHONY: all install-pipx generate-config install-node check-mattpocock-skills-tag install-skills update-skills install-coursier install-cellar test test-oc-switch test-agents-status
 
-all: install-pipx generate-config install-skills install-cellar
+all: install-pipx generate-config install-node install-skills install-cellar
 
 # oc-switch runs through pipx.
 install-pipx:
 	@set -e; \
-	if command -v pipx >/dev/null 2>&1; then \
+	sufficient() { \
+		printf "%s\n" "$$(pipx --version 2>/dev/null)" | awk -F. -v minimum="$(PIPX_MINIMUM)" \
+			'{ split(minimum, m, "."); for (i = 1; i <= 3; i++) if ($$i + 0 != m[i] + 0) exit !($$i + 0 > m[i] + 0); exit 0 }'; \
+	}; \
+	if sufficient; then \
 		echo "pipx already installed: $$(pipx --version)"; exit 0; \
 	fi; \
 	case "$$(uname -s)" in \
 		Darwin) brew install pipx ;; \
-		Linux) sudo apt-get install -y pipx ;; \
+		Linux) $(APT_GET) update; $(APT_GET) install -y --no-install-recommends pipx ;; \
 		*) echo "Unsupported platform: $$(uname -s)" >&2; exit 1 ;; \
-	esac
+	esac; \
+	if ! sufficient; then \
+		echo "pipx $(PIPX_MINIMUM) or later is required; installed: $$(pipx --version 2>/dev/null || echo none)" >&2; exit 1; \
+	fi
 
 generate-config:
 	@if [ ! -f opencode.jsonc ]; then \
 		./bin/oc-switch default; \
 	else \
 		echo "opencode.jsonc already exists; leaving it untouched"; \
+	fi
+
+# The skills CLI runs through npx.
+install-node:
+	@set -e; \
+	node_sufficient='const [have, need] = [process.versions.node, process.argv[1]].map((v) => v.split(".").map(Number)); const i = have.findIndex((part, index) => part !== need[index]); process.exit(i < 0 || have[i] > need[i] ? 0 : 1)'; \
+	sufficient() { \
+		npx --version >/dev/null 2>&1 && node -e "$$node_sufficient" "$(SKILLS_NODE_MINIMUM)" >/dev/null 2>&1; \
+	}; \
+	if sufficient; then \
+		echo "Node already installed: $$(node --version)"; exit 0; \
+	fi; \
+	case "$$(uname -s)" in \
+		Darwin) if brew list node >/dev/null 2>&1; then brew upgrade node; else brew install node; fi ;; \
+		Linux) $(APT_GET) update; $(APT_GET) install -y --no-install-recommends nodejs npm ;; \
+		*) echo "Unsupported platform: $$(uname -s)" >&2; exit 1 ;; \
+	esac; \
+	if ! sufficient; then \
+		echo "Node.js $(SKILLS_NODE_MINIMUM) or later with npx is required by the skills CLI; installed: $$(node --version 2>/dev/null || echo none)" >&2; exit 1; \
 	fi
 
 check-mattpocock-skills-tag:
@@ -93,6 +125,11 @@ install-coursier:
 				aarch64|arm64) url="$(COURSIER_LINUX_AARCH64_URL)" ;; \
 				*) echo "Unsupported architecture: $$(uname -m)" >&2; exit 1 ;; \
 			esac; \
+			missing=; \
+			for tool in curl gzip; do command -v "$$tool" >/dev/null 2>&1 || missing="$$missing $$tool"; done; \
+			if [ -n "$$missing" ]; then \
+				$(APT_GET) update; $(APT_GET) install -y --no-install-recommends $$missing; \
+			fi; \
 			mkdir -p "$$HOME/.local/bin"; \
 			archive=$$(mktemp); \
 			trap 'rm -f "$$archive"' 0; \
