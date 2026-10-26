@@ -9,9 +9,6 @@ permissions:
   - action: question
     resource: "*"
     effect: deny
-  - action: todowrite
-    resource: "*"
-    effect: deny
   - action: plan_enter
     resource: "*"
     effect: deny
