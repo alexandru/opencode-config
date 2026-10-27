@@ -40,7 +40,7 @@ The thresholds above are examples, not an automatically enabled policy. Every co
 
 | Condition type | Fields | Meaning |
 | --- | --- | --- |
-| `toolCalls` | `count`, optional `tools` | Matching tool invocations since reset. Outer tool calls count once; calls nested inside `execute` count toward their own tool names. Failed calls count. `tools` accepts exact names or trailing-`*` prefix patterns and defaults to `["shell", "execute"]`. |
+| `toolCalls` | `count`, optional `tools` | Matching tool invocations since reset. Outer tool calls count once; calls nested inside `execute` count under their own registered tool names when selected. Failed calls count. `tools` accepts exact names or trailing-`*` prefix patterns and defaults to `["shell"]`. The `execute` wrapper is excluded by default; select it explicitly to count wrapper calls. |
 | `elapsedTime` | `seconds` | Wall-clock time since reset. Idle sessions are not awakened; the condition is checked when the agent next continues. |
 | `contextGrowth` | `tokens` | Growth in reported occupied context since the baseline. |
 | `contextUtilizationGrowth` | `percentagePoints` | Token growth divided by the current model's context limit, multiplied by 100. Five percentage points means growth from 10% to 15%, not a 5% relative increase. |
@@ -89,7 +89,7 @@ Context measurements use reported assistant token usage, including cache usage, 
 
 ### Tool names
 
-Built-in tools: `read`, `edit`, `write`, `patch` (GPT models only), `glob`, `grep`, `shell`, `webfetch`, `websearch` (needs a configured search provider), `question`, `skill`, `subagent`, and `execute`. OpenCode's built-in `opencode_*` tools are `opencode_session_rename`, `opencode_session_move`, `opencode_worktree_create`, `opencode_worktree_list`, `opencode_worktree_remove`, `opencode_models`, `opencode_list_mcp_resources`, and `opencode_read_mcp_resource`. MCP tools are named `<server-key>_<tool>` with characters outside `a-zA-Z0-9_-` replaced by `_`. Custom tools use their registered names. MCP and custom tools typically run nested inside `execute` (code mode) and therefore count via nested-name counting.
+Built-in tools: `read`, `edit`, `write`, `patch` (GPT models only), `glob`, `grep`, `shell`, `webfetch`, `websearch` (needs a configured search provider), `question`, `skill`, `subagent`, and the Code Mode wrapper `execute`. `shell`, `read`, and `subagent` are direct built-ins and do not run inside `execute`. OpenCode's built-in `opencode_*` tools are `opencode_session_rename`, `opencode_session_move`, `opencode_worktree_create`, `opencode_worktree_list`, `opencode_worktree_remove`, `opencode_models`, `opencode_list_mcp_resources`, and `opencode_read_mcp_resource`. MCP tools are named `<server-key>_<tool>` with characters outside `a-zA-Z0-9_-` replaced by `_`. Custom tools use their registered names. MCP and custom tools can run nested inside `execute` (code mode); nested calls report their own registered names and count when those names or matching patterns are selected in `tools`.
 
 ## Registration and development checks
 

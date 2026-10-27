@@ -18,7 +18,7 @@ const PositiveInteger = Schema.Int.pipe(
   Schema.brand("AgentReminders.PositiveInteger"),
 )
 
-export const DEFAULT_TOOLS: ReadonlyArray<string> = ["shell", "execute"]
+export const DEFAULT_TOOLS: ReadonlyArray<string> = ["shell"]
 
 const DEFAULT_RESET_TOOLS: ReadonlyArray<string> = ["subagent"]
 

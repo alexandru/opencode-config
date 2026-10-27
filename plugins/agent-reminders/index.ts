@@ -21,6 +21,7 @@ import {
   type ContextSample,
   deleteSession,
   policyFor,
+  type SessionEvent,
   type SessionState,
   setSession,
   type Step,
@@ -129,13 +130,6 @@ const readContextSample = (
     }
   })
 
-const writeBack = (
-  sessionID: string,
-  next: SessionState | undefined,
-): (current: Map<string, SessionState>) => Map<string, SessionState> =>
-(current: Map<string, SessionState>): Map<string, SessionState> =>
-  next === undefined ? current : setSession(current, sessionID, next)
-
 const logInjection = (
   event: SessionHooks["context"],
   firedAt: number,
@@ -155,32 +149,42 @@ const makeHandlers = (
   policy: CompiledPolicy,
   states: Ref.Ref<Map<string, SessionState>>,
 ): NativeHandlers => {
+  const transition = (sessionID: string, event: SessionEvent): Effect.Effect<Step> =>
+    Ref.modify(
+      states,
+      (current: Map<string, SessionState>): readonly [Step, Map<string, SessionState>] => {
+        const [result, next]: readonly [Step, SessionState | undefined] = step(
+          policy,
+          current.get(sessionID),
+          event,
+        )
+        return [
+          result,
+          next === undefined ? current : setSession(current, sessionID, next),
+        ]
+      },
+    )
+
   const toolBefore = (event: ToolHooks["execute.before"]): Effect.Effect<void> =>
     Effect.gen(function*(): Effect.fn.Return<void> {
       const now: number = yield* Clock.currentTimeMillis
-      yield* Ref.modify(states, (current): readonly [void, Map<string, SessionState>] => {
-        const [, next] = step(policy, current.get(event.sessionID), {
-          type: "tool.before",
-          now,
-          tool: event.tool,
-          agent: event.agent,
-          call: { messageID: event.messageID, id: event.id },
-        })
-        return [undefined, writeBack(event.sessionID, next)(current)]
+      yield* transition(event.sessionID, {
+        type: "tool.before",
+        now,
+        tool: event.tool,
+        agent: event.agent,
+        call: { messageID: event.messageID, id: event.id },
       })
     })
 
   const toolAfter = (event: ToolHooks["execute.after"]): Effect.Effect<void> =>
     Effect.gen(function*(): Effect.fn.Return<void> {
       const now: number = yield* Clock.currentTimeMillis
-      yield* Ref.modify(states, (current): readonly [void, Map<string, SessionState>] => {
-        const [, next] = step(policy, current.get(event.sessionID), {
-          type: "tool.after",
-          now,
-          tool: event.tool,
-          call: { messageID: event.messageID, id: event.id },
-        })
-        return [undefined, writeBack(event.sessionID, next)(current)]
+      yield* transition(event.sessionID, {
+        type: "tool.after",
+        now,
+        tool: event.tool,
+        call: { messageID: event.messageID, id: event.id },
       })
     })
 
@@ -200,18 +204,12 @@ const makeHandlers = (
         needsTokens,
         needsLimit,
       )
-      const emitted: Step = yield* Ref.modify(
-        states,
-        (current): readonly [Step, Map<string, SessionState>] => {
-          const [result, next] = step(policy, current.get(event.sessionID), {
-            type: "context",
-            now,
-            agent: event.agent,
-            sample,
-          })
-          return [result, writeBack(event.sessionID, next)(current)]
-        },
-      )
+      const emitted: Step = yield* transition(event.sessionID, {
+        type: "context",
+        now,
+        agent: event.agent,
+        sample,
+      })
       if (emitted.type === "Emit") {
         for (const message of emitted.messages) {
           event.system.push({ type: "text", text: message })
@@ -225,30 +223,25 @@ const makeHandlers = (
       case "session.agent.selected":
         return Effect.gen(function*(): Effect.fn.Return<void> {
           const now: number = yield* Clock.currentTimeMillis
-          yield* Ref.modify(states, (current): readonly [void, Map<string, SessionState>] => {
-            const [, next] = step(policy, current.get(event.data.sessionID), {
-              type: "agent.selected",
-              now,
-              agent: event.data.agent,
-            })
-            return [undefined, writeBack(event.data.sessionID, next)(current)]
+          yield* transition(event.data.sessionID, {
+            type: "agent.selected",
+            now,
+            agent: event.data.agent,
           })
         })
       case "session.compaction.ended":
         return Effect.gen(function*(): Effect.fn.Return<void> {
           const now: number = yield* Clock.currentTimeMillis
-          yield* Ref.modify(states, (current): readonly [void, Map<string, SessionState>] => {
-            const [, next] = step(policy, current.get(event.data.sessionID), {
-              type: "compaction.ended",
-              now,
-            })
-            return [undefined, writeBack(event.data.sessionID, next)(current)]
+          yield* transition(event.data.sessionID, {
+            type: "compaction.ended",
+            now,
           })
         })
       case "session.deleted":
         return Ref.update(
           states,
-          (current): Map<string, SessionState> => deleteSession(current, event.data.sessionID),
+          (current: Map<string, SessionState>): Map<string, SessionState> =>
+            deleteSession(current, event.data.sessionID),
         )
       default:
         return Effect.void

@@ -350,6 +350,12 @@ const beforeEvent = (
   input: {},
 })
 
+const completedAfterEvent = (event: ToolHooks["execute.before"]): ToolHooks["execute.after"] => ({
+  ...event,
+  status: "completed",
+  result: {},
+})
+
 const failedAfterEvent = (event: ToolHooks["execute.before"]): ToolHooks["execute.after"] => ({
   ...event,
   status: "error",
@@ -613,30 +619,22 @@ test("loading without configured agents warns once and disables all reminders", 
   )
 })
 
-test("default tools count outer calls once and count failed calls", async (): Promise<void> => {
-  const initial = contextEvent("ses_default")
-  const afterOuter = contextEvent("ses_default")
-  const afterShell = contextEvent("ses_default")
-  const outer = beforeEvent("execute", "call_execute", "ses_default", "msg_default")
-  const nestedShell = beforeEvent("shell", "call_execute", "ses_default", "msg_default")
-  const nestedRead = beforeEvent("read", "call_execute", "ses_default", "msg_default")
-  const shell = beforeEvent("shell", "call_shell", "ses_default", "msg_default")
+test("default tools ignore execute wrapper calls", async (): Promise<void> => {
+  const session = "ses_default_execute"
+  const initial = contextEvent(session)
+  const outgoing = contextEvent(session)
+  const execute = beforeEvent("execute", "call_execute_only", session, "msg_default_execute")
   const hooks = makeHooks({
-    contexts: [initial, afterOuter, afterShell],
-    before: [outer, nestedShell, nestedRead, shell],
-    after: [
-      failedAfterEvent(nestedShell),
-      failedAfterEvent(nestedRead),
-      failedAfterEvent(outer),
-      failedAfterEvent(shell),
-    ],
+    contexts: [initial, outgoing],
+    before: [execute],
+    after: [completedAfterEvent(execute)],
   })
 
   await runPlugin(
     {
       agents: {
         build: [
-          { message: "Reconsider delegation.", condition: { type: "toolCalls", count: 3 } },
+          { message: "Execute wrapper reminder.", condition: { type: "toolCalls", count: 1 } },
         ],
       },
     },
@@ -646,29 +644,78 @@ test("default tools count outer calls once and count failed calls", async (): Pr
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
-        yield* requiredEffect(hooks.toolEffects, 1)
-        yield* requiredEffect(hooks.toolEffects, 2)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
-        yield* requiredEffect(hooks.toolAfterEffects, 1)
-        yield* requiredEffect(hooks.toolAfterEffects, 2)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(afterOuter.system).toEqual([])
-        yield* requiredEffect(hooks.toolEffects, 3)
-        yield* requiredEffect(hooks.toolAfterEffects, 3)
-        yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(reminderTexts(afterShell)).toEqual(["Reconsider delegation."])
+        expect(outgoing.system).toEqual([])
       }),
   )
 })
 
-test("concurrent execute calls count separately while nested calls count their own tool names", async (): Promise<void> => {
+test("default tools count direct shell success and failure", async (): Promise<void> => {
+  const session = "ses_default_shell"
+  const contexts = [
+    contextEvent(session),
+    contextEvent(session),
+    contextEvent(session),
+    contextEvent(session),
+  ]
+  const execute = beforeEvent("execute", "call_execute", session, "msg_default_shell")
+  const shell = beforeEvent("shell", "call_shell", session, "msg_default_shell")
+  const failedShell = beforeEvent("shell", "call_failed_shell", session, "msg_default_shell")
+  const hooks = makeHooks({
+    contexts,
+    before: [execute, shell, failedShell],
+    after: [
+      completedAfterEvent(execute),
+      completedAfterEvent(shell),
+      failedAfterEvent(failedShell),
+    ],
+  })
+
+  await runPlugin(
+    {
+      agents: {
+        build: [
+          { message: "Shell reminder.", condition: { type: "toolCalls", count: 2 } },
+        ],
+      },
+    },
+    hooks,
+    emptySdk(),
+    (): Effect.Effect<void> =>
+      Effect.gen(function*(): Effect.fn.Return<void> {
+        yield* requiredEffect(hooks.sessionEffects, 0)
+        yield* requiredEffect(hooks.toolEffects, 0)
+        yield* requiredEffect(hooks.toolAfterEffects, 0)
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(contexts[1]?.system).toEqual([])
+
+        yield* requiredEffect(hooks.toolEffects, 1)
+        yield* requiredEffect(hooks.toolAfterEffects, 1)
+        yield* requiredEffect(hooks.sessionEffects, 2)
+        expect(contexts[2]?.system).toEqual([])
+
+        yield* requiredEffect(hooks.toolEffects, 2)
+        yield* requiredEffect(hooks.toolAfterEffects, 2)
+        yield* requiredEffect(hooks.sessionEffects, 3)
+        expect(reminderTexts(contexts[3])).toEqual(["Shell reminder."])
+      }),
+  )
+})
+
+test("concurrent execute calls keep nested registered tool counts separate", async (): Promise<void> => {
   const session = "ses_concurrent_execute"
   const initial = contextEvent(session)
   const outgoing = contextEvent(session)
   const outerA = beforeEvent("execute", "call_execute_a", session, "msg_concurrent")
-  const nestedA = beforeEvent("shell", "call_execute_a", session, "msg_concurrent")
+  const nestedA = beforeEvent(
+    "opencode_session_rename",
+    "call_execute_a",
+    session,
+    "msg_concurrent",
+  )
   const outerB = beforeEvent("execute", "call_execute_b", session, "msg_concurrent")
-  const nestedB = beforeEvent("read", "call_execute_b", session, "msg_concurrent")
+  const nestedB = beforeEvent("mcp-metals_hover", "call_execute_b", session, "msg_concurrent")
   const hooks = makeHooks({
     contexts: [initial, outgoing],
     before: [outerA, nestedA, outerB, nestedB],
@@ -686,7 +733,7 @@ test("concurrent execute calls count separately while nested calls count their o
         build: [
           {
             message: "Concurrent calls reminder.",
-            condition: { type: "toolCalls", count: 2 },
+            condition: { type: "toolCalls", count: 2, tools: ["opencode_*", "mcp-metals_*"] },
           },
         ],
       },
@@ -973,13 +1020,13 @@ test("a latest zero-usage assistant invalidates an older positive context sample
   )
 })
 
-test("assistant messages without token data are skipped when selecting occupied context", async (): Promise<void> => {
+test("a tokenless assistant is skipped so the earlier usable sample remains the growth baseline", async (): Promise<void> => {
   const session = "ses_missing_token_data"
   const contexts = [contextEvent(session), contextEvent(session)]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
   const sessionID = sessionIDFrom(session)
-  const history: SessionContextOutput = [
+  let history: SessionContextOutput = [
     assistantUsage("msg_token_usage", { input: 100 }),
     assistantWithoutUsage("msg_without_usage"),
   ]
@@ -1002,6 +1049,11 @@ test("assistant messages without token data are skipped when selecting occupied 
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         expect(contexts[0]?.system).toEqual([])
+
+        history = [...history, assistantUsage("msg_growth_threshold", { input: 150 })]
+        sdk.messages.set(sessionID, history)
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(reminderTexts(contexts[1])).toEqual(["Missing-usage reminder."])
       }),
   )
 })
@@ -2731,4 +2783,59 @@ test("machine step counts a tool once per call across duplicate list entries and
   )
   const [mcpFired] = step(policy, mcpSecond, machineContext(12, "build", machineSample()))
   expect(mcpFired).toEqual({ type: "Emit", messages: ["Prefixed."] })
+})
+
+test("machine matchers bound exact names and prefix patterns to full case-sensitive literals", (): void => {
+  const policy = policyFrom({
+    agents: {
+      build: [
+        { message: "Exact.", condition: { type: "toolCalls", count: 1, tools: ["shell"] } },
+        { message: "Prefix.", condition: { type: "toolCalls", count: 1, tools: ["mcp-*"] } },
+      ],
+    },
+  })
+
+  const exact = policy.build?.[0]
+  expect(exact?.counts("shell")).toBe(true)
+  expect(exact?.counts("shell_extra")).toBe(false)
+  expect(exact?.counts("Shell")).toBe(false)
+
+  const prefix = policy.build?.[1]
+  expect(prefix?.counts("mcp-")).toBe(true)
+  expect(prefix?.counts("mcp-hover")).toBe(true)
+  expect(prefix?.counts("MCP-hover")).toBe(false)
+  expect(prefix?.counts("mcp")).toBe(false)
+
+  const [, longerExact] = step(
+    policy,
+    undefined,
+    machineBefore(0, "shell_extra", "build", "msg_a", "call_a"),
+  )
+  expect(longerExact?.entries[0]?.toolCounts.size).toBe(0)
+  const [quiet] = step(policy, longerExact, machineContext(1, "build", machineSample()))
+  expect(quiet).toEqual({ type: "Continue" })
+
+  const [, exactMatch] = step(
+    policy,
+    undefined,
+    machineBefore(2, "shell", "build", "msg_a", "call_b"),
+  )
+  expect(exactMatch?.entries[0]?.toolCounts.get("shell")).toBe(1)
+  const [exactStep] = step(policy, exactMatch, machineContext(3, "build", machineSample()))
+  expect(exactStep).toEqual({ type: "Emit", messages: ["Exact."] })
+
+  const [, literalPrefix] = step(
+    policy,
+    undefined,
+    machineBefore(4, "mcp-", "build", "msg_b", "call_c"),
+  )
+  const [, longerPrefix] = step(
+    policy,
+    literalPrefix,
+    machineBefore(5, "mcp-hover", "build", "msg_b", "call_d"),
+  )
+  expect(longerPrefix?.entries[1]?.toolCounts.get("mcp-")).toBe(1)
+  expect(longerPrefix?.entries[1]?.toolCounts.get("mcp-hover")).toBe(1)
+  const [prefixStep] = step(policy, longerPrefix, machineContext(6, "build", machineSample()))
+  expect(prefixStep).toEqual({ type: "Emit", messages: ["Prefix."] })
 })

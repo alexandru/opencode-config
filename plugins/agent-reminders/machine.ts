@@ -29,7 +29,7 @@ interface CallWithTool extends CallIdentity {
 
 export interface SessionState {
   readonly agent: string
-  readonly entries: ReadonlyArray<Interval>
+  readonly entries: ReadonlyArray<RunningEntry>
   readonly activeCalls: ActiveCalls
 }
 
@@ -49,6 +49,10 @@ export interface CompiledEntry {
   readonly resets: (tool: string) => boolean
   readonly counts: (tool: string) => boolean
   readonly condition: CompiledCondition
+}
+
+export interface RunningEntry extends Interval {
+  readonly definition: CompiledEntry
 }
 
 export type CompiledPolicy = Readonly<Record<string, ReadonlyArray<CompiledEntry>>>
@@ -89,18 +93,20 @@ export type Step =
 
 const CONTINUE: Step = { type: "Continue" }
 
-const matchesPattern = (pattern: ToolPattern, tool: string): boolean =>
-  pattern.endsWith("*") ? tool.startsWith(pattern.slice(0, -1)) : tool === pattern
-
 const toolMatcher = (
   patterns: ReadonlyArray<ToolPattern>,
 ): (tool: string) => boolean => {
-  const matchers: ReadonlyArray<(tool: string) => boolean> = patterns.map(
-    (pattern: ToolPattern): (tool: string) => boolean => (tool: string): boolean =>
-      matchesPattern(pattern, tool),
+  const tests: ReadonlyArray<(tool: string) => boolean> = patterns.map(
+    (pattern: ToolPattern): (tool: string) => boolean => {
+      if (!pattern.endsWith("*")) {
+        return (tool: string): boolean => tool === pattern
+      }
+      const prefix: string = pattern.slice(0, -1)
+      return (tool: string): boolean => tool.startsWith(prefix)
+    },
   )
   return (tool: string): boolean =>
-    matchers.some((matches: (tool: string) => boolean): boolean => matches(tool))
+    tests.some((test: (tool: string) => boolean): boolean => test(tool))
 }
 
 export const compileCondition = (condition: Condition): CompiledCondition => {
@@ -187,7 +193,12 @@ export const policyFor = (
   return entries
 }
 
-const interval = (resetAt: number, tokens: Option.Option<Positive>): Interval => ({
+const interval = (
+  definition: CompiledEntry,
+  resetAt: number,
+  tokens: Option.Option<Positive>,
+): RunningEntry => ({
+  definition,
   resetAt,
   toolCounts: new Map(),
   contextBaseline: tokens,
@@ -195,12 +206,14 @@ const interval = (resetAt: number, tokens: Option.Option<Positive>): Interval =>
 })
 
 const freshEntries = (
-  entries: ReadonlyArray<CompiledEntry>,
+  definitions: ReadonlyArray<CompiledEntry>,
   now: number,
-): ReadonlyArray<Interval> =>
-  entries.map((_entry: CompiledEntry): Interval => interval(now, Option.none()))
+): ReadonlyArray<RunningEntry> =>
+  definitions.map((definition: CompiledEntry): RunningEntry =>
+    interval(definition, now, Option.none())
+  )
 
-const updateIntervalSample = (current: Interval, sample: ContextSample): Interval => ({
+const updateIntervalSample = (current: RunningEntry, sample: ContextSample): RunningEntry => ({
   ...current,
   contextBaseline: Option.isNone(current.contextBaseline) && Option.isSome(sample.tokens)
     ? sample.tokens
@@ -250,45 +263,34 @@ export const deleteSession = (
   return next
 }
 
-interface ResolvedEntries {
-  readonly state: SessionState
-  readonly entries: ReadonlyArray<CompiledEntry>
-}
-
-const resolveEntries = (
+const resolveState = (
   policy: CompiledPolicy,
   previous: SessionState | undefined,
   agent: string,
   now: number,
-): ResolvedEntries | undefined => {
-  const entries: ReadonlyArray<CompiledEntry> = policyFor(policy, agent) ?? []
-  if (previous !== undefined && previous.agent === agent) {
-    return { state: previous, entries }
-  }
-  if (previous === undefined && entries.length === 0) return undefined
+): SessionState | undefined => {
+  if (previous !== undefined && previous.agent === agent) return previous
+  const definitions: ReadonlyArray<CompiledEntry> = policyFor(policy, agent) ?? []
+  if (previous === undefined && definitions.length === 0) return undefined
   return {
-    state: {
-      agent,
-      entries: freshEntries(entries, now),
-      activeCalls: previous === undefined ? new Map() : previous.activeCalls,
-    },
-    entries,
+    agent,
+    entries: freshEntries(definitions, now),
+    activeCalls: previous === undefined ? new Map() : previous.activeCalls,
   }
 }
 
 const applyToolBefore = (
-  entries: ReadonlyArray<CompiledEntry>,
   state: SessionState,
   event: Extract<SessionEvent, { readonly type: "tool.before" }>,
 ): SessionState => {
   const outerTool: string | undefined = activeCall(state.activeCalls, event.call)
   const countsTool: boolean = outerTool === undefined || outerTool !== event.tool
-  const entriesUpdated: ReadonlyArray<Interval> = state.entries.map(
-    (current: Interval, index: number): Interval => {
-      const entry: CompiledEntry | undefined = entries[index]
-      if (entry === undefined) return current
-      if (entry.resets(event.tool)) return interval(event.now, current.latestContext)
-      if (countsTool && entry.counts(event.tool)) {
+  const entries: ReadonlyArray<RunningEntry> = state.entries.map(
+    (current: RunningEntry): RunningEntry => {
+      if (current.definition.resets(event.tool)) {
+        return interval(current.definition, event.now, current.latestContext)
+      }
+      if (countsTool && current.definition.counts(event.tool)) {
         const counts = new Map(current.toolCounts)
         counts.set(event.tool, (counts.get(event.tool) ?? 0) + 1)
         return { ...current, toolCounts: counts }
@@ -303,7 +305,7 @@ const applyToolBefore = (
       tool: event.tool,
     })
     : state.activeCalls
-  return { ...state, entries: entriesUpdated, activeCalls }
+  return { ...state, entries, activeCalls }
 }
 
 const stepToolBefore = (
@@ -311,14 +313,9 @@ const stepToolBefore = (
   previous: SessionState | undefined,
   event: Extract<SessionEvent, { readonly type: "tool.before" }>,
 ): readonly [Step, SessionState | undefined] => {
-  const resolved: ResolvedEntries | undefined = resolveEntries(
-    policy,
-    previous,
-    event.agent,
-    event.now,
-  )
-  if (resolved === undefined) return [CONTINUE, undefined]
-  return [CONTINUE, applyToolBefore(resolved.entries, resolved.state, event)]
+  const state: SessionState | undefined = resolveState(policy, previous, event.agent, event.now)
+  if (state === undefined) return [CONTINUE, undefined]
+  return [CONTINUE, applyToolBefore(state, event)]
 }
 
 const stepToolAfter = (
@@ -336,25 +333,18 @@ const stepContext = (
   previous: SessionState | undefined,
   event: Extract<SessionEvent, { readonly type: "context" }>,
 ): readonly [Step, SessionState | undefined] => {
-  const resolved: ResolvedEntries | undefined = resolveEntries(
-    policy,
-    previous,
-    event.agent,
-    event.now,
-  )
-  if (resolved === undefined) return [CONTINUE, undefined]
+  const state: SessionState | undefined = resolveState(policy, previous, event.agent, event.now)
+  if (state === undefined) return [CONTINUE, undefined]
   const messages: Array<string> = []
-  const entriesUpdated: ReadonlyArray<Interval> = resolved.state.entries.map(
-    (current: Interval, index: number): Interval => {
-      const entry: CompiledEntry | undefined = resolved.entries[index]
-      if (entry === undefined) return current
-      const measured: Interval = updateIntervalSample(current, event.sample)
-      if (!entry.condition.matches(measured, event.now, event.sample)) return measured
-      messages.push(entry.message)
-      return interval(event.now, measured.latestContext)
+  const entries: ReadonlyArray<RunningEntry> = state.entries.map(
+    (current: RunningEntry): RunningEntry => {
+      const measured: RunningEntry = updateIntervalSample(current, event.sample)
+      if (!current.definition.condition.matches(measured, event.now, event.sample)) return measured
+      messages.push(current.definition.message)
+      return interval(current.definition, event.now, measured.latestContext)
     },
   )
-  const nextState: SessionState = { ...resolved.state, entries: entriesUpdated }
+  const nextState: SessionState = { ...state, entries }
   if (messages.length === 0) return [CONTINUE, nextState]
   return [{ type: "Emit", messages }, nextState]
 }
@@ -364,14 +354,9 @@ const stepAgentSelected = (
   previous: SessionState | undefined,
   event: Extract<SessionEvent, { readonly type: "agent.selected" }>,
 ): readonly [Step, SessionState | undefined] => {
-  const resolved: ResolvedEntries | undefined = resolveEntries(
-    policy,
-    previous,
-    event.agent,
-    event.now,
-  )
-  if (resolved === undefined) return [CONTINUE, undefined]
-  return [CONTINUE, resolved.state]
+  const state: SessionState | undefined = resolveState(policy, previous, event.agent, event.now)
+  if (state === undefined) return [CONTINUE, undefined]
+  return [CONTINUE, state]
 }
 
 const stepCompactionEnded = (
@@ -382,7 +367,7 @@ const stepCompactionEnded = (
     CONTINUE,
     {
       ...state,
-      entries: state.entries.map((current: Interval): Interval => ({
+      entries: state.entries.map((current: RunningEntry): RunningEntry => ({
         ...current,
         contextBaseline: Option.none(),
         latestContext: Option.none(),
