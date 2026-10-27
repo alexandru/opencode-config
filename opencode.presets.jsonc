@@ -33,6 +33,7 @@
   // ----------------------------------------------------------------------------------
   // Pure DeepSeek
   "p-deepseek": {
+    "extends": ["agent-reminders"],
     "model": "opencode-go/deepseek-v4.1-flash",
     "agents": {
       "Orchestrator": {
@@ -132,5 +133,31 @@
   },
   "w-deepseek": {
     "extends": ["w-common", "p-deepseek"],
+  },
+  // ----------------------------------------------------------------------------------
+  // Activation of agent reminders; not activated for all models
+  "agent-reminders": {
+    "common": true,
+    "plugins": [
+      // oc-switch replaces arrays, so retain the baseline plugin here.
+      "opencode-brave-websearch",
+      {
+        "package": "./plugins/agent-reminders",
+        "options": {
+          "agents": {
+            "Orchestrator": {
+              "message": "Remember your prompt, consider delegating for efficiency.",
+              "condition": {
+                "type": "any",
+                "conditions": [
+                  { "type": "toolCalls", "count": 10 },
+                  { "type": "contextGrowth", "tokens": 20000 },
+                ],
+              },
+            },
+          },
+        },
+      },
+    ],
   },
 }
