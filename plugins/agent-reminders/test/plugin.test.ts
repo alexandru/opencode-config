@@ -8,15 +8,9 @@ import {
   SessionMessage,
 } from "@opencode/client/effect"
 import type { OpenCodeEvent } from "@opencode/client/effect"
-import type {
-  ModelListOutput,
-  SessionContextOutput,
-  SessionSyntheticInput,
-  SessionSyntheticOutput,
-} from "@opencode/client/effect/api"
+import type { ModelListOutput, SessionContextOutput } from "@opencode/client/effect/api"
 import type { SessionHooks } from "@opencode/plugin/effect/session"
 import type { ToolFailures, ToolHooks } from "@opencode/plugin/effect/tool"
-import { SessionInbox } from "@opencode/schema/session-inbox"
 import { Tool } from "@opencode/schema/tool"
 import { expect, test } from "bun:test"
 import {
@@ -26,6 +20,7 @@ import {
   Fiber,
   Formatter,
   Logger,
+  Option,
   Queue,
   References,
   Result,
@@ -34,7 +29,15 @@ import {
   Stream,
 } from "effect"
 import { TestClock } from "effect/testing"
+import { decodeConfiguration, decodePositive, type Positive } from "../config.ts"
 import agentReminders from "../index.ts"
+import {
+  type CompiledPolicy,
+  compilePolicy,
+  type ContextSample,
+  type SessionEvent,
+  step,
+} from "../machine.ts"
 
 type ReminderContext = Parameters<typeof agentReminders.effect>[0]
 
@@ -57,8 +60,6 @@ interface SdkResponses {
   models: ModelListOutput
   contextReads: number
   modelReads: number
-  readonly syntheticCalls: Array<SessionSyntheticInput>
-  syntheticFailure?: string
   contextRequest?: (sessionID: string) => Effect.Effect<SessionContextOutput>
 }
 
@@ -118,13 +119,6 @@ const makeReminderContext = (
         sdk.contextReads++
         if (sdk.contextRequest !== undefined) return yield* sdk.contextRequest(input.sessionID)
         return sdk.messages.get(input.sessionID) ?? []
-      }),
-    synthetic: (input: SessionSyntheticInput): Effect.Effect<SessionSyntheticOutput, unknown> =>
-      Effect.gen(function*(): Effect.fn.Return<SessionSyntheticOutput, unknown> {
-        sdk.syntheticCalls.push(input)
-        const failure: string | undefined = sdk.syntheticFailure
-        if (failure !== undefined) return yield* Effect.fail(failure)
-        return noticeResult
       }),
     hook: <Name extends keyof SessionHooks>(
       name: Name,
@@ -195,15 +189,6 @@ const makeReminderContext = (
   },
 })
 
-const noticeResult: SessionSyntheticOutput = Schema.decodeUnknownSync(SessionInbox.Synthetic)({
-  id: Schema.decodeUnknownSync(SessionMessage.ID)("msg_notice"),
-  sessionID: Schema.decodeUnknownSync(Session.ID)("ses_notice"),
-  time: { created: 0 },
-  type: "synthetic",
-  payload: { text: "notice delivered" },
-  delivery: "queue",
-})
-
 const emptySdk = (): SdkResponses => ({
   messages: new Map(),
   models: {
@@ -212,7 +197,6 @@ const emptySdk = (): SdkResponses => ({
   },
   contextReads: 0,
   modelReads: 0,
-  syntheticCalls: [],
 })
 
 const modelInfo = (context: number, id = "gpt-test", providerID = "openai"): Model.Info => {
@@ -457,6 +441,45 @@ const runPlugin = async <A>(
   )
 }
 
+const policyFrom = (options: unknown): CompiledPolicy => compilePolicy(decodeConfiguration(options))
+
+const machineSample = (tokens?: number, limit?: number): ContextSample => ({
+  tokens: tokens === undefined ? Option.none() : decodePositive(tokens),
+  modelLimit: limit === undefined ? Option.none() : decodePositive(limit),
+})
+
+const machineBefore = (
+  now: number,
+  tool: string,
+  agent: string,
+  messageID: string,
+  callID: string,
+): SessionEvent => ({
+  type: "tool.before",
+  now,
+  tool,
+  agent,
+  call: { messageID, id: callID },
+})
+
+const machineContext = (now: number, agent: string, sample: ContextSample): SessionEvent => ({
+  type: "context",
+  now,
+  agent,
+  sample,
+})
+
+const machineSelected = (now: number, agent: string): SessionEvent => ({
+  type: "agent.selected",
+  now,
+  agent,
+})
+
+const machineCompaction = (now: number): SessionEvent => ({ type: "compaction.ended", now })
+
+const sampleValue = (option: Option.Option<Positive> | undefined): number | undefined =>
+  option === undefined ? undefined : Option.isSome(option) ? option.value : undefined
+
 test("a matching outer shell call appends its configured system reminder", async (): Promise<void> => {
   const outgoing = contextEvent("ses_test")
   const before = beforeEvent("shell", "call_shell")
@@ -465,10 +488,12 @@ test("a matching outer shell call appends its configured system reminder", async
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Reconsider delegation before continuing.",
-          condition: { type: "toolCalls", count: 1, tools: ["shell"] },
-        },
+        build: [
+          {
+            message: "Reconsider delegation before continuing.",
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+        ],
       },
     },
     hooks,
@@ -512,10 +537,9 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
   await runPlugin(
     {
       agents: {
-        [agent]: {
-          message,
-          condition: { type: "toolCalls", count: 1, tools: ["shell"] },
-        },
+        [agent]: [
+          { message, condition: { type: "toolCalls", count: 1, tools: ["shell"] } },
+        ],
       },
     },
     hooks,
@@ -544,17 +568,6 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
             },
           },
         ])
-        expect(sdk.syntheticCalls).toEqual([
-          {
-            sessionID: sessionIDFrom(session),
-            text: message,
-            description: message,
-            metadata: { source: "agent-reminders", agent, state: "completed" },
-            delivery: "steer",
-            resume: false,
-          },
-        ])
-        expect(Object.hasOwn(sdk.syntheticCalls.at(0) ?? {}, "id")).toBe(false)
         const rendered: ReadonlyArray<string> = logs.map(
           (log: CapturedLog): string =>
             `${Formatter.format(log.message)} ${Formatter.format(log.annotations)}`,
@@ -564,76 +577,8 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
         yield* requiredEffect(hooks.sessionEffects, 2)
         expect(reminderTexts(afterReset)).toEqual([])
         expect(logs).toHaveLength(1)
-        expect(sdk.syntheticCalls).toHaveLength(1)
       }),
     [logger],
-  )
-})
-
-test("a failing session notice is reported without suppressing the reminder", async (): Promise<void> => {
-  const session = "ses_reminder_notice_failure"
-  const agent = "orchestrator"
-  const message = "Delegate before continuing."
-  const initial = contextEvent(session, agent)
-  const outgoing = contextEvent(session, agent)
-  const shell = beforeEvent(
-    "shell",
-    "call_reminder_notice_failure",
-    session,
-    "msg_reminder_notice_failure",
-    agent,
-  )
-  const hooks = makeHooks({ contexts: [initial, outgoing], before: [shell] })
-  const sdk: SdkResponses = {
-    ...emptySdk(),
-    syntheticFailure: "notice down",
-  }
-  const logs: Array<CapturedLog> = []
-
-  await runPlugin(
-    {
-      agents: {
-        [agent]: {
-          message,
-          condition: { type: "toolCalls", count: 1, tools: ["shell"] },
-        },
-      },
-    },
-    hooks,
-    sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
-        yield* requiredEffect(hooks.sessionEffects, 0)
-        yield* requiredEffect(hooks.toolEffects, 0)
-        yield* TestClock.adjust("5 seconds")
-        yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(reminderTexts(outgoing)).toEqual([message])
-        expect(logs).toMatchObject([
-          {
-            level: "Info",
-            message: ["Agent reminder injected"],
-            annotations: { sessionID: session, agent },
-          },
-          {
-            level: "Warn",
-            message: [
-              "Agent reminders could not publish the session notice: notice down",
-            ],
-          },
-        ])
-        expect(logs.filter((log: CapturedLog): boolean => log.level === "Warn")).toHaveLength(1)
-        expect(sdk.syntheticCalls).toEqual([
-          {
-            sessionID: sessionIDFrom(session),
-            text: message,
-            description: message,
-            metadata: { source: "agent-reminders", agent, state: "completed" },
-            delivery: "steer",
-            resume: false,
-          },
-        ])
-      }),
-    [makeCapturingLogger(logs)],
   )
 })
 
@@ -663,7 +608,6 @@ test("loading without configured agents warns once and disables all reminders", 
         yield* TestClock.adjust("1 hour")
         expect(contexts[0]?.system).toEqual([])
         expect(logs).toHaveLength(1)
-        expect(sdk.syntheticCalls).toEqual([])
       }),
     [makeCapturingLogger(logs)],
   )
@@ -691,7 +635,9 @@ test("default tools count outer calls once and count failed calls", async (): Pr
   await runPlugin(
     {
       agents: {
-        build: { message: "Reconsider delegation.", condition: { type: "toolCalls", count: 2 } },
+        build: [
+          { message: "Reconsider delegation.", condition: { type: "toolCalls", count: 3 } },
+        ],
       },
     },
     hooks,
@@ -715,7 +661,7 @@ test("default tools count outer calls once and count failed calls", async (): Pr
   )
 })
 
-test("concurrent execute calls count separately while their nested tools count zero", async (): Promise<void> => {
+test("concurrent execute calls count separately while nested calls count their own tool names", async (): Promise<void> => {
   const session = "ses_concurrent_execute"
   const initial = contextEvent(session)
   const outgoing = contextEvent(session)
@@ -737,10 +683,12 @@ test("concurrent execute calls count separately while their nested tools count z
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Concurrent calls reminder.",
-          condition: { type: "toolCalls", count: 2 },
-        },
+        build: [
+          {
+            message: "Concurrent calls reminder.",
+            condition: { type: "toolCalls", count: 2 },
+          },
+        ],
       },
     },
     hooks,
@@ -784,10 +732,12 @@ test("sessions keep independent tool counters and reminder reset cycles", async 
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Session-local reminder.",
-          condition: { type: "toolCalls", count: 2, tools: ["shell"] },
-        },
+        build: [
+          {
+            message: "Session-local reminder.",
+            condition: { type: "toolCalls", count: 2, tools: ["shell"] },
+          },
+        ],
       },
     },
     hooks,
@@ -826,10 +776,12 @@ test("duplicate names in a custom tool list do not double-count one invocation",
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Duplicate-list reminder.",
-          condition: { type: "toolCalls", count: 2, tools: ["shell", "shell"] },
-        },
+        build: [
+          {
+            message: "Duplicate-list reminder.",
+            condition: { type: "toolCalls", count: 2, tools: ["shell", "shell"] },
+          },
+        ],
       },
     },
     hooks,
@@ -867,10 +819,12 @@ test("context growth uses reported occupied tokens, excludes the initial sample,
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Context reminder.",
-          condition: { type: "contextGrowth", tokens: 100 },
-        },
+        build: [
+          {
+            message: "Context reminder.",
+            condition: { type: "contextGrowth", tokens: 100 },
+          },
+        ],
       },
     },
     hooks,
@@ -937,10 +891,12 @@ test("zero and missing usage leave the context baseline unknown until a positive
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Usage reminder.",
-          condition: { type: "contextGrowth", tokens: 10 },
-        },
+        build: [
+          {
+            message: "Usage reminder.",
+            condition: { type: "contextGrowth", tokens: 10 },
+          },
+        ],
       },
     },
     hooks,
@@ -985,10 +941,12 @@ test("a latest zero-usage assistant invalidates an older positive context sample
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Latest usage reminder.",
-          condition: { type: "contextGrowth", tokens: 50 },
-        },
+        build: [
+          {
+            message: "Latest usage reminder.",
+            condition: { type: "contextGrowth", tokens: 50 },
+          },
+        ],
       },
     },
     hooks,
@@ -1030,10 +988,12 @@ test("assistant messages without token data are skipped when selecting occupied 
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Missing-usage reminder.",
-          condition: { type: "contextGrowth", tokens: 50 },
-        },
+        build: [
+          {
+            message: "Missing-usage reminder.",
+            condition: { type: "contextGrowth", tokens: 50 },
+          },
+        ],
       },
     },
     hooks,
@@ -1077,22 +1037,24 @@ test("recursive all/any conditions sum each leaf's selected tools and reset afte
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Composite reminder.",
-          condition: {
-            type: "any",
-            conditions: [
-              {
-                type: "all",
-                conditions: [
-                  { type: "toolCalls", count: 3, tools: ["shell", "read", "shell"] },
-                  { type: "toolCalls", count: 3, tools: ["read", "write"] },
-                ],
-              },
-              { type: "elapsedTime", seconds: 1 },
-            ],
+        build: [
+          {
+            message: "Composite reminder.",
+            condition: {
+              type: "any",
+              conditions: [
+                {
+                  type: "all",
+                  conditions: [
+                    { type: "toolCalls", count: 3, tools: ["shell", "read", "shell"] },
+                    { type: "toolCalls", count: 3, tools: ["read", "write"] },
+                  ],
+                },
+                { type: "elapsedTime", seconds: 1 },
+              ],
+            },
           },
-        },
+        ],
       },
     },
     hooks,
@@ -1137,10 +1099,12 @@ test("context utilization uses the current model limit and percentage-point grow
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Utilization reminder.",
-          condition: { type: "contextUtilizationGrowth", percentagePoints: 5 },
-        },
+        build: [
+          {
+            message: "Utilization reminder.",
+            condition: { type: "contextUtilizationGrowth", percentagePoints: 5 },
+          },
+        ],
       },
     },
     hooks,
@@ -1195,10 +1159,12 @@ test("missing and invalid model limits cannot satisfy utilization conditions", a
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Model-limit reminder.",
-          condition: { type: "contextUtilizationGrowth", percentagePoints: 5 },
-        },
+        build: [
+          {
+            message: "Model-limit reminder.",
+            condition: { type: "contextUtilizationGrowth", percentagePoints: 5 },
+          },
+        ],
       },
     },
     hooks,
@@ -1245,14 +1211,18 @@ test("configured agents receive their own messages and other agents receive none
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Build-specific message.",
-          condition: { type: "toolCalls", count: 1, tools: ["shell"] },
-        },
-        review: {
-          message: "Review-specific message.",
-          condition: { type: "toolCalls", count: 1, tools: ["shell"] },
-        },
+        build: [
+          {
+            message: "Build-specific message.",
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+        ],
+        review: [
+          {
+            message: "Review-specific message.",
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+        ],
       },
     },
     hooks,
@@ -1286,45 +1256,55 @@ test("malformed recursive conditions fail plugin initialization clearly", async 
   const invalidConfigurations: ReadonlyArray<ReminderContext["options"]> = [
     {
       agents: {
-        build: {
-          message: "Invalid threshold.",
-          condition: { type: "toolCalls", count: 0 },
-        },
-      },
-    },
-    {
-      agents: {
-        build: {
-          message: "Invalid composition.",
-          condition: { type: "all", conditions: [] },
-        },
-      },
-    },
-    {
-      agents: {
-        build: {
-          message: "Unknown condition field.",
-          condition: { type: "elapsedTime", seconds: 5, steps: 3 },
-        },
-      },
-    },
-    {
-      agents: {
-        build: {
-          message: "Unknown condition type.",
-          condition: { type: "steps", count: 3 },
-        },
-      },
-    },
-    {
-      agents: {
-        build: {
-          message: "Unknown nested condition type.",
-          condition: {
-            type: "all",
-            conditions: [{ type: "any", conditions: [{ type: "steps", count: 3 }] }],
+        build: [
+          {
+            message: "Invalid threshold.",
+            condition: { type: "toolCalls", count: 0 },
           },
-        },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Invalid composition.",
+            condition: { type: "all", conditions: [] },
+          },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Unknown condition field.",
+            condition: { type: "elapsedTime", seconds: 5, steps: 3 },
+          },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Unknown condition type.",
+            condition: { type: "steps", count: 3 },
+          },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Unknown nested condition type.",
+            condition: {
+              type: "all",
+              conditions: [{ type: "any", conditions: [{ type: "steps", count: 3 }] }],
+            },
+          },
+        ],
       },
     },
   ]
@@ -1354,7 +1334,9 @@ test("elapsed-time reminders wait for an ordinary continuation and use inclusive
   await runPlugin(
     {
       agents: {
-        build: { message: "Time reminder.", condition: { type: "elapsedTime", seconds: 60 } },
+        build: [
+          { message: "Time reminder.", condition: { type: "elapsedTime", seconds: 60 } },
+        ],
       },
     },
     hooks,
@@ -1448,14 +1430,18 @@ test("explicitly configured prototype-like agent names receive reminders while a
   await runPlugin(
     {
       agents: {
-        constructor: {
-          message: "Constructor-named reminder.",
-          condition: { type: "toolCalls", count: 1, tools: ["shell"] },
-        },
-        toString: {
-          message: "ToString-named reminder.",
-          condition: { type: "toolCalls", count: 1, tools: ["shell"] },
-        },
+        constructor: [
+          {
+            message: "Constructor-named reminder.",
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+        ],
+        toString: [
+          {
+            message: "ToString-named reminder.",
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+        ],
       },
     },
     hooks,
@@ -1499,8 +1485,12 @@ test("agent-selected events reset at switch time while redundant selections leav
   await runPlugin(
     {
       agents: {
-        build: { message: "Build reminder.", condition: { type: "elapsedTime", seconds: 60 } },
-        review: { message: "Review reminder.", condition: { type: "elapsedTime", seconds: 60 } },
+        build: [
+          { message: "Build reminder.", condition: { type: "elapsedTime", seconds: 60 } },
+        ],
+        review: [
+          { message: "Review reminder.", condition: { type: "elapsedTime", seconds: 60 } },
+        ],
       },
     },
     hooks,
@@ -1549,10 +1539,12 @@ test("the first configured agent-selected event starts the elapsed interval imme
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "First-event reminder.",
-          condition: { type: "elapsedTime", seconds: 60 },
-        },
+        build: [
+          {
+            message: "First-event reminder.",
+            condition: { type: "elapsedTime", seconds: 60 },
+          },
+        ],
       },
     },
     hooks,
@@ -1585,14 +1577,18 @@ test("an agent switch establishes the new context baseline on its first usable s
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Build context reminder.",
-          condition: { type: "contextGrowth", tokens: 1_000 },
-        },
-        review: {
-          message: "Review context reminder.",
-          condition: { type: "contextGrowth", tokens: 50 },
-        },
+        build: [
+          {
+            message: "Build context reminder.",
+            condition: { type: "contextGrowth", tokens: 1_000 },
+          },
+        ],
+        review: [
+          {
+            message: "Review context reminder.",
+            condition: { type: "contextGrowth", tokens: 50 },
+          },
+        ],
       },
     },
     hooks,
@@ -1633,14 +1629,18 @@ test("an unconfigured role's accumulated context does not count when switching b
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Build context reminder.",
-          condition: { type: "contextGrowth", tokens: 1_000 },
-        },
-        review: {
-          message: "Review context reminder.",
-          condition: { type: "contextGrowth", tokens: 50 },
-        },
+        build: [
+          {
+            message: "Build context reminder.",
+            condition: { type: "contextGrowth", tokens: 1_000 },
+          },
+        ],
+        review: [
+          {
+            message: "Review context reminder.",
+            condition: { type: "contextGrowth", tokens: 50 },
+          },
+        ],
       },
     },
     hooks,
@@ -1686,14 +1686,18 @@ test("an agent change observed at the context hook starts with a fresh baseline"
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Build reminder.",
-          condition: { type: "contextGrowth", tokens: 1_000 },
-        },
-        review: {
-          message: "Review reminder.",
-          condition: { type: "contextGrowth", tokens: 50 },
-        },
+        build: [
+          {
+            message: "Build reminder.",
+            condition: { type: "contextGrowth", tokens: 1_000 },
+          },
+        ],
+        review: [
+          {
+            message: "Review reminder.",
+            condition: { type: "contextGrowth", tokens: 50 },
+          },
+        ],
       },
     },
     hooks,
@@ -1739,14 +1743,18 @@ test("an agent change observed at a tool hook starts with a fresh baseline", asy
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Build reminder.",
-          condition: { type: "contextGrowth", tokens: 1_000 },
-        },
-        review: {
-          message: "Review reminder.",
-          condition: { type: "contextGrowth", tokens: 50 },
-        },
+        build: [
+          {
+            message: "Build reminder.",
+            condition: { type: "contextGrowth", tokens: 1_000 },
+          },
+        ],
+        review: [
+          {
+            message: "Review reminder.",
+            condition: { type: "contextGrowth", tokens: 50 },
+          },
+        ],
       },
     },
     hooks,
@@ -1771,11 +1779,20 @@ test("an agent change observed at a tool hook starts with a fresh baseline", asy
   )
 })
 
-test("successful compaction rebases context while preserving elapsed time and tool counts", async (): Promise<void> => {
+test("successful compaction rebases context per entry while preserving per-entry counts and elapsed time", async (): Promise<void> => {
   const session = "ses_compaction"
-  const contexts = [contextEvent(session), contextEvent(session), contextEvent(session)]
-  const shell = beforeEvent("shell", "call_compaction_shell", session, "msg_compaction")
-  const hooks = makeHooks({ contexts, before: [shell], after: [failedAfterEvent(shell)] })
+  const contexts = [
+    contextEvent(session),
+    contextEvent(session),
+    contextEvent(session),
+    contextEvent(session),
+  ]
+  const calls = [
+    beforeEvent("shell", "call_compaction_shell", session, "msg_compaction"),
+    beforeEvent("read", "call_compaction_read_1", session, "msg_compaction"),
+    beforeEvent("read", "call_compaction_read_2", session, "msg_compaction"),
+  ]
+  const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
   const sdk = emptySdk()
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [assistantUsage("msg_pre_compaction", { input: 1_000 })]
@@ -1784,17 +1801,23 @@ test("successful compaction rebases context while preserving elapsed time and to
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Post-compaction reminder.",
-          condition: {
-            type: "all",
-            conditions: [
-              { type: "elapsedTime", seconds: 60 },
-              { type: "toolCalls", count: 1, tools: ["shell"] },
-              { type: "contextGrowth", tokens: 100 },
-            ],
+        build: [
+          {
+            message: "Post-compaction reminder.",
+            condition: {
+              type: "all",
+              conditions: [
+                { type: "elapsedTime", seconds: 60 },
+                { type: "toolCalls", count: 1, tools: ["shell"] },
+                { type: "contextGrowth", tokens: 100 },
+              ],
+            },
           },
-        },
+          {
+            message: "Counted reminder.",
+            condition: { type: "toolCalls", count: 2, tools: ["read"] },
+          },
+        ],
       },
     },
     hooks,
@@ -1804,7 +1827,12 @@ test("successful compaction rebases context while preserving elapsed time and to
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
+        yield* requiredEffect(hooks.toolEffects, 1)
+        yield* requiredEffect(hooks.toolAfterEffects, 1)
         yield* TestClock.adjust("20 seconds")
+
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(contexts[1]?.system).toEqual([])
 
         yield* events.publish(compactionEndedEvent(session))
         history = [
@@ -1812,17 +1840,18 @@ test("successful compaction rebases context while preserving elapsed time and to
           assistantUsage("msg_post_compaction", { input: 100 }),
         ]
         sdk.messages.set(sessionID, history)
-        yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        yield* requiredEffect(hooks.sessionEffects, 2)
+        expect(contexts[2]?.system).toEqual([])
 
+        yield* requiredEffect(hooks.toolEffects, 2)
+        yield* requiredEffect(hooks.toolAfterEffects, 2)
         yield* TestClock.adjust("40 seconds")
         history = [...history, assistantUsage("msg_post_compaction_growth", { input: 200 })]
         sdk.messages.set(sessionID, history)
-        yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual([
+        yield* requiredEffect(hooks.sessionEffects, 3)
+        expect(reminderTexts(contexts[3])).toEqual([
           "Post-compaction reminder.",
+          "Counted reminder.",
         ])
       }),
   )
@@ -1844,10 +1873,12 @@ test("session deletion clears interval state and scoped hook registrations are d
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
   const options = {
     agents: {
-      build: {
-        message: "Deleted-session reminder.",
-        condition: { type: "toolCalls", count: 2, tools: ["shell"] },
-      },
+      build: [
+        {
+          message: "Deleted-session reminder.",
+          condition: { type: "toolCalls", count: 2, tools: ["shell"] },
+        },
+      ],
     },
   }
 
@@ -1898,16 +1929,18 @@ test("scope closure prevents an in-flight context hook from appending a stale re
   const sdk = emptySdk()
   const options = {
     agents: {
-      build: {
-        message: "Stale scope reminder.",
-        condition: {
-          type: "any",
-          conditions: [
-            { type: "toolCalls", count: 1, tools: ["shell"] },
-            { type: "contextGrowth", tokens: 100 },
-          ],
+      build: [
+        {
+          message: "Stale scope reminder.",
+          condition: {
+            type: "any",
+            conditions: [
+              { type: "toolCalls", count: 1, tools: ["shell"] },
+              { type: "contextGrowth", tokens: 100 },
+            ],
+          },
         },
-      },
+      ],
     },
   }
 
@@ -1947,10 +1980,12 @@ test("scope closure prevents an in-flight context hook from appending a stale re
 test("a fresh plugin scope starts with fresh intervals after reload", async (): Promise<void> => {
   const options = {
     agents: {
-      build: {
-        message: "Reload reminder.",
-        condition: { type: "toolCalls", count: 2, tools: ["shell"] },
-      },
+      build: [
+        {
+          message: "Reload reminder.",
+          condition: { type: "toolCalls", count: 2, tools: ["shell"] },
+        },
+      ],
     },
   }
   const firstContext = contextEvent("ses_reload")
@@ -2005,10 +2040,12 @@ test("delegation resets to the latest known context sample", async (): Promise<v
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Delegation context reminder.",
-          condition: { type: "contextGrowth", tokens: 100 },
-        },
+        build: [
+          {
+            message: "Delegation context reminder.",
+            condition: { type: "contextGrowth", tokens: 100 },
+          },
+        ],
       },
     },
     hooks,
@@ -2091,16 +2128,18 @@ test("delegation resets tool counts and elapsed time in the same interval", asyn
   await runPlugin(
     {
       agents: {
-        build: {
-          message: "Shared interval reminder.",
-          condition: {
-            type: "all",
-            conditions: [
-              { type: "elapsedTime", seconds: 60 },
-              { type: "toolCalls", count: 2, tools: ["shell"] },
-            ],
+        build: [
+          {
+            message: "Shared interval reminder.",
+            condition: {
+              type: "all",
+              conditions: [
+                { type: "elapsedTime", seconds: 60 },
+                { type: "toolCalls", count: 2, tools: ["shell"] },
+              ],
+            },
           },
-        },
+        ],
       },
     },
     hooks,
@@ -2138,4 +2177,558 @@ test("delegation resets tool counts and elapsed time in the same interval", asyn
         ])
       }),
   )
+})
+
+test("a reset tool resets only its own entry and leaves other entries' counters and baselines intact", async (): Promise<void> => {
+  const session = "ses_multi_entry_reset"
+  const contexts = [0, 1, 2, 3].map((_index: number): SessionHooks["context"] =>
+    contextEvent(session)
+  )
+  const calls = [
+    beforeEvent("shell", "call_shell_1", session, "msg_multi"),
+    beforeEvent("shell", "call_shell_2", session, "msg_multi"),
+    beforeEvent("grep", "call_grep", session, "msg_multi"),
+    beforeEvent("shell", "call_shell_3", session, "msg_multi"),
+    beforeEvent("shell", "call_shell_4", session, "msg_multi"),
+    beforeEvent("subagent", "call_subagent", session, "msg_multi"),
+  ]
+  const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
+  const sdk = emptySdk()
+  const sessionID = sessionIDFrom(session)
+  let history: SessionContextOutput = [assistantUsage("msg_multi_initial", { input: 100 })]
+  sdk.messages.set(sessionID, history)
+
+  await runPlugin(
+    {
+      agents: {
+        build: [
+          {
+            message: "Entry one.",
+            condition: {
+              type: "all",
+              conditions: [
+                { type: "toolCalls", count: 2, tools: ["shell"] },
+                { type: "contextGrowth", tokens: 100 },
+              ],
+            },
+          },
+          {
+            message: "Entry two.",
+            resetTools: ["grep"],
+            condition: {
+              type: "all",
+              conditions: [
+                { type: "toolCalls", count: 2, tools: ["shell"] },
+                { type: "contextGrowth", tokens: 100 },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    hooks,
+    sdk,
+    (): Effect.Effect<void> =>
+      Effect.gen(function*(): Effect.fn.Return<void> {
+        yield* requiredEffect(hooks.sessionEffects, 0)
+
+        yield* requiredEffect(hooks.toolEffects, 0)
+        yield* requiredEffect(hooks.toolAfterEffects, 0)
+        yield* requiredEffect(hooks.toolEffects, 1)
+        yield* requiredEffect(hooks.toolAfterEffects, 1)
+
+        yield* requiredEffect(hooks.toolEffects, 2)
+        yield* requiredEffect(hooks.toolAfterEffects, 2)
+
+        history = [...history, assistantUsage("msg_multi_after_grep", { input: 200 })]
+        sdk.messages.set(sessionID, history)
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(reminderTexts(contexts[1])).toEqual(["Entry one."])
+
+        yield* requiredEffect(hooks.toolEffects, 3)
+        yield* requiredEffect(hooks.toolAfterEffects, 3)
+
+        history = [...history, assistantUsage("msg_multi_after_shell_3", { input: 210 })]
+        sdk.messages.set(sessionID, history)
+        yield* requiredEffect(hooks.sessionEffects, 2)
+        expect(reminderTexts(contexts[2])).toEqual([])
+
+        yield* requiredEffect(hooks.toolEffects, 4)
+        yield* requiredEffect(hooks.toolAfterEffects, 4)
+        yield* requiredEffect(hooks.toolEffects, 5)
+        yield* requiredEffect(hooks.toolAfterEffects, 5)
+
+        history = [...history, assistantUsage("msg_multi_after_subagent", { input: 260 })]
+        sdk.messages.set(sessionID, history)
+        yield* requiredEffect(hooks.sessionEffects, 3)
+        expect(reminderTexts(contexts[3])).toEqual(["Entry two."])
+      }),
+  )
+})
+
+test("two entries matching the same request emit both messages in order with one log per message", async (): Promise<void> => {
+  const session = "ses_two_entries"
+  const initial = contextEvent(session)
+  const outgoing = contextEvent(session)
+  const shell = beforeEvent("shell", "call_two_entries", session, "msg_two_entries")
+  const hooks = makeHooks({
+    contexts: [initial, outgoing],
+    before: [shell],
+    after: [failedAfterEvent(shell)],
+  })
+  const sdk = emptySdk()
+  const logs: Array<CapturedLog> = []
+
+  await runPlugin(
+    {
+      agents: {
+        build: [
+          {
+            message: "First reminder.",
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+          {
+            message: "Second reminder.",
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+        ],
+      },
+    },
+    hooks,
+    sdk,
+    (): Effect.Effect<void> =>
+      Effect.gen(function*(): Effect.fn.Return<void> {
+        yield* requiredEffect(hooks.sessionEffects, 0)
+        yield* requiredEffect(hooks.toolEffects, 0)
+        yield* requiredEffect(hooks.toolAfterEffects, 0)
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(reminderTexts(outgoing)).toEqual(["First reminder.", "Second reminder."])
+        expect(logs).toMatchObject([
+          { level: "Info", message: ["Agent reminder injected"] },
+          { level: "Info", message: ["Agent reminder injected"] },
+        ])
+      }),
+    [makeCapturingLogger(logs)],
+  )
+})
+
+test("resetTools with an empty array allows a condition to count subagent calls", async (): Promise<void> => {
+  const session = "ses_empty_reset_tools"
+  const initial = contextEvent(session)
+  const outgoing = contextEvent(session)
+  const delegation = beforeEvent("subagent", "call_delegate", session, "msg_delegate")
+  const hooks = makeHooks({
+    contexts: [initial, outgoing],
+    before: [delegation],
+    after: [failedAfterEvent(delegation)],
+  })
+
+  await runPlugin(
+    {
+      agents: {
+        build: [
+          {
+            message: "Delegate reminder.",
+            resetTools: [],
+            condition: { type: "toolCalls", count: 1, tools: ["subagent"] },
+          },
+        ],
+      },
+    },
+    hooks,
+    emptySdk(),
+    (): Effect.Effect<void> =>
+      Effect.gen(function*(): Effect.fn.Return<void> {
+        yield* requiredEffect(hooks.sessionEffects, 0)
+        yield* requiredEffect(hooks.toolEffects, 0)
+        yield* requiredEffect(hooks.toolAfterEffects, 0)
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(reminderTexts(outgoing)).toEqual(["Delegate reminder."])
+      }),
+  )
+})
+
+test("prefix patterns count nested MCP-style tool calls inside an execute call", async (): Promise<void> => {
+  const session = "ses_prefix_pattern"
+  const initial = contextEvent(session)
+  const outgoing = contextEvent(session)
+  const outer = beforeEvent("execute", "call_execute", session, "msg_prefix")
+  const hover = beforeEvent("mcp-metals_hover", "call_execute", session, "msg_prefix")
+  const compileCall = beforeEvent("mcp-metals_compile", "call_execute", session, "msg_prefix")
+  const hooks = makeHooks({
+    contexts: [initial, outgoing],
+    before: [outer, hover, compileCall],
+    after: [
+      failedAfterEvent(hover),
+      failedAfterEvent(compileCall),
+      failedAfterEvent(outer),
+    ],
+  })
+
+  await runPlugin(
+    {
+      agents: {
+        build: [
+          {
+            message: "MCP reminder.",
+            condition: { type: "toolCalls", count: 2, tools: ["mcp-metals_*"] },
+          },
+        ],
+      },
+    },
+    hooks,
+    emptySdk(),
+    (): Effect.Effect<void> =>
+      Effect.gen(function*(): Effect.fn.Return<void> {
+        yield* requiredEffect(hooks.sessionEffects, 0)
+        yield* requiredEffect(hooks.toolEffects, 0)
+        yield* requiredEffect(hooks.toolEffects, 1)
+        yield* requiredEffect(hooks.toolEffects, 2)
+        yield* requiredEffect(hooks.toolAfterEffects, 0)
+        yield* requiredEffect(hooks.toolAfterEffects, 1)
+        yield* requiredEffect(hooks.toolAfterEffects, 2)
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(reminderTexts(outgoing)).toEqual(["MCP reminder."])
+      }),
+  )
+})
+
+test("entries that count and reset overlapping tool patterns are rejected at load", async (): Promise<void> => {
+  const invalidConfigurations: ReadonlyArray<ReminderContext["options"]> = [
+    {
+      agents: {
+        build: [
+          {
+            message: "Exact overlap.",
+            resetTools: ["shell"],
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Counted exact inside reset pattern.",
+            resetTools: ["mcp-metals_*"],
+            condition: { type: "toolCalls", count: 1, tools: ["mcp-metals_hover"] },
+          },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Counted pattern covering reset exact.",
+            resetTools: ["mcp-metals_hover"],
+            condition: { type: "toolCalls", count: 1, tools: ["mcp-metals_*"] },
+          },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Nested prefix overlap.",
+            resetTools: ["mcp-metals_*"],
+            condition: { type: "toolCalls", count: 1, tools: ["mcp-*"] },
+          },
+        ],
+      },
+    },
+  ]
+
+  for (const options of invalidConfigurations) {
+    await expect(
+      runPlugin(
+        options,
+        makeHooks({ contexts: [] }),
+        emptySdk(),
+        (): Effect.Effect<void> => Effect.void,
+      ),
+    )
+      .rejects.toThrow("Invalid agent reminder configuration")
+  }
+})
+
+test("invalid tool reference patterns are rejected at load", async (): Promise<void> => {
+  const invalidConfigurations: ReadonlyArray<ReminderContext["options"]> = [
+    {
+      agents: {
+        build: [
+          {
+            message: "Leading star.",
+            resetTools: ["*shell"],
+            condition: { type: "toolCalls", count: 1 },
+          },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Mid-string star.",
+            resetTools: ["sh*ell"],
+            condition: { type: "toolCalls", count: 1 },
+          },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Empty reference.",
+            resetTools: [""],
+            condition: { type: "toolCalls", count: 1 },
+          },
+        ],
+      },
+    },
+    {
+      agents: {
+        build: [
+          {
+            message: "Invalid counted tool.",
+            condition: { type: "toolCalls", count: 1, tools: ["sh*ell"] },
+          },
+        ],
+      },
+    },
+  ]
+
+  for (const options of invalidConfigurations) {
+    await expect(
+      runPlugin(
+        options,
+        makeHooks({ contexts: [] }),
+        emptySdk(),
+        (): Effect.Effect<void> => Effect.void,
+      ),
+    )
+      .rejects.toThrow("Invalid agent reminder configuration")
+  }
+})
+
+test("machine step creates state for configured agents only and resets all entries on agent switch", (): void => {
+  const policy = policyFrom({
+    agents: {
+      build: [
+        { message: "Build.", condition: { type: "toolCalls", count: 2, tools: ["shell"] } },
+      ],
+      review: [
+        { message: "Review.", condition: { type: "toolCalls", count: 2, tools: ["read"] } },
+      ],
+    },
+  })
+
+  const [, created] = step(policy, undefined, machineSelected(0, "build"))
+  expect(created?.agent).toBe("build")
+  expect(created?.entries).toHaveLength(1)
+  expect(created?.entries[0]?.resetAt).toBe(0)
+
+  const [, unconfigured] = step(policy, undefined, machineSelected(0, "idle"))
+  expect(unconfigured).toBeUndefined()
+
+  const [, counted] = step(
+    policy,
+    created,
+    machineBefore(10, "shell", "build", "msg_a", "call_a"),
+  )
+  expect(counted?.entries[0]?.toolCounts.get("shell")).toBe(1)
+  expect(counted?.activeCalls.get("msg_a")?.get("call_a")).toBe("shell")
+
+  const [, switched] = step(policy, counted, machineContext(20, "review", machineSample()))
+  expect(switched?.agent).toBe("review")
+  expect(switched?.entries).toHaveLength(1)
+  expect(switched?.entries[0]?.resetAt).toBe(20)
+  expect(switched?.entries[0]?.toolCounts.get("shell")).toBeUndefined()
+  expect(switched?.activeCalls.get("msg_a")?.get("call_a")).toBe("shell")
+
+  const [, unconfiguredSwitch] = step(
+    policy,
+    switched,
+    machineBefore(30, "shell", "idle", "msg_b", "call_b"),
+  )
+  expect(unconfiguredSwitch?.agent).toBe("idle")
+  expect(unconfiguredSwitch?.entries).toHaveLength(0)
+  expect(unconfiguredSwitch?.activeCalls.get("msg_b")?.get("call_b")).toBe("shell")
+
+  const [, none] = step(policy, undefined, machineBefore(40, "shell", "idle", "msg_c", "call_c"))
+  expect(none).toBeUndefined()
+})
+
+test("machine step counts nested calls under their own tool names without re-counting the outer call", (): void => {
+  const policy = policyFrom({
+    agents: {
+      build: [
+        {
+          message: "Nested.",
+          condition: { type: "toolCalls", count: 3, tools: ["shell", "read"] },
+        },
+      ],
+    },
+  })
+
+  const [, outer] = step(policy, undefined, machineBefore(0, "execute", "build", "msg_a", "call_a"))
+  expect(outer?.entries[0]?.toolCounts.get("execute")).toBeUndefined()
+  expect(outer?.activeCalls.get("msg_a")?.get("call_a")).toBe("execute")
+
+  const [, nestedShell] = step(
+    policy,
+    outer,
+    machineBefore(1, "shell", "build", "msg_a", "call_a"),
+  )
+  expect(nestedShell?.entries[0]?.toolCounts.get("shell")).toBe(1)
+  expect(nestedShell?.entries[0]?.toolCounts.get("execute")).toBeUndefined()
+
+  const [, nestedAgain] = step(
+    policy,
+    nestedShell,
+    machineBefore(2, "execute", "build", "msg_a", "call_a"),
+  )
+  expect(nestedAgain?.entries[0]?.toolCounts.get("execute")).toBeUndefined()
+  expect(nestedAgain?.entries[0]?.toolCounts.get("shell")).toBe(1)
+
+  const [, nestedRead] = step(
+    policy,
+    nestedAgain,
+    machineBefore(3, "read", "build", "msg_a", "call_a"),
+  )
+  expect(nestedRead?.entries[0]?.toolCounts.get("read")).toBe(1)
+
+  const [, outerAgain] = step(
+    policy,
+    nestedRead,
+    machineBefore(4, "shell", "build", "msg_b", "call_b"),
+  )
+  expect(outerAgain?.entries[0]?.toolCounts.get("shell")).toBe(2)
+  expect(outerAgain?.activeCalls.get("msg_b")?.get("call_b")).toBe("shell")
+})
+
+test("machine step resets only the matching entry and carries its latest context sample", (): void => {
+  const policy = policyFrom({
+    agents: {
+      build: [
+        { message: "One.", condition: { type: "toolCalls", count: 1, tools: ["shell"] } },
+        {
+          message: "Two.",
+          resetTools: ["grep"],
+          condition: { type: "toolCalls", count: 5, tools: ["shell"] },
+        },
+      ],
+    },
+  })
+
+  const [, sampled] = step(policy, undefined, machineContext(0, "build", machineSample(100)))
+  expect(sampleValue(sampled?.entries[0]?.contextBaseline)).toBe(100)
+  expect(sampleValue(sampled?.entries[1]?.contextBaseline)).toBe(100)
+
+  const [, counted] = step(
+    policy,
+    sampled,
+    machineBefore(10, "shell", "build", "msg_a", "call_a"),
+  )
+  expect(counted?.entries[0]?.toolCounts.get("shell")).toBe(1)
+  expect(counted?.entries[1]?.toolCounts.get("shell")).toBe(1)
+
+  const [, resetFirst] = step(
+    policy,
+    counted,
+    machineBefore(20, "subagent", "build", "msg_a", "call_b"),
+  )
+  expect(resetFirst?.entries[0]?.resetAt).toBe(20)
+  expect(resetFirst?.entries[0]?.toolCounts.get("shell")).toBeUndefined()
+  expect(sampleValue(resetFirst?.entries[0]?.contextBaseline)).toBe(100)
+  expect(resetFirst?.entries[1]?.resetAt).toBe(0)
+  expect(resetFirst?.entries[1]?.toolCounts.get("shell")).toBe(1)
+  expect(sampleValue(resetFirst?.entries[1]?.contextBaseline)).toBe(100)
+
+  const [, resetSecond] = step(
+    policy,
+    resetFirst,
+    machineBefore(30, "grep", "build", "msg_a", "call_c"),
+  )
+  expect(resetSecond?.entries[1]?.resetAt).toBe(30)
+  expect(resetSecond?.entries[1]?.toolCounts.get("shell")).toBeUndefined()
+  expect(resetSecond?.entries[0]?.resetAt).toBe(20)
+  expect(resetSecond?.entries[0]?.toolCounts.get("shell")).toBeUndefined()
+})
+
+test("machine step compaction clears context fields across entries and preserves counts and elapsed time", (): void => {
+  const policy = policyFrom({
+    agents: {
+      build: [
+        { message: "One.", condition: { type: "toolCalls", count: 2, tools: ["shell"] } },
+        { message: "Two.", condition: { type: "contextGrowth", tokens: 10 } },
+      ],
+    },
+  })
+
+  const [, counted] = step(
+    policy,
+    undefined,
+    machineBefore(0, "shell", "build", "msg_a", "call_a"),
+  )
+  const [, sampled] = step(policy, counted, machineContext(5, "build", machineSample(100)))
+  expect(sampleValue(sampled?.entries[1]?.contextBaseline)).toBe(100)
+
+  const [, compacted] = step(policy, sampled, machineCompaction(7))
+  expect(sampleValue(compacted?.entries[0]?.contextBaseline)).toBeUndefined()
+  expect(sampleValue(compacted?.entries[0]?.latestContext)).toBeUndefined()
+  expect(sampleValue(compacted?.entries[1]?.contextBaseline)).toBeUndefined()
+  expect(compacted?.entries[0]?.toolCounts.get("shell")).toBe(1)
+  expect(compacted?.entries[0]?.resetAt).toBe(0)
+  expect(compacted?.entries[1]?.resetAt).toBe(0)
+})
+
+test("machine step counts a tool once per call across duplicate list entries and matches prefix patterns", (): void => {
+  const policy = policyFrom({
+    agents: {
+      build: [
+        {
+          message: "Duplicate.",
+          condition: { type: "toolCalls", count: 2, tools: ["shell", "shell"] },
+        },
+        {
+          message: "Prefixed.",
+          condition: { type: "toolCalls", count: 2, tools: ["mcp-*"] },
+        },
+      ],
+    },
+  })
+
+  const [, first] = step(policy, undefined, machineBefore(0, "shell", "build", "msg_a", "call_a"))
+  expect(first?.entries[0]?.toolCounts.get("shell")).toBe(1)
+
+  const [quiet, quietState] = step(policy, first, machineContext(1, "build", machineSample()))
+  expect(quiet).toEqual({ type: "Continue" })
+
+  const [, second] = step(
+    policy,
+    quietState,
+    machineBefore(2, "shell", "build", "msg_a", "call_b"),
+  )
+  expect(second?.entries[0]?.toolCounts.get("shell")).toBe(2)
+
+  const [fired, reset] = step(policy, second, machineContext(3, "build", machineSample()))
+  expect(fired).toEqual({ type: "Emit", messages: ["Duplicate."] })
+  expect(reset?.entries[0]?.toolCounts.get("shell")).toBeUndefined()
+
+  const [, mcpFirst] = step(
+    policy,
+    undefined,
+    machineBefore(10, "mcp-one_hover", "build", "msg_b", "call_c"),
+  )
+  const [, mcpSecond] = step(
+    policy,
+    mcpFirst,
+    machineBefore(11, "mcp-two_compile", "build", "msg_b", "call_d"),
+  )
+  const [mcpFired] = step(policy, mcpSecond, machineContext(12, "build", machineSample()))
+  expect(mcpFired).toEqual({ type: "Emit", messages: ["Prefixed."] })
 })

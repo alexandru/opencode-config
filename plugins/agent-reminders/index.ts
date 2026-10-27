@@ -1,9 +1,5 @@
 import type { OpenCodeEvent } from "@opencode/client/effect"
-import type {
-  ModelListOutput,
-  SessionContextOutput,
-  SessionSyntheticOutput,
-} from "@opencode/client/effect/api"
+import type { ModelListOutput, SessionContextOutput } from "@opencode/client/effect/api"
 import type {
   Context as PluginContext,
   Plugin as NativePlugin,
@@ -12,36 +8,24 @@ import type { SessionHooks } from "@opencode/plugin/effect/session"
 import type { ToolHooks } from "@opencode/plugin/effect/tool"
 import { Array as Arr, Clock, Effect, Option, Ref, Result, type Scope, Stream } from "effect"
 import {
-  type AgentReminder,
-  type Condition,
   type Configuration,
   decodeConfiguration,
   decodePositive,
   errorMessage,
   type Positive,
 } from "./config.ts"
-
-interface Interval {
-  readonly resetAt: number
-  readonly toolCounts: ReadonlyMap<string, number>
-  readonly contextBaseline: Option.Option<Positive>
-  readonly latestContext: Option.Option<Positive>
-}
-
-type ActiveCalls = ReadonlyMap<string, ReadonlyMap<string, string>>
-type CallIdentity = Pick<ToolHooks["execute.before"], "messageID" | "id">
-type CallWithTool = Readonly<Pick<ToolHooks["execute.before"], "messageID" | "id" | "tool">>
-
-interface SessionState {
-  readonly agent: string
-  readonly interval: Interval
-  readonly activeCalls: ActiveCalls
-}
-
-interface ContextSample {
-  readonly tokens: Option.Option<Positive>
-  readonly modelLimit: Option.Option<Positive>
-}
+import {
+  type CompiledEntry,
+  type CompiledPolicy,
+  compilePolicy,
+  type ContextSample,
+  deleteSession,
+  policyFor,
+  type SessionState,
+  setSession,
+  type Step,
+  step,
+} from "./machine.ts"
 
 type AssistantMessage = Extract<SessionContextOutput[number], { readonly type: "assistant" }>
 type AssistantWithTokens = AssistantMessage & {
@@ -62,94 +46,18 @@ const isContextSampleBoundary = (
 
 interface ReminderContext {
   readonly options: PluginContext["options"]
-  readonly session: Pick<PluginContext["session"], "context" | "hook" | "synthetic">
+  readonly session: Pick<PluginContext["session"], "context" | "hook">
   readonly tool: Pick<PluginContext["tool"], "hook">
   readonly model: Pick<PluginContext["model"], "list">
   readonly event: Pick<PluginContext["event"], "subscribe">
 }
 
-interface CompiledCondition {
-  readonly needsTokens: boolean
-  readonly needsLimit: boolean
-  readonly matches: (current: Interval, now: number, sample: ContextSample) => boolean
+interface NativeHandlers {
+  readonly toolBefore: (event: ToolHooks["execute.before"]) => Effect.Effect<void>
+  readonly toolAfter: (event: ToolHooks["execute.after"]) => Effect.Effect<void>
+  readonly sessionContext: (event: SessionHooks["context"]) => Effect.Effect<void>
+  readonly event: (event: OpenCodeEvent) => Effect.Effect<void>
 }
-
-interface CompiledAgentReminder {
-  readonly message: string
-  readonly condition: CompiledCondition
-}
-
-const DEFAULT_TOOLS: ReadonlyArray<string> = ["shell", "execute"]
-
-const compileCondition = (condition: Condition): CompiledCondition => {
-  switch (condition.type) {
-    case "toolCalls": {
-      const selected: ReadonlySet<string> = new Set(condition.tools ?? DEFAULT_TOOLS)
-      return {
-        needsTokens: false,
-        needsLimit: false,
-        matches: (current: Interval, _now: number, _sample: ContextSample): boolean => {
-          let count = 0
-          for (const tool of selected) count += current.toolCounts.get(tool) ?? 0
-          return count >= condition.count
-        },
-      }
-    }
-    case "elapsedTime":
-      return {
-        needsTokens: false,
-        needsLimit: false,
-        matches: (current: Interval, now: number, _sample: ContextSample): boolean =>
-          (now - current.resetAt) / 1000 >= condition.seconds,
-      }
-    case "contextGrowth":
-      return {
-        needsTokens: true,
-        needsLimit: false,
-        matches: (current: Interval, _now: number, sample: ContextSample): boolean =>
-          Option.isSome(current.contextBaseline) && Option.isSome(sample.tokens)
-          && sample.tokens.value - current.contextBaseline.value >= condition.tokens,
-      }
-    case "contextUtilizationGrowth":
-      return {
-        needsTokens: true,
-        needsLimit: true,
-        matches: (current: Interval, _now: number, sample: ContextSample): boolean =>
-          Option.isSome(current.contextBaseline) && Option.isSome(sample.tokens)
-          && Option.isSome(sample.modelLimit)
-          && 100 * (sample.tokens.value - current.contextBaseline.value) / sample.modelLimit.value
-            >= condition.percentagePoints,
-      }
-    case "all":
-    case "any": {
-      const children: ReadonlyArray<CompiledCondition> = condition.conditions.map(
-        (nested: Condition): CompiledCondition => compileCondition(nested),
-      )
-      const needsTokens: boolean = children.some(
-        (child: CompiledCondition): boolean => child.needsTokens,
-      )
-      const needsLimit: boolean = children.some(
-        (child: CompiledCondition): boolean => child.needsLimit,
-      )
-      const matches: CompiledCondition["matches"] = condition.type === "all"
-        ? (current: Interval, now: number, sample: ContextSample): boolean =>
-          children.every((child: CompiledCondition): boolean => child.matches(current, now, sample))
-        : (current: Interval, now: number, sample: ContextSample): boolean =>
-          children.some((child: CompiledCondition): boolean => child.matches(current, now, sample))
-      return { needsTokens, needsLimit, matches }
-    }
-  }
-}
-
-const compileAgentReminders = (
-  agents: Readonly<Record<string, AgentReminder>>,
-): Readonly<Record<string, CompiledAgentReminder>> =>
-  Object.fromEntries(
-    Object.entries(agents).map(([agent, reminder]): [string, CompiledAgentReminder] => [
-      agent,
-      { message: reminder.message, condition: compileCondition(reminder.condition) },
-    ]),
-  )
 
 const readRequest = <A, E>(
   operation: string,
@@ -194,18 +102,17 @@ const contextLimit = (
 const readContextSample = (
   context: ReminderContext,
   event: SessionHooks["context"],
-  condition: CompiledCondition,
+  needsTokens: boolean,
+  needsLimit: boolean,
 ): Effect.Effect<ContextSample> =>
   Effect.gen(function*(): Effect.fn.Return<ContextSample> {
-    const wantsTokens: boolean = condition.needsTokens
-    const wantsLimit: boolean = condition.needsLimit
-    const messages: Option.Option<SessionContextOutput> = wantsTokens
+    const messages: Option.Option<SessionContextOutput> = needsTokens
       ? yield* readRequest(
         "session context",
         context.session.context({ sessionID: event.sessionID }),
       )
       : Option.none()
-    const models: Option.Option<ModelListOutput> = wantsLimit
+    const models: Option.Option<ModelListOutput> = needsLimit
       ? yield* readRequest("model metadata", context.model.list())
       : Option.none()
     const tokens: Option.Option<Positive> = Option.match(messages, {
@@ -222,215 +129,94 @@ const readContextSample = (
     }
   })
 
-const interval = (
-  resetAt: number,
-  tokens: Option.Option<Positive>,
-): Interval => ({
-  resetAt,
-  toolCounts: new Map(),
-  contextBaseline: tokens,
-  latestContext: tokens,
-})
-
-const setSession = (
-  current: Map<string, SessionState>,
+const writeBack = (
   sessionID: string,
-  state: SessionState,
-): Map<string, SessionState> => {
-  const next = new Map(current)
-  next.set(sessionID, state)
-  return next
-}
+  next: SessionState | undefined,
+): (current: Map<string, SessionState>) => Map<string, SessionState> =>
+(current: Map<string, SessionState>): Map<string, SessionState> =>
+  next === undefined ? current : setSession(current, sessionID, next)
 
-const deleteSession = (
-  current: Map<string, SessionState>,
-  sessionID: string,
-): Map<string, SessionState> => {
-  if (!current.has(sessionID)) return current
-  const next = new Map(current)
-  next.delete(sessionID)
-  return next
-}
-
-const resolveState = (
-  previous: SessionState | undefined,
-  agent: string,
-  now: number,
-): SessionState =>
-  previous === undefined
-    ? { agent, interval: interval(now, Option.none()), activeCalls: new Map() }
-    : previous.agent === agent
-    ? previous
-    : {
-      agent,
-      interval: interval(now, Option.none()),
-      activeCalls: previous.activeCalls,
-    }
-
-const activeCall = (
-  activeCalls: ActiveCalls,
-  identity: CallIdentity,
-): string | undefined => activeCalls.get(identity.messageID)?.get(identity.id)
-
-const addActiveCall = (
-  activeCalls: ActiveCalls,
-  call: CallWithTool,
-): ActiveCalls => {
-  const forMessage = new Map(activeCalls.get(call.messageID) ?? [])
-  forMessage.set(call.id, call.tool)
-  const next = new Map(activeCalls)
-  next.set(call.messageID, forMessage)
-  return next
-}
-
-const removeActiveCall = (
-  activeCalls: ActiveCalls,
-  identity: CallIdentity,
-): ActiveCalls => {
-  const existing = activeCalls.get(identity.messageID)
-  if (existing === undefined || !existing.has(identity.id)) return activeCalls
-  const forMessage = new Map(existing)
-  forMessage.delete(identity.id)
-  const next = new Map(activeCalls)
-  if (forMessage.size === 0) next.delete(identity.messageID)
-  else next.set(identity.messageID, forMessage)
-  return next
-}
-
-const updateIntervalSample = (current: Interval, sample: ContextSample): Interval => {
-  return {
-    ...current,
-    contextBaseline: Option.isNone(current.contextBaseline) && Option.isSome(sample.tokens)
-      ? sample.tokens
-      : current.contextBaseline,
-    latestContext: sample.tokens,
-  }
-}
-
-const configuredAgent = (
-  agents: Readonly<Record<string, CompiledAgentReminder>>,
-  agent: string,
-): CompiledAgentReminder | undefined =>
-  Object.prototype.hasOwnProperty.call(agents, agent) ? agents[agent] : undefined
-
-interface NativeHandlers {
-  readonly toolBefore: (event: ToolHooks["execute.before"]) => Effect.Effect<void>
-  readonly toolAfter: (event: ToolHooks["execute.after"]) => Effect.Effect<void>
-  readonly sessionContext: (event: SessionHooks["context"]) => Effect.Effect<void>
-  readonly event: (event: OpenCodeEvent) => Effect.Effect<void>
-}
+const logInjection = (
+  event: SessionHooks["context"],
+  firedAt: number,
+): Effect.Effect<void> =>
+  Effect.logInfo("Agent reminder injected").pipe(
+    Effect.annotateLogs({
+      sessionID: event.sessionID,
+      agent: event.agent,
+      providerID: event.model.providerID,
+      modelID: event.model.id,
+      firedAt,
+    }),
+  )
 
 const makeHandlers = (
   context: ReminderContext,
-  agents: Readonly<Record<string, CompiledAgentReminder>>,
+  policy: CompiledPolicy,
   states: Ref.Ref<Map<string, SessionState>>,
 ): NativeHandlers => {
   const toolBefore = (event: ToolHooks["execute.before"]): Effect.Effect<void> =>
     Effect.gen(function*(): Effect.fn.Return<void> {
       const now: number = yield* Clock.currentTimeMillis
-      yield* Ref.update(states, (current): Map<string, SessionState> => {
-        const previous = current.get(event.sessionID)
-        const existingCall = previous === undefined
-          ? undefined
-          : activeCall(previous.activeCalls, event)
-        const state: SessionState = resolveState(previous, event.agent, now)
-        const reminder: CompiledAgentReminder | undefined = configuredAgent(agents, state.agent)
-        if (event.tool === "subagent") {
-          const activeCalls = existingCall === undefined
-            ? addActiveCall(state.activeCalls, event)
-            : state.activeCalls
-          const nextState: SessionState = {
-            ...state,
-            interval: interval(now, state.interval.latestContext),
-            activeCalls,
-          }
-          return setSession(current, event.sessionID, nextState)
-        }
-        if (existingCall !== undefined || reminder === undefined) {
-          if (previous === undefined) return current
-          return setSession(current, event.sessionID, state)
-        }
-        const counts = new Map(state.interval.toolCounts)
-        counts.set(event.tool, (counts.get(event.tool) ?? 0) + 1)
-        const nextState: SessionState = {
-          ...state,
-          interval: { ...state.interval, toolCounts: counts },
-          activeCalls: addActiveCall(state.activeCalls, event),
-        }
-        return setSession(current, event.sessionID, nextState)
+      yield* Ref.modify(states, (current): readonly [void, Map<string, SessionState>] => {
+        const [, next] = step(policy, current.get(event.sessionID), {
+          type: "tool.before",
+          now,
+          tool: event.tool,
+          agent: event.agent,
+          call: { messageID: event.messageID, id: event.id },
+        })
+        return [undefined, writeBack(event.sessionID, next)(current)]
       })
     })
 
   const toolAfter = (event: ToolHooks["execute.after"]): Effect.Effect<void> =>
-    Ref.update(states, (current): Map<string, SessionState> => {
-      const previous = current.get(event.sessionID)
-      if (previous === undefined) return current
-      const outerTool = activeCall(previous.activeCalls, event)
-      if (outerTool === undefined || outerTool !== event.tool) return current
-      const activeCalls = removeActiveCall(previous.activeCalls, event)
-      return setSession(current, event.sessionID, { ...previous, activeCalls })
+    Effect.gen(function*(): Effect.fn.Return<void> {
+      const now: number = yield* Clock.currentTimeMillis
+      yield* Ref.modify(states, (current): readonly [void, Map<string, SessionState>] => {
+        const [, next] = step(policy, current.get(event.sessionID), {
+          type: "tool.after",
+          now,
+          tool: event.tool,
+          call: { messageID: event.messageID, id: event.id },
+        })
+        return [undefined, writeBack(event.sessionID, next)(current)]
+      })
     })
 
   const sessionContext = (event: SessionHooks["context"]): Effect.Effect<void> =>
     Effect.gen(function*(): Effect.fn.Return<void> {
-      const reminder: CompiledAgentReminder | undefined = configuredAgent(agents, event.agent)
       const now: number = yield* Clock.currentTimeMillis
-      if (reminder === undefined) {
-        yield* Ref.update(states, (current): Map<string, SessionState> => {
-          const previous = current.get(event.sessionID)
-          if (previous === undefined || previous.agent === event.agent) return current
-          return setSession(current, event.sessionID, resolveState(previous, event.agent, now))
-        })
-        return
-      }
-      const sample: ContextSample = yield* readContextSample(context, event, reminder.condition)
-      const shouldRemind: boolean = yield* Ref.modify(
+      const entries: ReadonlyArray<CompiledEntry> | undefined = policyFor(policy, event.agent)
+      const needsTokens: boolean = entries?.some(
+        (entry: CompiledEntry): boolean => entry.condition.needsTokens,
+      ) ?? false
+      const needsLimit: boolean = entries?.some(
+        (entry: CompiledEntry): boolean => entry.condition.needsLimit,
+      ) ?? false
+      const sample: ContextSample = yield* readContextSample(
+        context,
+        event,
+        needsTokens,
+        needsLimit,
+      )
+      const emitted: Step = yield* Ref.modify(
         states,
-        (current): readonly [boolean, Map<string, SessionState>] => {
-          const previous = current.get(event.sessionID)
-          const state: SessionState = resolveState(previous, event.agent, now)
-          const measured: Interval = updateIntervalSample(state.interval, sample)
-          const matched: boolean = reminder.condition.matches(measured, now, sample)
-          const nextInterval: Interval = matched
-            ? interval(now, measured.latestContext)
-            : measured
-          const nextState: SessionState = { ...state, interval: nextInterval }
-          return [matched, setSession(current, event.sessionID, nextState)]
+        (current): readonly [Step, Map<string, SessionState>] => {
+          const [result, next] = step(policy, current.get(event.sessionID), {
+            type: "context",
+            now,
+            agent: event.agent,
+            sample,
+          })
+          return [result, writeBack(event.sessionID, next)(current)]
         },
       )
-      if (shouldRemind) {
-        event.system.push({ type: "text", text: reminder.message })
-        yield* Effect.logInfo("Agent reminder injected").pipe(
-          Effect.annotateLogs({
-            sessionID: event.sessionID,
-            agent: event.agent,
-            providerID: event.model.providerID,
-            modelID: event.model.id,
-            firedAt: now,
-          }),
-        )
-        yield* Effect.result(
-          context.session.synthetic({
-            sessionID: event.sessionID,
-            text: reminder.message,
-            description: reminder.message,
-            metadata: { source: "agent-reminders", agent: event.agent, state: "completed" },
-            delivery: "steer",
-            resume: false,
-          }),
-        ).pipe(
-          Effect.flatMap((
-            result: Result.Result<SessionSyntheticOutput, unknown>,
-          ): Effect.Effect<void> =>
-            Result.isFailure(result)
-              ? Effect.logWarning(
-                `Agent reminders could not publish the session notice: ${
-                  errorMessage(result.failure)
-                }`,
-              )
-              : Effect.void
-          ),
-        )
+      if (emitted.type === "Emit") {
+        for (const message of emitted.messages) {
+          event.system.push({ type: "text", text: message })
+          yield* logInjection(event, now)
+        }
       }
     })
 
@@ -439,30 +225,24 @@ const makeHandlers = (
       case "session.agent.selected":
         return Effect.gen(function*(): Effect.fn.Return<void> {
           const now: number = yield* Clock.currentTimeMillis
-          yield* Ref.update(states, (current): Map<string, SessionState> => {
-            const previous = current.get(event.data.sessionID)
-            if (previous?.agent === event.data.agent) return current
-            if (
-              previous === undefined && configuredAgent(agents, event.data.agent) === undefined
-            ) return current
-            return setSession(
-              current,
-              event.data.sessionID,
-              resolveState(previous, event.data.agent, now),
-            )
+          yield* Ref.modify(states, (current): readonly [void, Map<string, SessionState>] => {
+            const [, next] = step(policy, current.get(event.data.sessionID), {
+              type: "agent.selected",
+              now,
+              agent: event.data.agent,
+            })
+            return [undefined, writeBack(event.data.sessionID, next)(current)]
           })
         })
       case "session.compaction.ended":
-        return Ref.update(states, (current): Map<string, SessionState> => {
-          const previous = current.get(event.data.sessionID)
-          if (previous === undefined) return current
-          return setSession(current, event.data.sessionID, {
-            ...previous,
-            interval: {
-              ...previous.interval,
-              contextBaseline: Option.none(),
-              latestContext: Option.none(),
-            },
+        return Effect.gen(function*(): Effect.fn.Return<void> {
+          const now: number = yield* Clock.currentTimeMillis
+          yield* Ref.modify(states, (current): readonly [void, Map<string, SessionState>] => {
+            const [, next] = step(policy, current.get(event.data.sessionID), {
+              type: "compaction.ended",
+              now,
+            })
+            return [undefined, writeBack(event.data.sessionID, next)(current)]
           })
         })
       case "session.deleted":
@@ -480,19 +260,17 @@ const makeHandlers = (
 
 const pluginEffect = (context: ReminderContext): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function*(): Effect.fn.Return<void, never, Scope.Scope> {
-    const configuration = yield* Effect.sync(
+    const configuration: Configuration = yield* Effect.sync(
       (): Configuration => decodeConfiguration(context.options),
     )
-    const agents: Readonly<Record<string, CompiledAgentReminder>> = compileAgentReminders(
-      configuration.agents,
-    )
+    const policy: CompiledPolicy = compilePolicy(configuration)
     if (Object.entries(configuration.agents).length === 0) {
       yield* Effect.logWarning(
         "Agent reminders loaded with no agents configured; no reminders will fire.",
       )
     }
     const states: Ref.Ref<Map<string, SessionState>> = yield* Ref.make(new Map())
-    const handlers: NativeHandlers = makeHandlers(context, agents, states)
+    const handlers: NativeHandlers = makeHandlers(context, policy, states)
     yield* Effect.addFinalizer((): Effect.Effect<void> => Ref.set(states, new Map()))
     yield* context.tool.hook("execute.before", handlers.toolBefore)
     yield* context.tool.hook("execute.after", handlers.toolAfter)

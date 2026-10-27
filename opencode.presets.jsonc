@@ -146,16 +146,19 @@
         "package": "./plugins/agent-reminders",
         "options": {
           "agents": {
-            "Orchestrator": {
-              "message": "Remember your prompt, you SHOULD delegate grunt work for efficiency!",
-              "condition": {
-                "type": "any",
-                "conditions": [
-                  { "type": "toolCalls", "count": 10 },
-                  { "type": "contextGrowth", "tokens": 20000 },
-                ],
+            "Orchestrator": [
+              {
+                "message": "Remember your prompt, you should delegate grunt work for efficiency",
+                "resetTools": ["subagent"],
+                "condition": {
+                  "type": "any",
+                  "conditions": [
+                    { "type": "toolCalls", "count": 8, "tools": ["shell"] },
+                    { "type": "contextGrowth", "tokens": 20000 },
+                  ],
+                },
               },
-            },
+            ],
           },
         },
       },
