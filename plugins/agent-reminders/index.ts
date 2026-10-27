@@ -1,5 +1,9 @@
 import type { OpenCodeEvent } from "@opencode/client/effect"
-import type { ModelListOutput, SessionContextOutput } from "@opencode/client/effect/api"
+import type {
+  ModelListOutput,
+  SessionContextOutput,
+  SessionSyntheticOutput,
+} from "@opencode/client/effect/api"
 import type {
   Context as PluginContext,
   Plugin as NativePlugin,
@@ -58,7 +62,7 @@ const isContextSampleBoundary = (
 
 interface ReminderContext {
   readonly options: PluginContext["options"]
-  readonly session: Pick<PluginContext["session"], "context" | "hook">
+  readonly session: Pick<PluginContext["session"], "context" | "hook" | "synthetic">
   readonly tool: Pick<PluginContext["tool"], "hook">
   readonly model: Pick<PluginContext["model"], "list">
   readonly event: Pick<PluginContext["event"], "subscribe">
@@ -147,12 +151,12 @@ const compileAgentReminders = (
     ]),
   )
 
-const readRequest = <A>(
+const readRequest = <A, E>(
   operation: string,
-  request: Effect.Effect<A, unknown>,
+  request: Effect.Effect<A, E>,
 ): Effect.Effect<Option.Option<A>> =>
   Effect.result(request).pipe(
-    Effect.flatMap((result: Result.Result<A, unknown>): Effect.Effect<Option.Option<A>> => {
+    Effect.flatMap((result: Result.Result<A, E>): Effect.Effect<Option.Option<A>> => {
       if (Result.isFailure(result)) {
         return Effect.logWarning(
           `Agent reminders could not read ${operation}: ${errorMessage(result.failure)}`,
@@ -394,7 +398,40 @@ const makeHandlers = (
           return [matched, setSession(current, event.sessionID, nextState)]
         },
       )
-      if (shouldRemind) event.system.push({ type: "text", text: reminder.message })
+      if (shouldRemind) {
+        event.system.push({ type: "text", text: reminder.message })
+        yield* Effect.logInfo("Agent reminder injected").pipe(
+          Effect.annotateLogs({
+            sessionID: event.sessionID,
+            agent: event.agent,
+            providerID: event.model.providerID,
+            modelID: event.model.id,
+            firedAt: now,
+          }),
+        )
+        yield* Effect.result(
+          context.session.synthetic({
+            sessionID: event.sessionID,
+            text: reminder.message,
+            description: reminder.message,
+            metadata: { source: "agent-reminders", agent: event.agent, state: "completed" },
+            delivery: "steer",
+            resume: false,
+          }),
+        ).pipe(
+          Effect.flatMap((
+            result: Result.Result<SessionSyntheticOutput, unknown>,
+          ): Effect.Effect<void> =>
+            Result.isFailure(result)
+              ? Effect.logWarning(
+                `Agent reminders could not publish the session notice: ${
+                  errorMessage(result.failure)
+                }`,
+              )
+              : Effect.void
+          ),
+        )
+      }
     })
 
   const eventHandler = (event: OpenCodeEvent): Effect.Effect<void> => {
@@ -449,6 +486,11 @@ const pluginEffect = (context: ReminderContext): Effect.Effect<void, never, Scop
     const agents: Readonly<Record<string, CompiledAgentReminder>> = compileAgentReminders(
       configuration.agents,
     )
+    if (Object.entries(configuration.agents).length === 0) {
+      yield* Effect.logWarning(
+        "Agent reminders loaded with no agents configured; no reminders will fire.",
+      )
+    }
     const states: Ref.Ref<Map<string, SessionState>> = yield* Ref.make(new Map())
     const handlers: NativeHandlers = makeHandlers(context, agents, states)
     yield* Effect.addFinalizer((): Effect.Effect<void> => Ref.set(states, new Map()))

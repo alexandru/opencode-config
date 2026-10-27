@@ -66,6 +66,8 @@ For example, require both ten minutes and either five matching tool calls or 20,
 - Successful compaction rebases context measurements on the first usable post-compaction sample, preserving tool counts and elapsed time.
 - Counters are in memory only. Plugin reloads and service restarts establish fresh intervals.
 - Reminders are attached to the next ordinary model request after foreground work finishes. They do not interrupt tools, add user turns, or start another model run.
+- Every delivered reminder additionally records an `Agent reminder injected` info log annotated with sessionID, agent, providerID, modelID, and firedAt, and admits a steer synthetic notice (resume disabled) that is delivered between foreground agent steps, appearing in the session transcript; the notice text becomes model input at that step.
+- Loading the plugin with no agents configured logs a warning and disables all reminders.
 
 Context measurements use reported assistant token usage, including cache usage, rather than cumulative session billing totals. They lag the next outgoing request. Missing usage or model limits cannot establish a match for conditions requiring those measurements. Percentage-point growth uses the current model's configured context limit; switching models does not itself add context tokens.
 

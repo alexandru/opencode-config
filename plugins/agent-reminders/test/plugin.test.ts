@@ -8,12 +8,31 @@ import {
   SessionMessage,
 } from "@opencode/client/effect"
 import type { OpenCodeEvent } from "@opencode/client/effect"
-import type { ModelListOutput, SessionContextOutput } from "@opencode/client/effect/api"
+import type {
+  ModelListOutput,
+  SessionContextOutput,
+  SessionSyntheticInput,
+  SessionSyntheticOutput,
+} from "@opencode/client/effect/api"
 import type { SessionHooks } from "@opencode/plugin/effect/session"
 import type { ToolFailures, ToolHooks } from "@opencode/plugin/effect/tool"
+import { SessionInbox } from "@opencode/schema/session-inbox"
 import { Tool } from "@opencode/schema/tool"
 import { expect, test } from "bun:test"
-import { Deferred, Effect, Exit, Fiber, Queue, Result, Schema, Scope, Stream } from "effect"
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Formatter,
+  Logger,
+  Queue,
+  References,
+  Result,
+  Schema,
+  Scope,
+  Stream,
+} from "effect"
 import { TestClock } from "effect/testing"
 import agentReminders from "../index.ts"
 
@@ -38,6 +57,8 @@ interface SdkResponses {
   models: ModelListOutput
   contextReads: number
   modelReads: number
+  readonly syntheticCalls: Array<SessionSyntheticInput>
+  syntheticFailure?: string
   contextRequest?: (sessionID: string) => Effect.Effect<SessionContextOutput>
 }
 
@@ -50,6 +71,21 @@ interface EventPublisher {
   readonly stream: Stream.Stream<OpenCodeEvent, unknown>
   readonly publish: (event: OpenCodeEvent) => Effect.Effect<void>
 }
+
+interface CapturedLog {
+  readonly level: Logger.Options<unknown>["logLevel"]
+  readonly message: unknown
+  readonly annotations: Readonly<Record<string, unknown>>
+}
+
+const makeCapturingLogger = (logs: Array<CapturedLog>): Logger.Logger<unknown, void> =>
+  Logger.make((options: Logger.Options<unknown>): void => {
+    logs.push({
+      level: options.logLevel,
+      message: options.message,
+      annotations: options.fiber.getRef(References.CurrentLogAnnotations),
+    })
+  })
 
 const disposeEffects = (
   registered: Array<Effect.Effect<void>>,
@@ -82,6 +118,13 @@ const makeReminderContext = (
         sdk.contextReads++
         if (sdk.contextRequest !== undefined) return yield* sdk.contextRequest(input.sessionID)
         return sdk.messages.get(input.sessionID) ?? []
+      }),
+    synthetic: (input: SessionSyntheticInput): Effect.Effect<SessionSyntheticOutput, unknown> =>
+      Effect.gen(function*(): Effect.fn.Return<SessionSyntheticOutput, unknown> {
+        sdk.syntheticCalls.push(input)
+        const failure: string | undefined = sdk.syntheticFailure
+        if (failure !== undefined) return yield* Effect.fail(failure)
+        return noticeResult
       }),
     hook: <Name extends keyof SessionHooks>(
       name: Name,
@@ -152,6 +195,15 @@ const makeReminderContext = (
   },
 })
 
+const noticeResult: SessionSyntheticOutput = Schema.decodeUnknownSync(SessionInbox.Synthetic)({
+  id: Schema.decodeUnknownSync(SessionMessage.ID)("msg_notice"),
+  sessionID: Schema.decodeUnknownSync(Session.ID)("ses_notice"),
+  time: { created: 0 },
+  type: "synthetic",
+  payload: { text: "notice delivered" },
+  delivery: "queue",
+})
+
 const emptySdk = (): SdkResponses => ({
   messages: new Map(),
   models: {
@@ -160,6 +212,7 @@ const emptySdk = (): SdkResponses => ({
   },
   contextReads: 0,
   modelReads: 0,
+  syntheticCalls: [],
 })
 
 const modelInfo = (context: number, id = "gpt-test", providerID = "openai"): Model.Info => {
@@ -385,22 +438,22 @@ const runPlugin = async <A>(
   hooks: Hooks,
   sdk: SdkResponses,
   exercise: (publisher: EventPublisher) => Effect.Effect<A>,
+  loggers?: ReadonlyArray<Logger.Logger<unknown, void>>,
 ): Promise<A> => {
+  const program = Effect.scoped(Effect.gen(function*(): Effect.fn.Return<A, never, Scope.Scope> {
+    const publisher: EventPublisher = yield* makeEventPublisher()
+    const context = makeReminderContext(
+      options,
+      hooks,
+      sdk,
+      publisher.stream,
+    )
+    yield* agentReminders.effect(context)
+    return yield* exercise(publisher)
+  }))
+  const withClock = Effect.provide(program, TestClock.layer())
   return Effect.runPromise(
-    Effect.provide(
-      Effect.scoped(Effect.gen(function*(): Effect.fn.Return<A, never, Scope.Scope> {
-        const publisher: EventPublisher = yield* makeEventPublisher()
-        const context = makeReminderContext(
-          options,
-          hooks,
-          sdk,
-          publisher.stream,
-        )
-        yield* agentReminders.effect(context)
-        return yield* exercise(publisher)
-      })),
-      TestClock.layer(),
-    ),
+    loggers === undefined ? withClock : Effect.provide(withClock, Logger.layer(loggers)),
   )
 }
 
@@ -441,6 +494,179 @@ test("a matching outer shell call appends its configured system reminder", async
   expect(hooks.sessionEffects).toEqual([])
   expect(hooks.toolEffects).toEqual([])
   expect(hooks.toolAfterEffects).toEqual([])
+})
+
+test("a fired reminder emits one annotated info log and no trigger log below or after reset", async (): Promise<void> => {
+  const session = "ses_reminder_log"
+  const agent = "orchestrator"
+  const message = "Delegate before continuing."
+  const initial = contextEvent(session, agent)
+  const afterTrigger = contextEvent(session, agent)
+  const afterReset = contextEvent(session, agent)
+  const shell = beforeEvent("shell", "call_reminder_log", session, "msg_reminder_log", agent)
+  const hooks = makeHooks({ contexts: [initial, afterTrigger, afterReset], before: [shell] })
+  const sdk: SdkResponses = emptySdk()
+  const logs: Array<CapturedLog> = []
+  const logger: Logger.Logger<unknown, void> = makeCapturingLogger(logs)
+
+  await runPlugin(
+    {
+      agents: {
+        [agent]: {
+          message,
+          condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+        },
+      },
+    },
+    hooks,
+    sdk,
+    (): Effect.Effect<void> =>
+      Effect.gen(function*(): Effect.fn.Return<void> {
+        yield* requiredEffect(hooks.sessionEffects, 0)
+        expect(reminderTexts(initial)).toEqual([])
+        expect(logs).toEqual([])
+
+        yield* requiredEffect(hooks.toolEffects, 0)
+        yield* TestClock.adjust("5 seconds")
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(reminderTexts(afterTrigger)).toEqual([message])
+        expect(logs).toHaveLength(1)
+        expect(logs).toMatchObject([
+          {
+            level: "Info",
+            message: ["Agent reminder injected"],
+            annotations: {
+              sessionID: session,
+              agent,
+              providerID: "openai",
+              modelID: "gpt-test",
+              firedAt: 5_000,
+            },
+          },
+        ])
+        expect(sdk.syntheticCalls).toEqual([
+          {
+            sessionID: sessionIDFrom(session),
+            text: message,
+            description: message,
+            metadata: { source: "agent-reminders", agent, state: "completed" },
+            delivery: "steer",
+            resume: false,
+          },
+        ])
+        expect(Object.hasOwn(sdk.syntheticCalls.at(0) ?? {}, "id")).toBe(false)
+        const rendered: ReadonlyArray<string> = logs.map(
+          (log: CapturedLog): string =>
+            `${Formatter.format(log.message)} ${Formatter.format(log.annotations)}`,
+        )
+        expect(rendered.some((entry: string): boolean => entry.includes(message))).toBe(false)
+
+        yield* requiredEffect(hooks.sessionEffects, 2)
+        expect(reminderTexts(afterReset)).toEqual([])
+        expect(logs).toHaveLength(1)
+        expect(sdk.syntheticCalls).toHaveLength(1)
+      }),
+    [logger],
+  )
+})
+
+test("a failing session notice is reported without suppressing the reminder", async (): Promise<void> => {
+  const session = "ses_reminder_notice_failure"
+  const agent = "orchestrator"
+  const message = "Delegate before continuing."
+  const initial = contextEvent(session, agent)
+  const outgoing = contextEvent(session, agent)
+  const shell = beforeEvent(
+    "shell",
+    "call_reminder_notice_failure",
+    session,
+    "msg_reminder_notice_failure",
+    agent,
+  )
+  const hooks = makeHooks({ contexts: [initial, outgoing], before: [shell] })
+  const sdk: SdkResponses = {
+    ...emptySdk(),
+    syntheticFailure: "notice down",
+  }
+  const logs: Array<CapturedLog> = []
+
+  await runPlugin(
+    {
+      agents: {
+        [agent]: {
+          message,
+          condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+        },
+      },
+    },
+    hooks,
+    sdk,
+    (): Effect.Effect<void> =>
+      Effect.gen(function*(): Effect.fn.Return<void> {
+        yield* requiredEffect(hooks.sessionEffects, 0)
+        yield* requiredEffect(hooks.toolEffects, 0)
+        yield* TestClock.adjust("5 seconds")
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(reminderTexts(outgoing)).toEqual([message])
+        expect(logs).toMatchObject([
+          {
+            level: "Info",
+            message: ["Agent reminder injected"],
+            annotations: { sessionID: session, agent },
+          },
+          {
+            level: "Warn",
+            message: [
+              "Agent reminders could not publish the session notice: notice down",
+            ],
+          },
+        ])
+        expect(logs.filter((log: CapturedLog): boolean => log.level === "Warn")).toHaveLength(1)
+        expect(sdk.syntheticCalls).toEqual([
+          {
+            sessionID: sessionIDFrom(session),
+            text: message,
+            description: message,
+            metadata: { source: "agent-reminders", agent, state: "completed" },
+            delivery: "steer",
+            resume: false,
+          },
+        ])
+      }),
+    [makeCapturingLogger(logs)],
+  )
+})
+
+test("loading without configured agents warns once and disables all reminders", async (): Promise<void> => {
+  const contexts = [contextEvent("ses_no_agents")]
+  const hooks = makeHooks({ contexts })
+  const sdk: SdkResponses = emptySdk()
+  const logs: Array<CapturedLog> = []
+
+  await runPlugin(
+    { agents: {} },
+    hooks,
+    sdk,
+    (): Effect.Effect<void> =>
+      Effect.gen(function*(): Effect.fn.Return<void> {
+        expect(logs).toMatchObject([
+          {
+            level: "Warn",
+            message: [
+              "Agent reminders loaded with no agents configured; no reminders will fire.",
+            ],
+          },
+        ])
+        expect(logs.filter((log: CapturedLog): boolean => log.level === "Info")).toHaveLength(0)
+
+        yield* requiredEffect(hooks.sessionEffects, 0)
+        yield* TestClock.adjust("1 hour")
+        expect(contexts[0]?.system).toEqual([])
+        expect(logs).toHaveLength(1)
+        expect(sdk.syntheticCalls).toEqual([])
+      }),
+    [makeCapturingLogger(logs)],
+  )
 })
 
 test("default tools count outer calls once and count failed calls", async (): Promise<void> => {

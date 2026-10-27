@@ -7,6 +7,7 @@
   // ----------------------------------------------------------------------------------
   // Pure OpenAI / ChatGPT
   "p-openai": {
+    "extends": ["agent-reminders"],
     "model": "openai/gpt-6.1-sol#high",
     "agents": {
       "Orchestrator": {
@@ -146,7 +147,7 @@
         "options": {
           "agents": {
             "Orchestrator": {
-              "message": "Remember your prompt, consider delegating for efficiency.",
+              "message": "Acknowledge this reminder in your next message, then delegate the next work item unless you explicitly state why not.",
               "condition": {
                 "type": "any",
                 "conditions": [
