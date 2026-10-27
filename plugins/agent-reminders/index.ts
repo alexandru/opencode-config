@@ -1,5 +1,9 @@
 import type { OpenCodeEvent } from "@opencode/client/effect"
-import type { ModelListOutput, SessionContextOutput } from "@opencode/client/effect/api"
+import type {
+  ModelListOutput,
+  SessionContextOutput,
+  SessionSyntheticOutput,
+} from "@opencode/client/effect/api"
 import type {
   Context as PluginContext,
   Plugin as NativePlugin,
@@ -47,7 +51,7 @@ const isContextSampleBoundary = (
 
 interface ReminderContext {
   readonly options: PluginContext["options"]
-  readonly session: Pick<PluginContext["session"], "context" | "hook">
+  readonly session: Pick<PluginContext["session"], "context" | "hook" | "synthetic">
   readonly tool: Pick<PluginContext["tool"], "hook">
   readonly model: Pick<PluginContext["model"], "list">
   readonly event: Pick<PluginContext["event"], "subscribe">
@@ -144,6 +148,31 @@ const logInjection = (
     }),
   )
 
+const publishNotice = (
+  context: ReminderContext,
+  event: SessionHooks["context"],
+  message: string,
+  firedAt: number,
+): Effect.Effect<void> =>
+  Effect.gen(function*(): Effect.fn.Return<void> {
+    const result: Result.Result<SessionSyntheticOutput, unknown> = yield* Effect.result(
+      context.session.synthetic({
+        sessionID: event.sessionID,
+        text: message,
+        description: message,
+        metadata: { source: "agent-reminders", agent: event.agent },
+        delivery: "steer",
+        resume: false,
+      }),
+    )
+    if (Result.isFailure(result)) {
+      return yield* Effect.logWarning(
+        `Agent reminders could not publish the session notice: ${errorMessage(result.failure)}`,
+      )
+    }
+    yield* logInjection(event, firedAt)
+  })
+
 const makeHandlers = (
   context: ReminderContext,
   policy: CompiledPolicy,
@@ -212,8 +241,7 @@ const makeHandlers = (
       })
       if (emitted.type === "Emit") {
         for (const message of emitted.messages) {
-          event.system.push({ type: "text", text: message })
-          yield* logInjection(event, now)
+          yield* publishNotice(context, event, message, now)
         }
       }
     })

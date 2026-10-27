@@ -8,9 +8,15 @@ import {
   SessionMessage,
 } from "@opencode/client/effect"
 import type { OpenCodeEvent } from "@opencode/client/effect"
-import type { ModelListOutput, SessionContextOutput } from "@opencode/client/effect/api"
+import type {
+  ModelListOutput,
+  SessionContextOutput,
+  SessionSyntheticInput,
+  SessionSyntheticOutput,
+} from "@opencode/client/effect/api"
 import type { SessionHooks } from "@opencode/plugin/effect/session"
 import type { ToolFailures, ToolHooks } from "@opencode/plugin/effect/tool"
+import { SessionInbox } from "@opencode/schema/session-inbox"
 import { Tool } from "@opencode/schema/tool"
 import { expect, test } from "bun:test"
 import {
@@ -60,6 +66,8 @@ interface SdkResponses {
   models: ModelListOutput
   contextReads: number
   modelReads: number
+  readonly syntheticCalls: Array<SessionSyntheticInput>
+  syntheticFailure?: string
   contextRequest?: (sessionID: string) => Effect.Effect<SessionContextOutput>
 }
 
@@ -119,6 +127,13 @@ const makeReminderContext = (
         sdk.contextReads++
         if (sdk.contextRequest !== undefined) return yield* sdk.contextRequest(input.sessionID)
         return sdk.messages.get(input.sessionID) ?? []
+      }),
+    synthetic: (input: SessionSyntheticInput): Effect.Effect<SessionSyntheticOutput, unknown> =>
+      Effect.gen(function*(): Effect.fn.Return<SessionSyntheticOutput, unknown> {
+        sdk.syntheticCalls.push(input)
+        const failure: string | undefined = sdk.syntheticFailure
+        if (failure !== undefined) return yield* Effect.fail(failure)
+        return noticeResult
       }),
     hook: <Name extends keyof SessionHooks>(
       name: Name,
@@ -189,6 +204,15 @@ const makeReminderContext = (
   },
 })
 
+const noticeResult: SessionSyntheticOutput = Schema.decodeUnknownSync(SessionInbox.Synthetic)({
+  id: Schema.decodeUnknownSync(SessionMessage.ID)("msg_notice"),
+  sessionID: Schema.decodeUnknownSync(Session.ID)("ses_notice"),
+  time: { created: 0 },
+  type: "synthetic",
+  payload: { text: "notice delivered" },
+  delivery: "queue",
+})
+
 const emptySdk = (): SdkResponses => ({
   messages: new Map(),
   models: {
@@ -197,6 +221,7 @@ const emptySdk = (): SdkResponses => ({
   },
   contextReads: 0,
   modelReads: 0,
+  syntheticCalls: [],
 })
 
 const modelInfo = (context: number, id = "gpt-test", providerID = "openai"): Model.Info => {
@@ -222,15 +247,36 @@ const contextEvent = (
   tools: {},
 })
 
-const reminderTexts = (
-  event: SessionHooks["context"] | undefined,
-): Array<string> | undefined =>
-  event?.system.map(
-    (part: SessionHooks["context"]["system"][number]): string => part.text,
-  )
-
 const sessionIDFrom = (session: string): Schema.Schema.Type<typeof Session.ID> =>
   Schema.decodeUnknownSync(Session.ID)(session)
+
+const notice = (
+  session: string,
+  text: string,
+  agent = "build",
+): SessionSyntheticInput => ({
+  sessionID: sessionIDFrom(session),
+  text,
+  description: text,
+  metadata: { source: "agent-reminders", agent },
+  delivery: "steer",
+  resume: false,
+})
+
+interface NoticeJournal {
+  readonly take: () => ReadonlyArray<SessionSyntheticInput>
+}
+
+const noticeJournal = (sdk: SdkResponses): NoticeJournal => {
+  let consumed = 0
+  return {
+    take: (): ReadonlyArray<SessionSyntheticInput> => {
+      const pending: ReadonlyArray<SessionSyntheticInput> = sdk.syntheticCalls.slice(consumed)
+      consumed = sdk.syntheticCalls.length
+      return pending
+    },
+  }
+}
 
 type DurableEventEnvelope = Pick<
   Extract<OpenCodeEvent, { readonly type: "session.agent.selected" }>,
@@ -486,11 +532,12 @@ const machineCompaction = (now: number): SessionEvent => ({ type: "compaction.en
 const sampleValue = (option: Option.Option<Positive> | undefined): number | undefined =>
   option === undefined ? undefined : Option.isSome(option) ? option.value : undefined
 
-test("a matching outer shell call appends its configured system reminder", async (): Promise<void> => {
+test("a matching outer shell call admits its configured session notice", async (): Promise<void> => {
   const outgoing = contextEvent("ses_test")
   const before = beforeEvent("shell", "call_shell")
   const hooks = makeHooks({ contexts: [outgoing, outgoing], before: [before] })
   const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   await runPlugin(
     {
       agents: {
@@ -509,11 +556,10 @@ test("a matching outer shell call appends its configured system reminder", async
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(
-          reminderTexts(outgoing),
-        ).toEqual([
-          "Reconsider delegation before continuing.",
+        expect(notices.take()).toEqual([
+          notice("ses_test", "Reconsider delegation before continuing."),
         ])
+        expect(outgoing.system).toEqual([])
         expect(outgoing.messages).toEqual([])
         expect(hooks.sessionRegistrations).toEqual(["context"])
         expect(hooks.toolRegistrations).toEqual(["execute.before", "execute.after"])
@@ -537,6 +583,7 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
   const shell = beforeEvent("shell", "call_reminder_log", session, "msg_reminder_log", agent)
   const hooks = makeHooks({ contexts: [initial, afterTrigger, afterReset], before: [shell] })
   const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const logs: Array<CapturedLog> = []
   const logger: Logger.Logger<unknown, void> = makeCapturingLogger(logs)
 
@@ -553,13 +600,14 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
-        expect(reminderTexts(initial)).toEqual([])
+        expect(notices.take()).toEqual([])
         expect(logs).toEqual([])
 
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* TestClock.adjust("5 seconds")
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(reminderTexts(afterTrigger)).toEqual([message])
+        expect(notices.take()).toEqual([notice(session, message, agent)])
+        expect(Object.hasOwn(sdk.syntheticCalls.at(0) ?? {}, "id")).toBe(false)
         expect(logs).toHaveLength(1)
         expect(logs).toMatchObject([
           {
@@ -581,10 +629,79 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
         expect(rendered.some((entry: string): boolean => entry.includes(message))).toBe(false)
 
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(reminderTexts(afterReset)).toEqual([])
+        expect(notices.take()).toEqual([])
         expect(logs).toHaveLength(1)
       }),
     [logger],
+  )
+})
+
+test("a failing session notice is reported without suppressing other reminders or reviving reset state", async (): Promise<void> => {
+  const session = "ses_reminder_notice_failure"
+  const agent = "orchestrator"
+  const initial = contextEvent(session, agent)
+  const outgoing = contextEvent(session, agent)
+  const afterReset = contextEvent(session, agent)
+  const shell = beforeEvent(
+    "shell",
+    "call_reminder_notice_failure",
+    session,
+    "msg_reminder_notice_failure",
+    agent,
+  )
+  const hooks = makeHooks({ contexts: [initial, outgoing, afterReset], before: [shell] })
+  const sdk: SdkResponses = { ...emptySdk(), syntheticFailure: "notice down" }
+  const notices: NoticeJournal = noticeJournal(sdk)
+  const logs: Array<CapturedLog> = []
+
+  await runPlugin(
+    {
+      agents: {
+        [agent]: [
+          {
+            message: "First notice.",
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+          {
+            message: "Second notice.",
+            condition: { type: "toolCalls", count: 1, tools: ["shell"] },
+          },
+        ],
+      },
+    },
+    hooks,
+    sdk,
+    (): Effect.Effect<void> =>
+      Effect.gen(function*(): Effect.fn.Return<void> {
+        yield* requiredEffect(hooks.sessionEffects, 0)
+        yield* requiredEffect(hooks.toolEffects, 0)
+        yield* TestClock.adjust("5 seconds")
+        yield* requiredEffect(hooks.sessionEffects, 1)
+        expect(notices.take()).toEqual([
+          notice(session, "First notice.", agent),
+          notice(session, "Second notice.", agent),
+        ])
+        expect(logs).toMatchObject([
+          {
+            level: "Warn",
+            message: [
+              "Agent reminders could not publish the session notice: notice down",
+            ],
+          },
+          {
+            level: "Warn",
+            message: [
+              "Agent reminders could not publish the session notice: notice down",
+            ],
+          },
+        ])
+        expect(logs.filter((log: CapturedLog): boolean => log.level === "Warn")).toHaveLength(2)
+        expect(logs.filter((log: CapturedLog): boolean => log.level === "Info")).toHaveLength(0)
+
+        yield* requiredEffect(hooks.sessionEffects, 2)
+        expect(notices.take()).toEqual([])
+      }),
+    [makeCapturingLogger(logs)],
   )
 })
 
@@ -612,7 +729,7 @@ test("loading without configured agents warns once and disables all reminders", 
 
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* TestClock.adjust("1 hour")
-        expect(contexts[0]?.system).toEqual([])
+        expect(sdk.syntheticCalls).toEqual([])
         expect(logs).toHaveLength(1)
       }),
     [makeCapturingLogger(logs)],
@@ -629,6 +746,7 @@ test("default tools ignore execute wrapper calls", async (): Promise<void> => {
     before: [execute],
     after: [completedAfterEvent(execute)],
   })
+  const sdk: SdkResponses = emptySdk()
 
   await runPlugin(
     {
@@ -639,14 +757,14 @@ test("default tools ignore execute wrapper calls", async (): Promise<void> => {
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(outgoing.system).toEqual([])
+        expect(sdk.syntheticCalls).toEqual([])
       }),
   )
 })
@@ -671,6 +789,8 @@ test("default tools count direct shell success and failure", async (): Promise<v
       failedAfterEvent(failedShell),
     ],
   })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -681,24 +801,24 @@ test("default tools count direct shell success and failure", async (): Promise<v
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* requiredEffect(hooks.toolEffects, 1)
         yield* requiredEffect(hooks.toolAfterEffects, 1)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(contexts[2]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* requiredEffect(hooks.toolEffects, 2)
         yield* requiredEffect(hooks.toolAfterEffects, 2)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(reminderTexts(contexts[3])).toEqual(["Shell reminder."])
+        expect(notices.take()).toEqual([notice(session, "Shell reminder.")])
       }),
   )
 })
@@ -726,6 +846,8 @@ test("concurrent execute calls keep nested registered tool counts separate", asy
       failedAfterEvent(outerA),
     ],
   })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -739,16 +861,14 @@ test("concurrent execute calls keep nested registered tool counts separate", asy
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         for (let index = 0; index < 4; index++) yield* requiredEffect(hooks.toolEffects, index)
         for (let index = 0; index < 4; index++) yield* requiredEffect(hooks.toolAfterEffects, index)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(
-          reminderTexts(outgoing),
-        ).toEqual(["Concurrent calls reminder."])
+        expect(notices.take()).toEqual([notice(session, "Concurrent calls reminder.")])
       }),
   )
 })
@@ -775,6 +895,8 @@ test("sessions keep independent tool counters and reminder reset cycles", async 
     beforeEvent("shell", "call_a2", sessionA, "msg_a"),
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -788,7 +910,7 @@ test("sessions keep independent tool counters and reminder reset cycles", async 
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
@@ -796,16 +918,17 @@ test("sessions keep independent tool counters and reminder reset cycles", async 
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(contexts[2]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         for (let index = 1; index < calls.length; index++) {
           yield* requiredEffect(hooks.toolEffects, index)
           yield* requiredEffect(hooks.toolAfterEffects, index)
           yield* requiredEffect(hooks.sessionEffects, index + 2)
-          const expected = index === 2 || index === 4 || index === 5
-            ? ["Session-local reminder."]
-            : []
-          expect(reminderTexts(contexts[index + 2]) ?? []).toEqual(expected)
+          const delivered = index === 2 || index === 4 || index === 5
+          const deliverySession = index === 5 ? sessionA : sessionB
+          expect(notices.take()).toEqual(
+            delivered ? [notice(deliverySession, "Session-local reminder.")] : [],
+          )
         }
       }),
   )
@@ -819,6 +942,8 @@ test("duplicate names in a custom tool list do not double-count one invocation",
     beforeEvent("shell", "call_duplicate_two", session, "msg_duplicate"),
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -832,23 +957,19 @@ test("duplicate names in a custom tool list do not double-count one invocation",
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* requiredEffect(hooks.toolEffects, 1)
         yield* requiredEffect(hooks.toolAfterEffects, 1)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual([
-          "Duplicate-list reminder.",
-        ])
+        expect(notices.take()).toEqual([notice(session, "Duplicate-list reminder.")])
       }),
   )
 })
@@ -860,6 +981,7 @@ test("context growth uses reported occupied tokens, excludes the initial sample,
   )
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = []
 
@@ -881,7 +1003,7 @@ test("context growth uses reported occupied tokens, excludes the initial sample,
         history = [...history, assistantUsage("msg_usage_initial", { input: 10_000 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 0)
-        expect(contexts[0]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [
           ...history,
@@ -894,7 +1016,7 @@ test("context growth uses reported occupied tokens, excludes the initial sample,
         ]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [
           ...history,
@@ -908,9 +1030,7 @@ test("context growth uses reported occupied tokens, excludes the initial sample,
         ]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual(["Context reminder."])
+        expect(notices.take()).toEqual([notice(session, "Context reminder.")])
 
         history = [
           ...history,
@@ -918,9 +1038,7 @@ test("context growth uses reported occupied tokens, excludes the initial sample,
         ]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(
-          reminderTexts(contexts[3]),
-        ).toEqual(["Context reminder."])
+        expect(notices.take()).toEqual([notice(session, "Context reminder.")])
       }),
   )
 })
@@ -932,6 +1050,7 @@ test("zero and missing usage leave the context baseline unknown until a positive
   )
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = []
 
@@ -951,24 +1070,22 @@ test("zero and missing usage leave the context baseline unknown until a positive
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
-        expect(contexts[0]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_zero_usage", { input: 0 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_first_positive", { input: 10 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(contexts[2]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_growth_threshold", { input: 20 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(
-          reminderTexts(contexts[3]),
-        ).toEqual(["Usage reminder."])
+        expect(notices.take()).toEqual([notice(session, "Usage reminder.")])
       }),
   )
 })
@@ -978,6 +1095,7 @@ test("a latest zero-usage assistant invalidates an older positive context sample
   const contexts = [0, 1, 2].map((_index: number): SessionHooks["context"] => contextEvent(session))
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [
     assistantUsage("msg_old_positive", { input: 100 }),
@@ -1001,21 +1119,17 @@ test("a latest zero-usage assistant invalidates an older positive context sample
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
-        expect(contexts[0]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_first_usable", { input: 10_000 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_growth_threshold", { input: 10_050 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual([
-          "Latest usage reminder.",
-        ])
+        expect(notices.take()).toEqual([notice(session, "Latest usage reminder.")])
       }),
   )
 })
@@ -1025,6 +1139,7 @@ test("a tokenless assistant is skipped so the earlier usable sample remains the 
   const contexts = [contextEvent(session), contextEvent(session)]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [
     assistantUsage("msg_token_usage", { input: 100 }),
@@ -1048,12 +1163,12 @@ test("a tokenless assistant is skipped so the earlier usable sample remains the 
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
-        expect(contexts[0]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_growth_threshold", { input: 150 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(reminderTexts(contexts[1])).toEqual(["Missing-usage reminder."])
+        expect(notices.take()).toEqual([notice(session, "Missing-usage reminder.")])
       }),
   )
 })
@@ -1085,6 +1200,7 @@ test("recursive all/any conditions sum each leaf's selected tools and reset afte
     after: before.map(failedAfterEvent),
   })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1119,8 +1235,10 @@ test("recursive all/any conditions sum each leaf's selected tools and reset afte
           yield* requiredEffect(hooks.toolAfterEffects, index)
           if (index === 4) yield* TestClock.adjust("1 second")
           yield* requiredEffect(hooks.sessionEffects, index + 1)
-          const expected = index === 4 || index === 9 ? ["Composite reminder."] : []
-          expect(reminderTexts(contexts[index + 1]) ?? []).toEqual(expected)
+          const delivered = index === 4 || index === 9
+          expect(notices.take()).toEqual(
+            delivered ? [notice(session, "Composite reminder.")] : [],
+          )
         }
         expect(sdk.contextReads).toBe(0)
         expect(sdk.modelReads).toBe(0)
@@ -1141,6 +1259,7 @@ test("context utilization uses the current model limit and percentage-point grow
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = []
   sdk.models = {
@@ -1170,26 +1289,22 @@ test("context utilization uses the current model limit and percentage-point grow
         history = [...history, assistantUsage("msg_usage_below", { input: 149 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_usage_at", { input: 150 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual(["Utilization reminder."])
+        expect(notices.take()).toEqual([notice(session, "Utilization reminder.")])
 
         history = [...history, assistantUsage("msg_usage_model_switch", { input: 150 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(contexts[3]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_usage_above", { input: 251 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 4)
-        expect(
-          reminderTexts(contexts[4]),
-        ).toEqual(["Utilization reminder."])
+        expect(notices.take()).toEqual([notice(session, "Utilization reminder.")])
       }),
   )
 })
@@ -1204,6 +1319,7 @@ test("missing and invalid model limits cannot satisfy utilization conditions", a
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [assistantUsage("msg_limit_initial", { input: 100 })]
   sdk.messages.set(sessionID, history)
@@ -1228,17 +1344,15 @@ test("missing and invalid model limits cannot satisfy utilization conditions", a
         history = [...history, assistantUsage("msg_limit_growth", { input: 200 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         sdk.models = { ...sdk.models, data: [modelInfo(0)] }
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(contexts[2]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         sdk.models = { ...sdk.models, data: [modelInfo(1_000)] }
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(
-          reminderTexts(contexts[3]),
-        ).toEqual(["Model-limit reminder."])
+        expect(notices.take()).toEqual([notice(session, "Model-limit reminder.")])
       }),
   )
 })
@@ -1259,6 +1373,7 @@ test("configured agents receive their own messages and other agents receive none
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1286,18 +1401,16 @@ test("configured agents receive their own messages and other agents receive none
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual(["Build-specific message."])
+        expect(notices.take()).toEqual([notice(buildSession, "Build-specific message.", "build")])
 
         yield* requiredEffect(hooks.toolEffects, 1)
         yield* requiredEffect(hooks.toolAfterEffects, 1)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(
-          reminderTexts(contexts[3]),
-        ).toEqual(["Review-specific message."])
+        expect(notices.take()).toEqual([
+          notice(reviewSession, "Review-specific message.", "review"),
+        ])
         yield* requiredEffect(hooks.sessionEffects, 4)
-        expect(contexts[4]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
         expect(sdk.contextReads).toBe(0)
         expect(sdk.modelReads).toBe(0)
       }),
@@ -1382,6 +1495,8 @@ test("elapsed-time reminders wait for an ordinary continuation and use inclusive
     contextEvent("ses_elapsed"),
   ]
   const hooks = makeHooks({ contexts })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1392,28 +1507,22 @@ test("elapsed-time reminders wait for an ordinary continuation and use inclusive
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* TestClock.adjust("59 seconds")
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* TestClock.adjust("1 second")
-        expect(contexts[2]?.system).toEqual([])
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual(["Time reminder."])
+        expect(notices.take()).toEqual([notice("ses_elapsed", "Time reminder.")])
 
         yield* TestClock.adjust("61 seconds")
-        expect(contexts[3]?.system).toEqual([])
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(
-          reminderTexts(contexts[3]),
-        ).toEqual(["Time reminder."])
+        expect(notices.take()).toEqual([notice("ses_elapsed", "Time reminder.")])
       }),
   )
 })
@@ -1424,20 +1533,17 @@ test("prototype property names are not treated as configured agents", async (): 
     contextEvent("ses_to_string", "toString"),
   ]
   const hooks = makeHooks({ contexts })
+  const sdk: SdkResponses = emptySdk()
 
   await runPlugin(
     { agents: {} },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(
-          contexts.map((event: SessionHooks["context"]): SessionHooks["context"]["system"] =>
-            event.system
-          ),
-        ).toEqual([[], []])
+        expect(sdk.syntheticCalls).toEqual([])
       }),
   )
 })
@@ -1478,6 +1584,8 @@ test("explicitly configured prototype-like agent names receive reminders while a
     ),
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1497,7 +1605,7 @@ test("explicitly configured prototype-like agent names receive reminders while a
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
@@ -1507,17 +1615,21 @@ test("explicitly configured prototype-like agent names receive reminders while a
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(reminderTexts(contexts[3])).toEqual(["Constructor-named reminder."])
+        expect(notices.take()).toEqual([
+          notice(constructorSession, "Constructor-named reminder.", "constructor"),
+        ])
 
         yield* requiredEffect(hooks.toolEffects, 1)
         yield* requiredEffect(hooks.toolAfterEffects, 1)
         yield* requiredEffect(hooks.sessionEffects, 4)
-        expect(reminderTexts(contexts[4])).toEqual(["ToString-named reminder."])
+        expect(notices.take()).toEqual([
+          notice(toStringSession, "ToString-named reminder.", "toString"),
+        ])
 
         yield* requiredEffect(hooks.toolEffects, 2)
         yield* requiredEffect(hooks.toolAfterEffects, 2)
         yield* requiredEffect(hooks.sessionEffects, 5)
-        expect(contexts[5]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
       }),
   )
 })
@@ -1533,6 +1645,8 @@ test("agent-selected events reset at switch time while redundant selections leav
     contextEvent(session, "review"),
   ]
   const hooks = makeHooks({ contexts })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1546,7 +1660,7 @@ test("agent-selected events reset at switch time while redundant selections leav
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (events: EventPublisher): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
@@ -1554,31 +1668,24 @@ test("agent-selected events reset at switch time while redundant selections leav
         yield* events.publish(agentSelectedEvent(session, "build", "build"))
         yield* TestClock.adjust("30 seconds")
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(
-          reminderTexts(contexts[1]),
-        ).toEqual(["Build reminder."])
+        expect(notices.take()).toEqual([notice(session, "Build reminder.")])
 
         yield* events.publish(agentSelectedEvent(session, "review", "build"))
         yield* TestClock.adjust("59 seconds")
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(contexts[2]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
         yield* TestClock.adjust("1 second")
-        expect(contexts[3]?.system).toEqual([])
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(
-          reminderTexts(contexts[3]),
-        ).toEqual(["Review reminder."])
+        expect(notices.take()).toEqual([notice(session, "Review reminder.", "review")])
 
         yield* events.publish(agentSelectedEvent(session, "idle", "review"))
         yield* events.publish(agentSelectedEvent(session, "review", "idle"))
         yield* TestClock.adjust("59 seconds")
         yield* requiredEffect(hooks.sessionEffects, 4)
-        expect(contexts[4]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
         yield* TestClock.adjust("1 second")
         yield* requiredEffect(hooks.sessionEffects, 5)
-        expect(
-          reminderTexts(contexts[5]),
-        ).toEqual(["Review reminder."])
+        expect(notices.take()).toEqual([notice(session, "Review reminder.", "review")])
       }),
   )
 })
@@ -1587,6 +1694,8 @@ test("the first configured agent-selected event starts the elapsed interval imme
   const session = "ses_first_agent_event"
   const outgoing = contextEvent(session, "build")
   const hooks = makeHooks({ contexts: [outgoing] })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1600,15 +1709,13 @@ test("the first configured agent-selected event starts the elapsed interval imme
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (events: EventPublisher): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* events.publish(agentSelectedEvent(session, "build"))
         yield* TestClock.adjust("60 seconds")
         yield* requiredEffect(hooks.sessionEffects, 0)
-        expect(
-          reminderTexts(outgoing),
-        ).toEqual(["First-event reminder."])
+        expect(notices.take()).toEqual([notice(session, "First-event reminder.")])
       }),
   )
 })
@@ -1622,6 +1729,7 @@ test("an agent switch establishes the new context baseline on its first usable s
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [assistantUsage("msg_before_agent_switch", { input: 100 })]
   sdk.messages.set(sessionID, history)
@@ -1652,14 +1760,12 @@ test("an agent switch establishes the new context baseline on its first usable s
         history = [...history, assistantUsage("msg_after_agent_switch", { input: 150 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_review_growth", { input: 200 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual(["Review context reminder."])
+        expect(notices.take()).toEqual([notice(session, "Review context reminder.", "review")])
       }),
   )
 })
@@ -1674,6 +1780,7 @@ test("an unconfigured role's accumulated context does not count when switching b
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [assistantUsage("msg_before_idle", { input: 100 })]
   sdk.messages.set(sessionID, history)
@@ -1708,14 +1815,12 @@ test("an unconfigured role's accumulated context does not count when switching b
         yield* events.publish(agentSelectedEvent(session, "review", "idle"))
 
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(contexts[2]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_after_switch_back", { input: 550 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(
-          reminderTexts(contexts[3]),
-        ).toEqual(["Review context reminder."])
+        expect(notices.take()).toEqual([notice(session, "Review context reminder.", "review")])
       }),
   )
 })
@@ -1729,6 +1834,7 @@ test("an agent change observed at the context hook starts with a fresh baseline"
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [
     assistantUsage("msg_before_context_fallback", { input: 100 }),
@@ -1760,14 +1866,12 @@ test("an agent change observed at the context hook starts with a fresh baseline"
         history = [...history, assistantUsage("msg_first_context_fallback", { input: 150 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_second_context_fallback", { input: 200 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual(["Review reminder."])
+        expect(notices.take()).toEqual([notice(session, "Review reminder.", "review")])
       }),
   )
 })
@@ -1788,6 +1892,7 @@ test("an agent change observed at a tool hook starts with a fresh baseline", asy
   )
   const hooks = makeHooks({ contexts, before: [switchTool], after: [failedAfterEvent(switchTool)] })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [assistantUsage("msg_before_tool_fallback", { input: 100 })]
   sdk.messages.set(sessionID, history)
@@ -1819,14 +1924,12 @@ test("an agent change observed at a tool hook starts with a fresh baseline", asy
         history = [...history, assistantUsage("msg_first_tool_fallback", { input: 150 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_second_tool_fallback", { input: 200 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual(["Review reminder."])
+        expect(notices.take()).toEqual([notice(session, "Review reminder.", "review")])
       }),
   )
 })
@@ -1846,6 +1949,7 @@ test("successful compaction rebases context per entry while preserving per-entry
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [assistantUsage("msg_pre_compaction", { input: 1_000 })]
   sdk.messages.set(sessionID, history)
@@ -1884,7 +1988,7 @@ test("successful compaction rebases context per entry while preserving per-entry
         yield* TestClock.adjust("20 seconds")
 
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* events.publish(compactionEndedEvent(session))
         history = [
@@ -1893,7 +1997,7 @@ test("successful compaction rebases context per entry while preserving per-entry
         ]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(contexts[2]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* requiredEffect(hooks.toolEffects, 2)
         yield* requiredEffect(hooks.toolAfterEffects, 2)
@@ -1901,9 +2005,9 @@ test("successful compaction rebases context per entry while preserving per-entry
         history = [...history, assistantUsage("msg_post_compaction_growth", { input: 200 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(reminderTexts(contexts[3])).toEqual([
-          "Post-compaction reminder.",
-          "Counted reminder.",
+        expect(notices.take()).toEqual([
+          notice(session, "Post-compaction reminder."),
+          notice(session, "Counted reminder."),
         ])
       }),
   )
@@ -1923,6 +2027,8 @@ test("session deletion clears interval state and scoped hook registrations are d
     beforeEvent("shell", "call_after_delete_2", session, "msg_deleted"),
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const options = {
     agents: {
       build: [
@@ -1937,29 +2043,25 @@ test("session deletion clears interval state and scoped hook registrations are d
   await runPlugin(
     options,
     hooks,
-    emptySdk(),
+    sdk,
     (events: EventPublisher): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* events.publish(sessionDeletedEvent(session))
         yield* requiredEffect(hooks.toolEffects, 1)
         yield* requiredEffect(hooks.toolAfterEffects, 1)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(contexts[2]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* requiredEffect(hooks.toolEffects, 2)
         yield* requiredEffect(hooks.toolAfterEffects, 2)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(
-          reminderTexts(contexts[3]),
-        ).toEqual([
-          "Deleted-session reminder.",
-        ])
+        expect(notices.take()).toEqual([notice(session, "Deleted-session reminder.")])
       }),
   )
 
@@ -1968,7 +2070,7 @@ test("session deletion clears interval state and scoped hook registrations are d
   expect(hooks.toolAfterEffects).toEqual([])
 })
 
-test("scope closure prevents an in-flight context hook from appending a stale reminder", async (): Promise<void> => {
+test("scope closure prevents an in-flight context hook from delivering a stale reminder", async (): Promise<void> => {
   const session = "ses_scope_close_in_flight"
   const initial = contextEvent(session)
   const pending = contextEvent(session)
@@ -2023,7 +2125,7 @@ test("scope closure prevents an in-flight context hook from appending a stale re
       ])
       yield* Fiber.join(callerFiber)
 
-      expect(reminderTexts(pending)).toEqual([])
+      expect(sdk.syntheticCalls).toEqual([])
     }),
   )
   await Effect.runPromise(Effect.provide(program, TestClock.layer()))
@@ -2061,16 +2163,17 @@ test("a fresh plugin scope starts with fresh intervals after reload", async (): 
     contexts: [reloadedContext, nextContext],
     before: [afterReloadCall],
   })
+  const reloadedSdk: SdkResponses = emptySdk()
   await runPlugin(
     options,
     reloadedHooks,
-    emptySdk(),
+    reloadedSdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(reloadedHooks.sessionEffects, 0)
         yield* requiredEffect(reloadedHooks.toolEffects, 0)
         yield* requiredEffect(reloadedHooks.sessionEffects, 1)
-        expect(nextContext.system).toEqual([])
+        expect(reloadedSdk.syntheticCalls).toEqual([])
       }),
   )
 })
@@ -2086,6 +2189,7 @@ test("delegation resets to the latest known context sample", async (): Promise<v
     after: [failedAfterEvent(delegation), failedAfterEvent(outer)],
   })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = []
 
@@ -2115,16 +2219,12 @@ test("delegation resets to the latest known context sample", async (): Promise<v
         history = [...history, assistantUsage("msg_after_delegate", { input: 150 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         history = [...history, assistantUsage("msg_delegation_threshold", { input: 200 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(
-          reminderTexts(contexts[2]),
-        ).toEqual([
-          "Delegation context reminder.",
-        ])
+        expect(notices.take()).toEqual([notice(session, "Delegation context reminder.")])
       }),
   )
 })
@@ -2176,6 +2276,8 @@ test("delegation resets tool counts and elapsed time in the same interval", asyn
       failedAfterEvent(shellAfterTwo),
     ],
   })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -2195,7 +2297,7 @@ test("delegation resets tool counts and elapsed time in the same interval", asyn
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
@@ -2210,23 +2312,19 @@ test("delegation resets tool counts and elapsed time in the same interval", asyn
         yield* requiredEffect(hooks.toolEffects, 3)
         yield* requiredEffect(hooks.toolAfterEffects, 3)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(contexts[1]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* TestClock.adjust("30 seconds")
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(contexts[2]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
         yield* TestClock.adjust("30 seconds")
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(contexts[3]?.system).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* requiredEffect(hooks.toolEffects, 4)
         yield* requiredEffect(hooks.toolAfterEffects, 4)
         yield* requiredEffect(hooks.sessionEffects, 4)
-        expect(
-          reminderTexts(contexts[4]),
-        ).toEqual([
-          "Shared interval reminder.",
-        ])
+        expect(notices.take()).toEqual([notice(session, "Shared interval reminder.")])
       }),
   )
 })
@@ -2246,6 +2344,7 @@ test("a reset tool resets only its own entry and leaves other entries' counters 
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = [assistantUsage("msg_multi_initial", { input: 100 })]
   sdk.messages.set(sessionID, history)
@@ -2295,7 +2394,7 @@ test("a reset tool resets only its own entry and leaves other entries' counters 
         history = [...history, assistantUsage("msg_multi_after_grep", { input: 200 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(reminderTexts(contexts[1])).toEqual(["Entry one."])
+        expect(notices.take()).toEqual([notice(session, "Entry one.")])
 
         yield* requiredEffect(hooks.toolEffects, 3)
         yield* requiredEffect(hooks.toolAfterEffects, 3)
@@ -2303,7 +2402,7 @@ test("a reset tool resets only its own entry and leaves other entries' counters 
         history = [...history, assistantUsage("msg_multi_after_shell_3", { input: 210 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 2)
-        expect(reminderTexts(contexts[2])).toEqual([])
+        expect(notices.take()).toEqual([])
 
         yield* requiredEffect(hooks.toolEffects, 4)
         yield* requiredEffect(hooks.toolAfterEffects, 4)
@@ -2313,7 +2412,7 @@ test("a reset tool resets only its own entry and leaves other entries' counters 
         history = [...history, assistantUsage("msg_multi_after_subagent", { input: 260 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 3)
-        expect(reminderTexts(contexts[3])).toEqual(["Entry two."])
+        expect(notices.take()).toEqual([notice(session, "Entry two.")])
       }),
   )
 })
@@ -2329,6 +2428,7 @@ test("two entries matching the same request emit both messages in order with one
     after: [failedAfterEvent(shell)],
   })
   const sdk = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
   const logs: Array<CapturedLog> = []
 
   await runPlugin(
@@ -2354,7 +2454,10 @@ test("two entries matching the same request emit both messages in order with one
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(reminderTexts(outgoing)).toEqual(["First reminder.", "Second reminder."])
+        expect(notices.take()).toEqual([
+          notice(session, "First reminder."),
+          notice(session, "Second reminder."),
+        ])
         expect(logs).toMatchObject([
           { level: "Info", message: ["Agent reminder injected"] },
           { level: "Info", message: ["Agent reminder injected"] },
@@ -2374,6 +2477,8 @@ test("resetTools with an empty array allows a condition to count subagent calls"
     before: [delegation],
     after: [failedAfterEvent(delegation)],
   })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -2388,14 +2493,14 @@ test("resetTools with an empty array allows a condition to count subagent calls"
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(reminderTexts(outgoing)).toEqual(["Delegate reminder."])
+        expect(notices.take()).toEqual([notice(session, "Delegate reminder.")])
       }),
   )
 })
@@ -2416,6 +2521,8 @@ test("prefix patterns count nested MCP-style tool calls inside an execute call",
       failedAfterEvent(outer),
     ],
   })
+  const sdk: SdkResponses = emptySdk()
+  const notices: NoticeJournal = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -2429,7 +2536,7 @@ test("prefix patterns count nested MCP-style tool calls inside an execute call",
       },
     },
     hooks,
-    emptySdk(),
+    sdk,
     (): Effect.Effect<void> =>
       Effect.gen(function*(): Effect.fn.Return<void> {
         yield* requiredEffect(hooks.sessionEffects, 0)
@@ -2440,7 +2547,7 @@ test("prefix patterns count nested MCP-style tool calls inside an execute call",
         yield* requiredEffect(hooks.toolAfterEffects, 1)
         yield* requiredEffect(hooks.toolAfterEffects, 2)
         yield* requiredEffect(hooks.sessionEffects, 1)
-        expect(reminderTexts(outgoing)).toEqual(["MCP reminder."])
+        expect(notices.take()).toEqual([notice(session, "MCP reminder.")])
       }),
   )
 })

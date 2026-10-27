@@ -34,7 +34,7 @@ The thresholds above are examples, not an automatically enabled policy. Every co
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `message` | nonempty string | Reminder text injected into the system prompt. |
+| `message` | nonempty string | Reminder text delivered as a session notice. |
 | `resetTools` | array of tool references, optional | Tools whose invocation resets this entry's interval. Defaults to `["subagent"]`; an explicit `[]` disables tool-based resets for the entry. |
 | `condition` | condition | The delivery condition; see the table below. |
 
@@ -81,8 +81,9 @@ A tool or pattern may not be both counted and reset within one entry; such a con
 - Switching agent types resets all entries and discards known context samples. The first usable context sample for the new agent establishes its baseline; switching back also starts fresh.
 - Successful compaction clears the context baseline and latest sample across entries while preserving tool counts and elapsed time; measurements rebase on the first usable post-compaction sample.
 - Counters are in memory only. Plugin reloads and service restarts establish fresh intervals.
-- Delivery attaches the reminder only to the system prompt of the next ordinary model request, exactly once. It does not interrupt tools, add user turns, publish a session notice, or start another model run.
-- Every delivery logs an `Agent reminder injected` info log annotated with sessionID, agent, providerID, modelID, and firedAt.
+- Reminders are delivered as session notices: each delivered reminder appears in the session transcript as a notice row and reaches the model exactly once, as the notice's text at the next agent step.
+- Reminders do not interrupt tools, do not add user turns, and do not wake idle sessions (resume disabled). A reminder delivered while the run continues joins the next step at no extra request; a reminder delivered as the run would otherwise end extends it by exactly one final step, in which the model reads the notice and responds.
+- Every delivery records an `Agent reminder injected` info log annotated with sessionID, agent, providerID, modelID, and firedAt. A notice that cannot be admitted is logged as a warning and the delivery is lost; measurements are not un-reset.
 - Loading the plugin with no agents configured logs a warning and disables all reminders.
 
 Context measurements use reported assistant token usage, including cache usage, rather than cumulative session billing totals. They lag the next outgoing request. Missing usage or model limits cannot establish a match for conditions requiring those measurements. Percentage-point growth uses the current model's configured context limit; switching models does not itself add context tokens.
