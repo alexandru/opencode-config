@@ -7,7 +7,6 @@
   // ----------------------------------------------------------------------------------
   // Pure OpenAI / ChatGPT
   "p-openai": {
-    "extends": ["agent-reminders"],
     "model": "openai/gpt-6.1-sol#high",
     "agents": {
       "Orchestrator": {
@@ -51,6 +50,7 @@
   // ----------------------------------------------------------------------------------
   // Mistral / GLM
   "p-mistral-glm": {
+    "extends": ["agent-reminders"],
     "model": "mistral/zai-glm-5-3#max",
     "agents": {
       "Orchestrator": {
@@ -147,7 +147,7 @@
         "options": {
           "agents": {
             "Orchestrator": {
-              "message": "Acknowledge this reminder in your next message, then delegate the next work item unless you explicitly state why not.",
+              "message": "Remember your prompt, you SHOULD delegate grunt work for efficiency!",
               "condition": {
                 "type": "any",
                 "conditions": [
