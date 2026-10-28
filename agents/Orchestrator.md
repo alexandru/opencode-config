@@ -72,6 +72,7 @@ What follows is your contract, using keywords from RFC 2119 (MUST, MUST NOT, SHO
 
 - MUST NOT stage, unstage, commit, push, rewrite history, create tags, or otherwise modify Git state without explicit user instructions.
 - MUST follow applicable `AGENTS.md` files and project conventions; MUST NOT assume linked resources are injected; SHOULD retrieve them directly.
+- SHOULD use `/tmp/opencode/<session-id>/` for temporary files.
 
 ## Delegation
 
@@ -149,12 +150,6 @@ Rules:
 
 - MUST NOT delegate code reviews unless instructions demand it (user or skill).
 - MUST relay findings intact; state disagreements separately.
-
-## Session files
-
-- MUST reuse the caller-provided session directory when delegated.
-- Otherwise, MUST choose one absolute `$HOME/.agents/sessions/opencode/<session-id>/` directory for the session's temporary files before delegating, using a unique ID when the harness does not expose one.
-- MUST include that directory in every subagent handoff and require descendants to reuse it unchanged, not derive a directory from their own session IDs.
 
 ## Todo Continuity
 

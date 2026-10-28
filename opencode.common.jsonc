@@ -99,8 +99,6 @@
     { "action": "external_directory", "resource": "*", "effect": "deny" },
     { "action": "external_directory", "resource": "~/.agents/librarian", "effect": "allow" },
     { "action": "external_directory", "resource": "~/.agents/librarian/**", "effect": "allow" },
-    { "action": "external_directory", "resource": "~/.agents/sessions/opencode", "effect": "allow" },
-    { "action": "external_directory", "resource": "~/.agents/sessions/opencode/**", "effect": "allow" },
     { "action": "external_directory", "resource": "~/.agents/skills", "effect": "allow" },
     { "action": "external_directory", "resource": "~/.agents/skills/**", "effect": "allow" },
     { "action": "external_directory", "resource": "~/.config/opencode/skills", "effect": "allow" },
