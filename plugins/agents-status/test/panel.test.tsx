@@ -1,19 +1,10 @@
 import type {
-  MessageListInput,
   ModelInfo,
-  ModelListInput,
-  ModelListOutput,
   ModelRef,
-  OpenCode as OpenCodeSdk,
-  OpenCodeClient,
-  SessionGetInput,
   SessionInfo,
-  SessionListInput,
   SessionMessageAssistant,
   SessionMessageInfo,
-  SessionMessagesResponse,
   SessionRevert,
-  SessionsResponse,
   TokenUsageInfo,
 } from "@opencode/client"
 import type {
@@ -22,17 +13,15 @@ import type {
   KeymapCommand,
   KeymapLayer,
   PanelInput,
-  Route,
   SlotClaim,
 } from "@opencode/plugin/tui/context"
 import type { Cleanup, Definition } from "@opencode/plugin/tui/plugin"
 import type { HueStep, ResolvedTheme, ThemeDefinition } from "@opencode/theme/tui"
-import type { CapturedFrame, CapturedLine, CapturedSpan, Renderable } from "@opentui/core"
+import type { CapturedFrame, Renderable } from "@opentui/core"
 import type { TestRendererOptions, TestRendererSetup } from "@opentui/core/testing"
-import type { JSX } from "@opentui/solid"
 import { ensureSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 import { expect, test } from "bun:test"
-import { Effect, type Exit, Option, type Scope } from "effect"
+import { Effect, Option, type Scope } from "effect"
 import type { Store } from "solid-js/store"
 
 ensureSolidTransformPlugin()
@@ -308,18 +297,18 @@ const DEFAULT_MODELS: readonly ModelInfo[] = [
 ]
 
 const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
-  const client: OpenCodeClient = OpenCode.make({ baseUrl: "http://127.0.0.1:1" })
-  const sessions: SessionInfo[] = [...(options?.sessions ?? defaultSessions())]
-  const messages: Record<string, readonly SessionMessageInfo[]> = {
+  const client = OpenCode.make({ baseUrl: "http://127.0.0.1:1" })
+  const sessions = [...(options?.sessions ?? defaultSessions())]
+  const messages = {
     ...(options?.messages ?? { [CHILD_SESSION]: [explorerUsage] }),
   }
-  const models: ModelInfo[] = [...(options?.models ?? DEFAULT_MODELS)]
+  const models = [...(options?.models ?? DEFAULT_MODELS)]
   const modelsByDirectory: Readonly<Record<string, readonly ModelInfo[]>> = {
     ...(options?.modelsByDirectory ?? {}),
   }
-  const catalogFailures: Record<string, string> = { ...(options?.catalogFailures ?? {}) }
-  const messageFailures: Record<string, string> = { ...(options?.messageFailures ?? {}) }
-  const pageSize: number = options?.pageSize ?? 200
+  const catalogFailures = { ...(options?.catalogFailures ?? {}) }
+  const messageFailures = { ...(options?.messageFailures ?? {}) }
+  const pageSize = options?.pageSize ?? 200
   const calls: ApiCall[] = []
   let failure: string | undefined
   const [statuses, setStatuses] = createSignal<Readonly<Record<string, "idle" | "running">>>(
@@ -327,60 +316,60 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
   )
   const [theme, setThemeState] = createSignal<ResolvedTheme>(THEME_A)
 
-  const record = (method: string, request: { readonly signal?: AbortSignal } | undefined): void => {
+  const record = (method: string, request: { readonly signal?: AbortSignal } | undefined) => {
     calls.push({ method, signal: request?.signal })
     if (failure !== undefined) throw new Error(failure)
   }
 
   client.session.get = async (
-    input: SessionGetInput,
-    request?: OpenCodeSdk.RequestOptions,
-  ): Promise<SessionInfo> => {
+    input,
+    request,
+  ) => {
     record("session.get", request)
-    const found = sessions.find((session): boolean => session.id === input.sessionID)
+    const found = sessions.find((session) => session.id === input.sessionID)
     if (found === undefined) throw new Error(`Unexpected session.get for ${input.sessionID}`)
     return found
   }
 
   client.session.list = async (
-    input?: SessionListInput,
-    request?: OpenCodeSdk.RequestOptions,
-  ): Promise<SessionsResponse> => {
+    input,
+    request,
+  ) => {
     record("session.list", request)
-    const parentID: string | null | undefined = input?.parentID
-    const limit: number = Math.min(input?.limit ?? pageSize, pageSize)
-    const offset: number = input?.cursor ? Number(input.cursor) : 0
-    const children: SessionInfo[] = sessions
-      .filter((session): boolean => session.parentID === parentID)
-      .sort((left, right): number => left.id < right.id ? -1 : 1)
-    const page: SessionInfo[] = children.slice(offset, offset + limit)
-    const next: string | null = offset + limit < children.length ? String(offset + limit) : null
+    const parentID = input?.parentID
+    const limit = Math.min(input?.limit ?? pageSize, pageSize)
+    const offset = input?.cursor ? Number(input.cursor) : 0
+    const children = sessions
+      .filter((session) => session.parentID === parentID)
+      .sort((left, right) => left.id < right.id ? -1 : 1)
+    const page = children.slice(offset, offset + limit)
+    const next = offset + limit < children.length ? String(offset + limit) : null
     return { data: page, cursor: { next } }
   }
 
   client.message.list = async (
-    input: MessageListInput,
-    request?: OpenCodeSdk.RequestOptions,
-  ): Promise<SessionMessagesResponse> => {
+    input,
+    request,
+  ) => {
     record("message.list", request)
-    const messageFailure: string | undefined = messageFailures[input.sessionID]
+    const messageFailure = messageFailures[input.sessionID]
     if (messageFailure !== undefined) throw new Error(messageFailure)
     const list: readonly SessionMessageInfo[] = messages[input.sessionID] ?? []
-    const ordered: SessionMessageInfo[] = input.order === "desc" ? [...list].reverse() : [...list]
-    const limit: number = input.limit ?? ordered.length
-    const offset: number = input.cursor ? Number(input.cursor) : 0
-    const page: SessionMessageInfo[] = ordered.slice(offset, offset + limit)
-    const next: string | null = offset + limit < ordered.length ? String(offset + limit) : null
+    const ordered = input.order === "desc" ? [...list].reverse() : [...list]
+    const limit = input.limit ?? ordered.length
+    const offset = input.cursor ? Number(input.cursor) : 0
+    const page = ordered.slice(offset, offset + limit)
+    const next = offset + limit < ordered.length ? String(offset + limit) : null
     return { data: page, cursor: { next } }
   }
 
   client.model.list = async (
-    input?: ModelListInput,
-    request?: OpenCodeSdk.RequestOptions,
-  ): Promise<ModelListOutput> => {
+    input,
+    request,
+  ) => {
     record("model.list", request)
-    const directory: string = input?.location?.directory ?? DIRECTORY
-    const catalogFailure: string | undefined = catalogFailures[directory]
+    const directory = input?.location?.directory ?? DIRECTORY
+    const catalogFailure = catalogFailures[directory]
     if (catalogFailure !== undefined) throw new Error(catalogFailure)
     return {
       location: { directory },
@@ -391,7 +380,7 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
   const layers: KeymapLayer[] = []
   const slots: Array<Option.Option<SlotClaim<"session.panel">>> = []
   const panelOpens: string[] = []
-  const panelClose: { calls: number } = { calls: 0 }
+  const panelClose = { calls: 0 }
   let currentPanel: { readonly name: string; readonly sessionID: string } | undefined
 
   const data: Data = {
@@ -417,7 +406,7 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
       get cost(): never {
         return unexpected("data.session.cost")
       },
-      status: (sessionID: string): "idle" | "running" => statuses()[sessionID] ?? "idle",
+      status: (sessionID) => statuses()[sessionID] ?? "idle",
       get pending(): never {
         return unexpected("data.session.pending")
       },
@@ -472,7 +461,7 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
       return unexpected("markdown")
     },
     keymap: {
-      layer: (factory: () => KeymapLayer): void => {
+      layer: (factory) => {
         layers.push(factory())
       },
       get dispatch(): never {
@@ -500,8 +489,8 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
         options: { readonly initial: Value },
       ): readonly [Store<Value>, (mutation: (draft: Value) => void) => Promise<void>] => {
         void key
-        const value: Value = options.initial
-        const update = async (mutation: (draft: Value) => void): Promise<void> => {
+        const value = options.initial
+        const update = async (mutation: (draft: Value) => void) => {
           mutation(value)
         }
         return [value, update]
@@ -521,7 +510,7 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
         return unexpected("ui.format")
       },
       router: {
-        current: (): Route => ({ type: "session", sessionID: ROOT_SESSION }),
+        current: () => ({ type: "session", sessionID: ROOT_SESSION }),
         get register(): never {
           return unexpected("ui.router.register")
         },
@@ -530,17 +519,16 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
         },
       },
       panel: {
-        open: (name: string): boolean => {
+        open: (name) => {
           panelOpens.push(name)
           currentPanel = { name, sessionID: ROOT_SESSION }
           return true
         },
-        close: (): void => {
+        close: () => {
           panelClose.calls += 1
           currentPanel = undefined
         },
-        current: (): { readonly name: string; readonly sessionID: string } | undefined =>
-          currentPanel,
+        current: () => currentPanel,
       },
       get tabs(): never {
         return unexpected("ui.tabs")
@@ -548,9 +536,9 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
       get model(): never {
         return unexpected("ui.model")
       },
-      slot: (claim: SlotClaim): () => void => {
+      slot: (claim) => {
         slots.push(panelClaim(claim))
-        return (): void => {}
+        return () => {}
       },
     },
   }
@@ -562,22 +550,22 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
     panelOpens,
     panelClose,
     calls,
-    setSessions: (next: readonly SessionInfo[]): void => {
+    setSessions: (next) => {
       sessions.splice(0, sessions.length, ...next)
     },
-    setMessages: (sessionID: string, next: readonly SessionMessageInfo[]): void => {
+    setMessages: (sessionID, next) => {
       messages[sessionID] = next
     },
-    setStatus: (sessionID: string, status: "idle" | "running"): void => {
-      setStatuses((previous): Readonly<Record<string, "idle" | "running">> => ({
+    setStatus: (sessionID, status) => {
+      setStatuses((previous) => ({
         ...previous,
         [sessionID]: status,
       }))
     },
-    setTheme: (next: ResolvedTheme): void => {
+    setTheme: (next) => {
       setThemeState(next)
     },
-    failWith: (message: string): void => {
+    failWith: (message) => {
       failure = message
     },
   }
@@ -588,7 +576,7 @@ const findCommand = (
   predicate: (command: KeymapCommand) => boolean,
 ): KeymapCommand | undefined =>
   fixture.layers
-    .flatMap((layer: KeymapLayer): readonly KeymapCommand[] => layer.commands ?? [])
+    .flatMap((layer) => layer.commands ?? [])
     .find(predicate)
 
 const findPanelClaim = (fixture: Fixture): SlotClaim<"session.panel"> => {
@@ -598,15 +586,15 @@ const findPanelClaim = (fixture: Fixture): SlotClaim<"session.panel"> => {
   throw new Error("Expected the plugin to claim the session.panel slot")
 }
 
-const makePanelInput = (name: string, close: () => void = (): void => {}): PanelInput => ({
+const makePanelInput = (name: string, close: () => void = () => {}): PanelInput => ({
   name,
   sessionID: ROOT_SESSION,
   width: 120,
   presentation: "panel",
   focused: true,
-  focus: (): void => {},
+  focus: () => {},
   close,
-  toggleFullscreen: (): void => {},
+  toggleFullscreen: () => {},
 })
 
 type PanelRenderer = (input: PanelInput, size: TestRendererOptions) => Promise<TestRendererSetup>
@@ -618,7 +606,7 @@ const renderPanel = (
   size: TestRendererOptions,
 ): Promise<TestRendererSetup> =>
   testRender(
-    (): JSX.Element =>
+    () =>
       PluginContextProvider({
         value: context,
         children: claim.render(input),
@@ -627,7 +615,7 @@ const renderPanel = (
   )
 
 const setupPlugin = async (fixture: Fixture): Promise<Cleanup> => {
-  const setupResult: Cleanup | void = await plugin.setup(fixture.context)
+  const setupResult = await plugin.setup(fixture.context)
   if (typeof setupResult !== "function") {
     throw new Error("Expected TUI plugin setup to return a cleanup function")
   }
@@ -639,9 +627,9 @@ const runScoped = <Result,>(effect: Effect.Effect<Result, never, Scope.Scope>): 
 
 const acquirePluginCleanup = (fixture: Fixture): Effect.Effect<Cleanup, never, Scope.Scope> =>
   Effect.acquireRelease(
-    Effect.promise((): Promise<Cleanup> => setupPlugin(fixture)),
-    (cleanup: Cleanup, _exit: Exit.Exit<unknown, unknown>): Effect.Effect<void> =>
-      Effect.promise(async (): Promise<void> => {
+    Effect.promise(() => setupPlugin(fixture)),
+    (cleanup, _exit) =>
+      Effect.promise(async () => {
         await cleanup()
       }),
   )
@@ -652,9 +640,9 @@ const acquirePanelRenderer = (
   size: TestRendererOptions,
 ): Effect.Effect<TestRendererSetup, never, Scope.Scope> =>
   Effect.acquireRelease(
-    Effect.promise((): Promise<TestRendererSetup> => render(input, size)),
-    (setup: TestRendererSetup, _exit: Exit.Exit<unknown, unknown>): Effect.Effect<void> =>
-      Effect.sync((): void => {
+    Effect.promise(() => render(input, size)),
+    (setup, _exit) =>
+      Effect.sync(() => {
         setup.renderer.destroy()
       }),
   )
@@ -667,14 +655,14 @@ const withPlugin = (
   runScoped(
     Effect.flatMap(
       acquirePluginCleanup(fixture),
-      (): Effect.Effect<void, never, Scope.Scope> => {
-        const claim: SlotClaim<"session.panel"> = findPanelClaim(fixture)
-        const context: Context = fixture.context
-        const render: PanelRenderer = (
+      () => {
+        const claim = findPanelClaim(fixture)
+        const context = fixture.context
+        const render = (
           input: PanelInput,
           size: TestRendererOptions,
-        ): Promise<TestRendererSetup> => renderPanel(context, claim, input, size)
-        return Effect.promise((): Promise<void> => body(render))
+        ) => renderPanel(context, claim, input, size)
+        return Effect.promise(() => body(render))
       },
     ),
   )
@@ -688,17 +676,16 @@ const withPanel = (
   runScoped(
     Effect.flatMap(
       acquirePanelRenderer(render, input, size),
-      (setup: TestRendererSetup): Effect.Effect<void, never, Scope.Scope> =>
-        Effect.promise((): Promise<void> => body(setup)),
+      (setup) => Effect.promise(() => body(setup)),
     ),
   )
 
-test("/agents-status opens the session panel that reports child agent usage", async (): Promise<void> => {
-  const fixture: Fixture = makeFixture()
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
-    const command: KeymapCommand | undefined = findCommand(
+test("/agents-status opens the session panel that reports child agent usage", async () => {
+  const fixture = makeFixture()
+  await withPlugin(fixture, async (render) => {
+    const command = findCommand(
       fixture,
-      (candidate: KeymapCommand): boolean => candidate.slash?.name === SLASH_NAME,
+      (candidate) => candidate.slash?.name === SLASH_NAME,
     )
     if (command === undefined) {
       throw new Error(`Expected the plugin to register the /${SLASH_NAME} command`)
@@ -714,9 +701,9 @@ test("/agents-status opens the session panel that reports child agent usage", as
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 24 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Junior"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Junior"),
           { maxPasses: 20 },
         )
         expect(frame).toContain("Junior")
@@ -730,12 +717,12 @@ test("/agents-status opens the session panel that reports child agent usage", as
   })
 })
 
-test("command toggles the panel, Escape closes it when focused, and unrelated panels do not render", async (): Promise<void> => {
-  const fixture: Fixture = makeFixture()
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
-    const command: KeymapCommand | undefined = findCommand(
+test("command toggles the panel, Escape closes it when focused, and unrelated panels do not render", async () => {
+  const fixture = makeFixture()
+  await withPlugin(fixture, async (render) => {
+    const command = findCommand(
       fixture,
-      (candidate: KeymapCommand): boolean => candidate.slash?.name === SLASH_NAME,
+      (candidate) => candidate.slash?.name === SLASH_NAME,
     )
     if (command === undefined) {
       throw new Error(`Expected the plugin to register the /${SLASH_NAME} command`)
@@ -749,37 +736,36 @@ test("command toggles the panel, Escape closes it when focused, and unrelated pa
       render,
       makePanelInput("session-todo.list"),
       { width: 120, height: 24 },
-      async (otherSetup: TestRendererSetup): Promise<void> => {
+      async (otherSetup) => {
         await otherSetup.flush()
-        const otherFrame: string = otherSetup.captureCharFrame()
+        const otherFrame = otherSetup.captureCharFrame()
         expect(otherFrame).not.toContain("Total reported spend")
         expect(otherFrame).not.toContain("Junior")
         expect(fixture.calls).toEqual([])
       },
     )
 
-    let closeCalls: number = 0
+    let closeCalls = 0
     await withPanel(
       render,
-      makePanelInput(PANEL_NAME, (): void => {
+      makePanelInput(PANEL_NAME, () => {
         closeCalls += 1
       }),
       { width: 120, height: 24 },
-      async (focusedSetup: TestRendererSetup): Promise<void> => {
+      async (focusedSetup) => {
         await focusedSetup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Junior"),
+          (candidate) => candidate.includes("Junior"),
           { maxPasses: 20 },
         )
-        const escape: KeymapCommand | undefined = findCommand(
+        const escape = findCommand(
           fixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "escape",
+          (candidate) => candidate.bind === "escape",
         )
         if (escape === undefined) {
           throw new Error("Expected the focused panel to bind Escape")
         }
-        const escapeLayer: KeymapLayer | undefined = fixture.layers.find(
-          (layer: KeymapLayer): boolean =>
-            (layer.commands ?? []).some((entry: KeymapCommand): boolean => entry.bind === "escape"),
+        const escapeLayer = fixture.layers.find(
+          (layer) => (layer.commands ?? []).some((entry) => entry.bind === "escape"),
         )
         expect(escapeLayer?.enabled).toBe(true)
         await escape.run()
@@ -789,14 +775,14 @@ test("command toggles the panel, Escape closes it when focused, and unrelated pa
   })
 })
 
-test("panel walks paginated descendants once, keeps same-agent sessions, and excludes unrelated trees", async (): Promise<void> => {
-  const root: SessionInfo = sessionInfo({
+test("panel walks paginated descendants once, keeps same-agent sessions, and excludes unrelated trees", async () => {
+  const root = sessionInfo({
     id: ROOT_SESSION,
     agent: "build",
     cost: 0.01,
     model: { providerID: "openai", id: "gpt-6.1-sol" },
   })
-  const alpha: SessionInfo = sessionInfo({
+  const alpha = sessionInfo({
     id: "ses_child_a",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -804,7 +790,7 @@ test("panel walks paginated descendants once, keeps same-agent sessions, and exc
     cost: 0.0123,
     model: DEEPSEEK,
   })
-  const beta: SessionInfo = sessionInfo({
+  const beta = sessionInfo({
     id: "ses_child_b",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -812,46 +798,46 @@ test("panel walks paginated descendants once, keeps same-agent sessions, and exc
     cost: 0.002,
     model: DEEPSEEK,
   })
-  const gamma: SessionInfo = sessionInfo({
+  const gamma = sessionInfo({
     id: "ses_child_c",
     parentID: ROOT_SESSION,
     agent: "Junior",
     title: "Gamma task",
     cost: 0.004,
   })
-  const nested: SessionInfo = sessionInfo({
+  const nested = sessionInfo({
     id: "ses_nested",
     parentID: "ses_child_a",
     agent: "Architect",
     title: "Delta task",
     cost: 0.001,
   })
-  const stranger: SessionInfo = sessionInfo({
+  const stranger = sessionInfo({
     id: "ses_stranger",
     parentID: OTHER_ROOT,
     agent: "Stranger",
     cost: 9.9999,
   })
-  const strangerChild: SessionInfo = sessionInfo({
+  const strangerChild = sessionInfo({
     id: "ses_stranger_child",
     parentID: "ses_stranger",
     agent: "Deep stranger child",
     cost: 0.5,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [root, alpha, alpha, beta, gamma, nested, stranger, strangerChild],
     messages: {},
     models: [],
     pageSize: 2,
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 60 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Architect"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Architect"),
           { maxPasses: 20 },
         )
         expect(frame.split("● Junior").length - 1).toBe(1)
@@ -959,20 +945,20 @@ const contextCases: readonly ContextCase[] = [
 ]
 
 for (const contextCase of contextCases) {
-  test(`context usage: ${contextCase.name}`, async (): Promise<void> => {
-    const fixture: Fixture = makeFixture({
+  test(`context usage: ${contextCase.name}`, async () => {
+    const fixture = makeFixture({
       sessions: [rootSession(), contextCase.child],
       messages: contextCase.messages,
       models: contextCase.models,
     })
-    await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPlugin(fixture, async (render) => {
       await withPanel(
         render,
         makePanelInput(PANEL_NAME),
         { width: 120, height: 40 },
-        async (setup: TestRendererSetup): Promise<void> => {
-          const frame: string = await setup.waitForFrame(
-            (candidate: string): boolean => candidate.includes(contextCase.contains[0]),
+        async (setup) => {
+          const frame = await setup.waitForFrame(
+            (candidate) => candidate.includes(contextCase.contains[0]),
             { maxPasses: 20 },
           )
           for (const expected of contextCase.contains) {
@@ -989,16 +975,16 @@ for (const contextCase of contextCases) {
 
 test(
   "panel live-refreshes after two seconds and stops fetching once unmounted",
-  async (): Promise<void> => {
-    const low: ModelRef = { providerID: "opencode-go", id: "deepseek-v4.1-flash", variant: "low" }
-    const high: ModelRef = { providerID: "opencode-go", id: "deepseek-v4.1-flash", variant: "high" }
-    const root: SessionInfo = sessionInfo({
+  async () => {
+    const low = { providerID: "opencode-go", id: "deepseek-v4.1-flash", variant: "low" }
+    const high = { providerID: "opencode-go", id: "deepseek-v4.1-flash", variant: "high" }
+    const root = sessionInfo({
       id: ROOT_SESSION,
       agent: "build",
       cost: 0.01,
       model: { providerID: "openai", id: "gpt-6.1-sol" },
     })
-    const childA: SessionInfo = sessionInfo({
+    const childA = sessionInfo({
       id: "ses_child_a",
       parentID: ROOT_SESSION,
       agent: "Junior",
@@ -1006,22 +992,21 @@ test(
       cost: 0.0123,
       model: low,
     })
-    const fixture: Fixture = makeFixture({
+    const fixture = makeFixture({
       sessions: [root, childA],
       messages: { ses_child_a: [assistantMessage("msg_a_initial", CHILD_USAGE, low, "Junior")] },
       statuses: { ses_child_a: "running" },
     })
-    await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPlugin(fixture, async (render) => {
       expect(fixture.calls).toEqual([])
 
       await withPanel(
         render,
         makePanelInput(PANEL_NAME),
         { width: 120, height: 40 },
-        async (setup: TestRendererSetup): Promise<void> => {
-          const initial: string = await setup.waitForFrame(
-            (candidate: string): boolean =>
-              candidate.includes("opencode-go/deepseek-v4.1-flash#low"),
+        async (setup) => {
+          const initial = await setup.waitForFrame(
+            (candidate) => candidate.includes("opencode-go/deepseek-v4.1-flash#low"),
             { maxPasses: 20 },
           )
           expect(initial).toContain("Peak context: 1.65K / 10K tokens (17%)")
@@ -1030,13 +1015,13 @@ test(
           expect(initial).toContain("Total reported spend: $0.0223")
           expect(fixture.calls.length).toBeGreaterThan(0)
 
-          const refreshedUsage: TokenUsageInfo = {
+          const refreshedUsage = {
             input: 1200,
             output: 300,
             reasoning: 100,
             cache: { read: 300, write: 100 },
           }
-          const childB: SessionInfo = sessionInfo({
+          const childB = sessionInfo({
             id: "ses_child_b",
             parentID: ROOT_SESSION,
             agent: "Reviewer",
@@ -1062,9 +1047,8 @@ test(
           fixture.setStatus("ses_child_a", "idle")
 
           await Bun.sleep(2200)
-          const refreshed: string = await setup.waitForFrame(
-            (candidate: string): boolean =>
-              candidate.includes("opencode-go/deepseek-v4.1-flash#high"),
+          const refreshed = await setup.waitForFrame(
+            (candidate) => candidate.includes("opencode-go/deepseek-v4.1-flash#high"),
             { maxPasses: 40 },
           )
           expect(refreshed).toContain("Peak context: 2K / 10K tokens (20%)")
@@ -1076,7 +1060,7 @@ test(
           expect(refreshed).not.toContain("#low")
           expect(refreshed).toContain("Total reported spend: $0.0330")
 
-          const before: number = fixture.calls.length
+          const before = fixture.calls.length
           setup.renderer.destroy()
           for (const call of fixture.calls) {
             expect(call.signal?.aborted).toBe(true)
@@ -1090,16 +1074,16 @@ test(
   20000,
 )
 
-test("panel warns with stale values when a refresh fails", async (): Promise<void> => {
-  const fixture: Fixture = makeFixture()
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+test("panel warns with stale values when a refresh fails", async () => {
+  const fixture = makeFixture()
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const initial: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Spent: $0.0123"),
+      async (setup) => {
+        const initial = await setup.waitForFrame(
+          (candidate) => candidate.includes("Spent: $0.0123"),
           { maxPasses: 20 },
         )
         expect(initial).toContain("Junior")
@@ -1107,8 +1091,8 @@ test("panel warns with stale values when a refresh fails", async (): Promise<voi
 
         fixture.failWith("refresh exploded")
         await Bun.sleep(2200)
-        const failed: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Refresh failed"),
+        const failed = await setup.waitForFrame(
+          (candidate) => candidate.includes("Refresh failed"),
           { maxPasses: 40 },
         )
         expect(failed).toContain("Refresh failed (values may be stale): refresh exploded")
@@ -1138,7 +1122,7 @@ const isScrollBoxLike = (value: unknown): value is ScrollBoxLike =>
 const findScrollBox = (renderable: Renderable): ScrollBoxLike | undefined => {
   if (isScrollBoxLike(renderable)) return renderable
   for (const child of renderable.getChildren()) {
-    const found: ScrollBoxLike | undefined = findScrollBox(child)
+    const found = findScrollBox(child)
     if (found !== undefined) return found
   }
   return undefined
@@ -1170,20 +1154,20 @@ const HELP_TEXTS: readonly string[] = [
 ]
 
 const chromeProblems = (frame: string, position: string): readonly string[] => {
-  const lines: readonly string[] = frame.split("\n").map((line: string): string => line.trim())
-  const nonEmpty: readonly string[] = lines.filter((line: string): boolean => line.length > 0)
-  const headers: readonly string[] = lines.filter((line: string): boolean =>
+  const lines: readonly string[] = frame.split("\n").map((line) => line.trim())
+  const nonEmpty: readonly string[] = lines.filter((line) => line.length > 0)
+  const headers: readonly string[] = lines.filter((line) =>
     line.includes("Agents") && line.includes("Sessions")
   )
-  const header: string | undefined = headers[0]
-  const footerIndex: number = lines.findIndex((line: string): boolean => line.includes("Total"))
-  const headerIndex: number = lines.findIndex((line: string): boolean =>
+  const header = headers[0]
+  const footerIndex = lines.findIndex((line) => line.includes("Total"))
+  const headerIndex = lines.findIndex((line) =>
     line.includes("Agents") && line.includes("Sessions")
   )
-  const footer: string | undefined = footerIndex < 0 ? undefined : lines[footerIndex]
-  const tokens: string | undefined = footerIndex < 0 ? undefined : lines[footerIndex + 1]
-  const top: string = nonEmpty[0] ?? ""
-  const bottom: string = nonEmpty[nonEmpty.length - 1] ?? ""
+  const footer = footerIndex < 0 ? undefined : lines[footerIndex]
+  const tokens = footerIndex < 0 ? undefined : lines[footerIndex + 1]
+  const top = nonEmpty[0] ?? ""
+  const bottom = nonEmpty[nonEmpty.length - 1] ?? ""
   const problems: string[] = []
   if (headers.length !== 1) {
     problems.push(
@@ -1230,7 +1214,7 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
     problems.push(`${position}: panel title 'Agents status' must not be rendered`)
   }
   if (headerIndex >= 0) {
-    const below: string = lines[headerIndex + 1] ?? ""
+    const below = lines[headerIndex + 1] ?? ""
     if (below !== "") {
       problems.push(
         `${position}: expected a fixed blank row below the tab header, found ${
@@ -1240,7 +1224,7 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
     }
   }
   if (footerIndex > 0) {
-    const above: string = lines[footerIndex - 1] ?? ""
+    const above = lines[footerIndex - 1] ?? ""
     if (above !== "") {
       problems.push(
         `${position}: expected a fixed blank row above the spend footer, found ${
@@ -1299,19 +1283,19 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
 }
 
 const trimmedLines = (frame: string): readonly string[] =>
-  frame.split("\n").map((line: string): string => line.replace(/[│█▀▄]/g, " ").trim())
+  frame.split("\n").map((line) => line.replace(/[│█▀▄]/g, " ").trim())
 
 /** Asserts the scrollTop 0 gap: exactly one fixed blank row between the tab header and the first card. */
 const topGapProblems = (frame: string, position: string): readonly string[] => {
   const lines: readonly string[] = trimmedLines(frame)
-  const headerIndex: number = lines.findIndex((line: string): boolean =>
+  const headerIndex = lines.findIndex((line) =>
     line.includes("Agents") && line.includes("Sessions")
   )
   if (headerIndex < 0) {
     return [`${position}: tab header row is missing`]
   }
-  const gap: string = lines[headerIndex + 1] ?? ""
-  const first: string = lines[headerIndex + 2] ?? ""
+  const gap = lines[headerIndex + 1] ?? ""
+  const first = lines[headerIndex + 2] ?? ""
   const problems: string[] = []
   if (gap !== "") {
     problems.push(
@@ -1331,13 +1315,13 @@ const topGapProblems = (frame: string, position: string): readonly string[] => {
 }
 
 const makeOverflowFixture = (): Fixture => {
-  const root: SessionInfo = sessionInfo({
+  const root = sessionInfo({
     id: ROOT_SESSION,
     agent: "build",
     cost: 0.01,
     model: { providerID: "openai", id: "gpt-6.1-sol" },
   })
-  const child = (index: number, cost: number): SessionInfo =>
+  const child = (index: number, cost: number) =>
     sessionInfo({
       id: `ses_child_${index}`,
       parentID: ROOT_SESSION,
@@ -1355,7 +1339,7 @@ const makeOverflowFixture = (): Fixture => {
 
 test(
   "panel keeps header and footer on coherent rows while entries overflow at 76x22, 12 rows, and 42 cols",
-  async (): Promise<void> => {
+  async () => {
     interface ViewportCase {
       readonly name: string
       readonly width: number
@@ -1370,21 +1354,21 @@ test(
 
     const problems: string[] = []
     for (const viewport of viewports) {
-      const fixture: Fixture = makeOverflowFixture()
-      await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+      const fixture = makeOverflowFixture()
+      await withPlugin(fixture, async (render) => {
         await withPanel(
           render,
           makePanelInput(PANEL_NAME),
           { width: viewport.width, height: viewport.height },
-          async (setup: TestRendererSetup): Promise<void> => {
-            const initial: string = await setup.waitForFrame(
-              (candidate: string): boolean => candidate.includes("Model: openai/gpt-6.1-sol"),
+          async (setup) => {
+            const initial = await setup.waitForFrame(
+              (candidate) => candidate.includes("Model: openai/gpt-6.1-sol"),
               { maxPasses: 40 },
             )
             problems.push(...chromeProblems(initial, `${viewport.name} agents top`))
             problems.push(...topGapProblems(initial, `${viewport.name} agents top`))
 
-            const scrollbox: ScrollBoxLike | undefined = findScrollBox(setup.renderer.root)
+            const scrollbox = findScrollBox(setup.renderer.root)
             if (scrollbox === undefined) {
               throw new Error(
                 `${viewport.name}: expected an OpenTUI scrollbox in the rendered panel`,
@@ -1398,15 +1382,15 @@ test(
 
             scrollbox.scrollTop = scrollbox.scrollHeight
             await setup.renderOnce()
-            const scrolled: string = await setup.waitForFrame(
-              (candidate: string): boolean => candidate.includes("Agent 3"),
+            const scrolled = await setup.waitForFrame(
+              (candidate) => candidate.includes("Agent 3"),
               { maxPasses: 40 },
             )
             problems.push(...chromeProblems(scrolled, `${viewport.name} agents bottom`))
 
-            const sessionsTab: KeymapCommand | undefined = findCommand(
+            const sessionsTab = findCommand(
               fixture,
-              (candidate: KeymapCommand): boolean => candidate.bind === "s",
+              (candidate) => candidate.bind === "s",
             )
             if (sessionsTab === undefined) {
               throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
@@ -1414,8 +1398,8 @@ test(
             await sessionsTab.run()
             scrollbox.scrollTop = 0
             await setup.renderOnce()
-            const sessionsTop: string = await setup.waitForFrame(
-              (candidate: string): boolean => candidate.includes("● ses_root"),
+            const sessionsTop = await setup.waitForFrame(
+              (candidate) => candidate.includes("● ses_root"),
               { maxPasses: 40 },
             )
             problems.push(...chromeProblems(sessionsTop, `${viewport.name} sessions top`))
@@ -1429,8 +1413,8 @@ test(
 
             scrollbox.scrollTop = scrollbox.scrollHeight
             await setup.renderOnce()
-            const sessionsBottom: string = await setup.waitForFrame(
-              (candidate: string): boolean => candidate.includes("Spent: $0.0040"),
+            const sessionsBottom = await setup.waitForFrame(
+              (candidate) => candidate.includes("Spent: $0.0040"),
               { maxPasses: 40 },
             )
             problems.push(
@@ -1448,14 +1432,14 @@ test(
   15000,
 )
 
-test("panel shows the executing assistant model as primary and the selected model separately when they differ", async (): Promise<void> => {
-  const selected: ModelRef = {
+test("panel shows the executing assistant model as primary and the selected model separately when they differ", async () => {
+  const selected = {
     providerID: "opencode-go",
     id: "deepseek-v4.1-flash",
     variant: "high",
   }
-  const executing: ModelRef = { providerID: "anthropic", id: "claude-5-opus" }
-  const child: SessionInfo = sessionInfo({
+  const executing = { providerID: "anthropic", id: "claude-5-opus" }
+  const child = sessionInfo({
     id: "ses_child_divergent",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -1463,20 +1447,20 @@ test("panel shows the executing assistant model as primary and the selected mode
     cost: 0.0123,
     model: selected,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), child],
     messages: {
       ses_child_divergent: [assistantMessage("msg_divergent", CHILD_USAGE, executing, "Junior")],
     },
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Model: anthropic/claude-5-opus"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Model: anthropic/claude-5-opus"),
           { maxPasses: 20 },
         )
         expect(frame).toContain("Model: anthropic/claude-5-opus")
@@ -1487,16 +1471,16 @@ test("panel shows the executing assistant model as primary and the selected mode
   })
 })
 
-test("panel isolates an unavailable model catalog to the affected card", async (): Promise<void> => {
-  const deletedDirectory: string = "/tmp/opencode/agents-status-deleted"
-  const failedModel: ModelRef = { providerID: "anthropic", id: "claude-5-opus" }
-  const root: SessionInfo = sessionInfo({
+test("panel isolates an unavailable model catalog to the affected card", async () => {
+  const deletedDirectory = "/tmp/opencode/agents-status-deleted"
+  const failedModel = { providerID: "anthropic", id: "claude-5-opus" }
+  const root = sessionInfo({
     id: ROOT_SESSION,
     agent: "build",
     cost: 0.01,
     model: { providerID: "openai", id: "gpt-6.1-sol" },
   })
-  const childOk: SessionInfo = sessionInfo({
+  const childOk = sessionInfo({
     id: "ses_child_ok",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -1504,7 +1488,7 @@ test("panel isolates an unavailable model catalog to the affected card", async (
     cost: 0.002,
     model: DEEPSEEK,
   })
-  const childGone: SessionInfo = sessionInfo({
+  const childGone = sessionInfo({
     id: "ses_child_gone",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -1513,7 +1497,7 @@ test("panel isolates an unavailable model catalog to the affected card", async (
     directory: deletedDirectory,
     model: failedModel,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [root, childOk, childGone],
     messages: {
       ses_child_ok: [assistantMessage("msg_ok", CHILD_USAGE, DEEPSEEK, "Junior")],
@@ -1522,14 +1506,14 @@ test("panel isolates an unavailable model catalog to the affected card", async (
     models: DEFAULT_MODELS,
     catalogFailures: { [deletedDirectory]: "catalog unavailable for deleted location" },
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Context data unavailable"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Context data unavailable"),
           { maxPasses: 40 },
         )
         expect(frame).toContain("build · main")
@@ -1541,9 +1525,9 @@ test("panel isolates an unavailable model catalog to the affected card", async (
         expect(frame).toContain("Total reported spend: $0.0150")
         expect(frame).not.toContain("Refresh failed (values may be stale)")
 
-        const failedModelRow: number = frame.indexOf("Model: anthropic/claude-5-opus")
-        const note: number = frame.indexOf("Context data unavailable")
-        const nextModelRow: number = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
+        const failedModelRow = frame.indexOf("Model: anthropic/claude-5-opus")
+        const note = frame.indexOf("Context data unavailable")
+        const nextModelRow = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
         expect(failedModelRow).toBeGreaterThanOrEqual(0)
         expect(note).toBeGreaterThan(failedModelRow)
         expect(nextModelRow).toBeGreaterThan(note)
@@ -1552,15 +1536,15 @@ test("panel isolates an unavailable model catalog to the affected card", async (
   })
 })
 
-test("panel paginates message history past the first page to honor a staged revert boundary", async (): Promise<void> => {
-  const boundary: string = "msg_boundary"
-  const lateUsage: TokenUsageInfo = {
+test("panel paginates message history past the first page to honor a staged revert boundary", async () => {
+  const boundary = "msg_boundary"
+  const lateUsage = {
     input: 4000,
     output: 1000,
     reasoning: 0,
     cache: { read: 0, write: 0 },
   }
-  const history: SessionMessageInfo[] = [
+  const history = [
     assistantMessage("msg_early_assistant", CHILD_USAGE, DEEPSEEK, "Junior"),
     userMessage(boundary, "stage revert here"),
   ]
@@ -1575,7 +1559,7 @@ test("panel paginates message history past the first page to honor a staged reve
       "Junior",
     ),
   )
-  const child: SessionInfo = sessionInfo({
+  const child = sessionInfo({
     id: "ses_child_paged",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -1584,19 +1568,18 @@ test("panel paginates message history past the first page to honor a staged reve
     revert: { messageID: boundary },
     model: DEEPSEEK,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), child],
     messages: { ses_child_paged: history },
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
-            candidate.includes("Peak context: 1.65K / 10K tokens (17%)"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Peak context: 1.65K / 10K tokens (17%)"),
           { maxPasses: 60 },
         )
         expect(frame).not.toContain("Paged history")
@@ -1604,19 +1587,19 @@ test("panel paginates message history past the first page to honor a staged reve
         expect(frame).toContain("Model: anthropic/claude-5-opus")
         expect(frame).not.toContain("Peak context: 5K")
 
-        const anthropicStart: number = frame.indexOf("Model: anthropic/claude-5-opus")
-        const contextStart: number = frame.indexOf(
+        const anthropicStart = frame.indexOf("Model: anthropic/claude-5-opus")
+        const contextStart = frame.indexOf(
           "Context model: opencode-go/deepseek-v4.1-flash#high",
         )
         expect(anthropicStart).toBeGreaterThanOrEqual(0)
         expect(contextStart).toBeGreaterThan(anthropicStart)
 
-        const anthropicGroup: string = frame.slice(anthropicStart, contextStart)
+        const anthropicGroup = frame.slice(anthropicStart, contextStart)
         expect(anthropicGroup).toContain("Peak context: unknown")
         expect(anthropicGroup).not.toContain("1.65K")
         expect(anthropicGroup).not.toContain("17%")
 
-        const contextGroup: string = frame.slice(
+        const contextGroup = frame.slice(
           contextStart,
           frame.indexOf("Total reported spend"),
         )
@@ -1626,15 +1609,15 @@ test("panel paginates message history past the first page to honor a staged reve
   })
 })
 
-test("panel does not report the selected model as actual when message history is unavailable", async (): Promise<void> => {
-  const root: SessionInfo = sessionInfo({
+test("panel does not report the selected model as actual when message history is unavailable", async () => {
+  const root = sessionInfo({
     id: ROOT_SESSION,
     agent: "build",
     title: "Main task",
     cost: 0.01,
     model: { providerID: "openai", id: "gpt-6.1-sol" },
   })
-  const child: SessionInfo = sessionInfo({
+  const child = sessionInfo({
     id: "ses_child_lost",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -1642,27 +1625,26 @@ test("panel does not report the selected model as actual when message history is
     cost: 0.003,
     model: DEEPSEEK,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [root, child],
     messages: {},
     messageFailures: { ses_child_lost: "message history unavailable" },
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
-            candidate.includes("Selected: opencode-go/deepseek-v4.1-flash#high"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Selected: opencode-go/deepseek-v4.1-flash#high"),
           { maxPasses: 40 },
         )
-        const cardStart: number = frame.indexOf("● Junior")
-        const cardEnd: number = frame.indexOf("Total reported spend")
+        const cardStart = frame.indexOf("● Junior")
+        const cardEnd = frame.indexOf("Total reported spend")
         expect(cardStart).toBeGreaterThanOrEqual(0)
         expect(cardEnd).toBeGreaterThan(cardStart)
-        const card: string = frame.slice(cardStart, cardEnd)
+        const card = frame.slice(cardStart, cardEnd)
         expect(card).toContain("Spent: $0.0030")
         expect(card).toContain("Model: unknown")
         expect(card).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
@@ -1675,36 +1657,36 @@ test("panel does not report the selected model as actual when message history is
   })
 })
 
-test("focused panel scrolls on PageDown and PageUp while header and footer stay fixed", async (): Promise<void> => {
-  const fixture: Fixture = makeOverflowFixture()
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+test("focused panel scrolls on PageDown and PageUp while header and footer stay fixed", async () => {
+  const fixture = makeOverflowFixture()
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 76, height: 22 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const initial: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Model: openai/gpt-6.1-sol"),
+      async (setup) => {
+        const initial = await setup.waitForFrame(
+          (candidate) => candidate.includes("Model: openai/gpt-6.1-sol"),
           { maxPasses: 40 },
         )
         expect(chromeProblems(initial, "initial")).toEqual([])
 
-        const scrollbox: ScrollBoxLike | undefined = findScrollBox(setup.renderer.root)
+        const scrollbox = findScrollBox(setup.renderer.root)
         if (scrollbox === undefined) {
           throw new Error("Expected an OpenTUI scrollbox in the rendered panel")
         }
-        const before: number = scrollbox.scrollTop
+        const before = scrollbox.scrollTop
         expect(before).toBe(0)
 
         setup.mockInput.pressKey("\x1b[6~")
         await setup.renderOnce()
-        const afterDown: number = scrollbox.scrollTop
+        const afterDown = scrollbox.scrollTop
         expect(afterDown).toBeGreaterThan(before)
         expect(chromeProblems(setup.captureCharFrame(), "after PageDown")).toEqual([])
 
         setup.mockInput.pressKey("\x1b[5~")
         await setup.renderOnce()
-        const afterUp: number = scrollbox.scrollTop
+        const afterUp = scrollbox.scrollTop
         expect(afterUp).toBeLessThan(afterDown)
         expect(chromeProblems(setup.captureCharFrame(), "after PageUp")).toEqual([])
       },
@@ -1712,22 +1694,22 @@ test("focused panel scrolls on PageDown and PageUp while header and footer stay 
   })
 })
 
-test("panel picks the highest known context percentage per model across locations", async (): Promise<void> => {
-  const locationA: string = "/tmp/opencode/agents-status-limit-a"
-  const locationB: string = "/tmp/opencode/agents-status-limit-b"
-  const smallUsage: TokenUsageInfo = {
+test("panel picks the highest known context percentage per model across locations", async () => {
+  const locationA = "/tmp/opencode/agents-status-limit-a"
+  const locationB = "/tmp/opencode/agents-status-limit-b"
+  const smallUsage = {
     input: 4000,
     output: 700,
     reasoning: 200,
     cache: { read: 100, write: 0 },
   }
-  const largeUsage: TokenUsageInfo = {
+  const largeUsage = {
     input: 16000,
     output: 3000,
     reasoning: 500,
     cache: { read: 400, write: 100 },
   }
-  const first: SessionInfo = sessionInfo({
+  const first = sessionInfo({
     id: "ses_limit_a",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -1735,7 +1717,7 @@ test("panel picks the highest known context percentage per model across location
     directory: locationA,
     model: DEEPSEEK,
   })
-  const second: SessionInfo = sessionInfo({
+  const second = sessionInfo({
     id: "ses_limit_b",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -1743,7 +1725,7 @@ test("panel picks the highest known context percentage per model across location
     directory: locationB,
     model: DEEPSEEK,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), first, second],
     messages: {
       ses_limit_a: [assistantMessage("msg_limit_a", smallUsage, DEEPSEEK, "Junior")],
@@ -1754,14 +1736,14 @@ test("panel picks the highest known context percentage per model across location
       [locationB]: [modelInfo("opencode-go", "deepseek-v4.1-flash", 100000)],
     },
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Peak context: 5K / 10K tokens (50%)"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Peak context: 5K / 10K tokens (50%)"),
           { maxPasses: 40 },
         )
         expect(frame).toContain("2 sessions")
@@ -1774,15 +1756,15 @@ test("panel picks the highest known context percentage per model across location
   })
 })
 
-test("focused panel switches between aggregate agents and per-session usage", async (): Promise<void> => {
-  const actualBeta: ModelRef = { providerID: "anthropic", id: "claude-5-opus", variant: "high" }
-  const betaUsage: TokenUsageInfo = {
+test("focused panel switches between aggregate agents and per-session usage", async () => {
+  const actualBeta = { providerID: "anthropic", id: "claude-5-opus", variant: "high" }
+  const betaUsage = {
     input: 4000,
     output: 500,
     reasoning: 100,
     cache: { read: 300, write: 100 },
   }
-  const alpha: SessionInfo = sessionInfo({
+  const alpha = sessionInfo({
     id: "ses_child_a",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -1790,7 +1772,7 @@ test("focused panel switches between aggregate agents and per-session usage", as
     cost: 0.0123,
     model: DEEPSEEK,
   })
-  const beta: SessionInfo = sessionInfo({
+  const beta = sessionInfo({
     id: "ses_child_b",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -1798,7 +1780,7 @@ test("focused panel switches between aggregate agents and per-session usage", as
     cost: 0.002,
     model: DEEPSEEK,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), alpha, beta, unrelatedSession],
     messages: {
       ses_child_a: [assistantMessage("msg_alpha", CHILD_USAGE, DEEPSEEK, "Junior")],
@@ -1811,14 +1793,14 @@ test("focused panel switches between aggregate agents and per-session usage", as
     statuses: { ses_child_a: "running", ses_child_b: "idle" },
   })
 
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 65 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const aggregate: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Total reported spend: $0.0143"),
+      async (setup) => {
+        const aggregate = await setup.waitForFrame(
+          (candidate) => candidate.includes("Total reported spend: $0.0143"),
           { maxPasses: 40 },
         )
         expect(aggregate.split("● Junior").length - 1).toBe(1)
@@ -1828,28 +1810,27 @@ test("focused panel switches between aggregate agents and per-session usage", as
         expect(aggregate).not.toContain("Beta task")
         expect(aggregate).not.toContain("Unrelated")
 
-        const sessionsTab: KeymapCommand | undefined = findCommand(
+        const sessionsTab = findCommand(
           fixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "s",
+          (candidate) => candidate.bind === "s",
         )
         if (sessionsTab === undefined) {
           throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
         }
         await sessionsTab.run()
 
-        const sessions: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
-            candidate.includes("Alpha task") && candidate.includes("Beta task"),
+        const sessions = await setup.waitForFrame(
+          (candidate) => candidate.includes("Alpha task") && candidate.includes("Beta task"),
           { maxPasses: 40 },
         )
-        const alphaStart: number = sessions.indexOf("Alpha task")
-        const betaStart: number = sessions.indexOf("Beta task")
-        const totalStart: number = sessions.indexOf("Total reported spend")
+        const alphaStart = sessions.indexOf("Alpha task")
+        const betaStart = sessions.indexOf("Beta task")
+        const totalStart = sessions.indexOf("Total reported spend")
         expect(alphaStart).toBeGreaterThanOrEqual(0)
         expect(betaStart).toBeGreaterThan(alphaStart)
         expect(totalStart).toBeGreaterThan(betaStart)
-        const alphaCard: string = sessions.slice(alphaStart, betaStart)
-        const betaCard: string = sessions.slice(betaStart, totalStart)
+        const alphaCard = sessions.slice(alphaStart, betaStart)
+        const betaCard = sessions.slice(betaStart, totalStart)
 
         expect(alphaCard).toContain("Junior")
         expect(alphaCard).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
@@ -1876,17 +1857,17 @@ test("focused panel switches between aggregate agents and per-session usage", as
         expect(sessions).toContain("Total reported spend: $0.0143")
         expect(sessions).not.toContain("Unrelated")
 
-        const agentsTab: KeymapCommand | undefined = findCommand(
+        const agentsTab = findCommand(
           fixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "a",
+          (candidate) => candidate.bind === "a",
         )
         if (agentsTab === undefined) {
           throw new Error("Expected the focused panel to bind 'a' to the Agents tab")
         }
         await agentsTab.run()
 
-        const restoredAggregate: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
+        const restoredAggregate = await setup.waitForFrame(
+          (candidate) =>
             candidate.includes("Total reported spend: $0.0143")
             && !candidate.includes("Alpha task")
             && !candidate.includes("Beta task"),
@@ -1900,15 +1881,15 @@ test("focused panel switches between aggregate agents and per-session usage", as
   })
 })
 
-test("panel attributes a usage sample to its own model when the latest assistant has no tokens", async (): Promise<void> => {
-  const anthropic: ModelRef = { providerID: "anthropic", id: "claude-5-opus" }
-  const switchedUsage: TokenUsageInfo = {
+test("panel attributes a usage sample to its own model when the latest assistant has no tokens", async () => {
+  const anthropic = { providerID: "anthropic", id: "claude-5-opus" }
+  const switchedUsage = {
     input: 4000,
     output: 700,
     reasoning: 200,
     cache: { read: 100, write: 0 },
   }
-  const anthropicUsage: TokenUsageInfo = {
+  const anthropicUsage = {
     input: 1500,
     output: 300,
     reasoning: 100,
@@ -1920,27 +1901,27 @@ test("panel attributes a usage sample to its own model when the latest assistant
     anthropic,
     "Junior",
   )
-  const root: SessionInfo = sessionInfo({
+  const root = sessionInfo({
     id: ROOT_SESSION,
     agent: "build",
     cost: 0.01,
     model: { providerID: "openai", id: "gpt-6.1-sol" },
   })
-  const switched: SessionInfo = sessionInfo({
+  const switched = sessionInfo({
     id: "ses_switch_a",
     parentID: ROOT_SESSION,
     agent: "Junior",
     cost: 0.0123,
     model: anthropic,
   })
-  const current: SessionInfo = sessionInfo({
+  const current = sessionInfo({
     id: "ses_switch_b",
     parentID: ROOT_SESSION,
     agent: "Junior",
     cost: 0.002,
     model: anthropic,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [root, switched, current],
     messages: {
       ses_switch_a: [
@@ -1953,30 +1934,30 @@ test("panel attributes a usage sample to its own model when the latest assistant
     },
     models: [...DEFAULT_MODELS, modelInfo("anthropic", "claude-5-opus", 200000)],
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Model: anthropic/claude-5-opus"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Model: anthropic/claude-5-opus"),
           { maxPasses: 40 },
         )
         expect(frame.split("● Junior").length - 1).toBe(1)
         expect(frame).toContain("2 sessions")
 
-        const anthropicStart: number = frame.indexOf("Model: anthropic/claude-5-opus")
-        const contextStart: number = frame.indexOf("Context model:")
+        const anthropicStart = frame.indexOf("Model: anthropic/claude-5-opus")
+        const contextStart = frame.indexOf("Context model:")
         expect(anthropicStart).toBeGreaterThanOrEqual(0)
         expect(contextStart).toBeGreaterThan(anthropicStart)
 
-        const anthropicGroup: string = frame.slice(anthropicStart, contextStart)
+        const anthropicGroup = frame.slice(anthropicStart, contextStart)
         expect(anthropicGroup).toMatch(/Peak context:\s*2K\s*\/\s*200K tokens\s*\(1%\)/)
         expect(anthropicGroup).not.toContain("5K")
         expect(anthropicGroup).not.toContain("50%")
 
-        const contextGroup: string = frame.slice(
+        const contextGroup = frame.slice(
           contextStart,
           frame.indexOf("Total reported spend"),
         )
@@ -1991,34 +1972,34 @@ test("panel attributes a usage sample to its own model when the latest assistant
   })
 })
 
-test("panel keeps distinct variant rows with per-variant peak context for a main and child session", async (): Promise<void> => {
-  const low: ModelRef = { providerID: "opencode-go", id: "deepseek-v4.1-flash", variant: "low" }
-  const mainUsage: TokenUsageInfo = {
+test("panel keeps distinct variant rows with per-variant peak context for a main and child session", async () => {
+  const low = { providerID: "opencode-go", id: "deepseek-v4.1-flash", variant: "low" }
+  const mainUsage = {
     input: 1000,
     output: 200,
     reasoning: 50,
     cache: { read: 300, write: 100 },
   }
-  const childUsage: TokenUsageInfo = {
+  const childUsage = {
     input: 1500,
     output: 300,
     reasoning: 100,
     cache: { read: 100, write: 0 },
   }
-  const root: SessionInfo = sessionInfo({
+  const root = sessionInfo({
     id: ROOT_SESSION,
     agent: "Junior",
     cost: 0.0123,
     model: DEEPSEEK,
   })
-  const child: SessionInfo = sessionInfo({
+  const child = sessionInfo({
     id: "ses_variant_low",
     parentID: ROOT_SESSION,
     agent: "Junior",
     cost: 0.002,
     model: low,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [root, child],
     messages: {
       [ROOT_SESSION]: [assistantMessage("msg_variant_high", mainUsage, DEEPSEEK, "Junior")],
@@ -2026,15 +2007,14 @@ test("panel keeps distinct variant rows with per-variant peak context for a main
     },
     models: DEFAULT_MODELS,
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
-            candidate.includes("Model: opencode-go/deepseek-v4.1-flash#low"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Model: opencode-go/deepseek-v4.1-flash#low"),
           { maxPasses: 40 },
         )
         expect(frame.split("● Junior").length - 1).toBe(1)
@@ -2042,18 +2022,18 @@ test("panel keeps distinct variant rows with per-variant peak context for a main
         expect(frame).toContain("2 sessions")
         expect(frame.split("Spent: $0.0143").length - 1).toBe(1)
 
-        const highStart: number = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
-        const lowStart: number = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#low")
+        const highStart = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
+        const lowStart = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#low")
         expect(highStart).toBeGreaterThanOrEqual(0)
         expect(lowStart).toBeGreaterThan(highStart)
 
-        const highGroup: string = frame.slice(highStart, lowStart)
+        const highGroup = frame.slice(highStart, lowStart)
         expect(highGroup).toMatch(/Peak context:\s*1\.65K\s*\/\s*10K tokens\s*\(17%\)/)
         expect(highGroup).toContain("1 session")
         expect(highGroup).not.toContain("2K")
         expect(highGroup).not.toContain("20%")
 
-        const lowGroup: string = frame.slice(lowStart, frame.indexOf("Total reported spend"))
+        const lowGroup = frame.slice(lowStart, frame.indexOf("Total reported spend"))
         expect(lowGroup).toMatch(/Peak context:\s*2K\s*\/\s*10K tokens\s*\(20%\)/)
         expect(lowGroup).toContain("1 session")
         expect(lowGroup).not.toContain("1.65K")
@@ -2063,28 +2043,28 @@ test("panel keeps distinct variant rows with per-variant peak context for a main
   })
 })
 
-test("panel groups descendants by agent with combined counts, single-count spend, and per-model peak context", async (): Promise<void> => {
-  const alternate: ModelRef = { providerID: "anthropic", id: "claude-5-opus", variant: "medium" }
-  const peakUsage: TokenUsageInfo = {
+test("panel groups descendants by agent with combined counts, single-count spend, and per-model peak context", async () => {
+  const alternate = { providerID: "anthropic", id: "claude-5-opus", variant: "medium" }
+  const peakUsage = {
     input: 4000,
     output: 700,
     reasoning: 200,
     cache: { read: 100, write: 0 },
   }
-  const nestedUsage: TokenUsageInfo = {
+  const nestedUsage = {
     input: 1500,
     output: 300,
     reasoning: 100,
     cache: { read: 100, write: 0 },
   }
-  const root: SessionInfo = sessionInfo({
+  const root = sessionInfo({
     id: ROOT_SESSION,
     agent: "build",
     title: "Root grouped task",
     cost: 0.01,
     model: { providerID: "openai", id: "gpt-6.1-sol" },
   })
-  const alpha: SessionInfo = sessionInfo({
+  const alpha = sessionInfo({
     id: "ses_grouped_alpha",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -2092,7 +2072,7 @@ test("panel groups descendants by agent with combined counts, single-count spend
     cost: 0.0123,
     model: DEEPSEEK,
   })
-  const beta: SessionInfo = sessionInfo({
+  const beta = sessionInfo({
     id: "ses_grouped_beta",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -2100,7 +2080,7 @@ test("panel groups descendants by agent with combined counts, single-count spend
     cost: 0.002,
     model: DEEPSEEK,
   })
-  const nested: SessionInfo = sessionInfo({
+  const nested = sessionInfo({
     id: "ses_grouped_nested",
     parentID: alpha.id,
     agent: "Junior",
@@ -2108,7 +2088,7 @@ test("panel groups descendants by agent with combined counts, single-count spend
     cost: 0.003,
     model: alternate,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [root, alpha, beta, nested, unrelatedSession],
     messages: {
       ses_grouped_alpha: [assistantMessage("msg_grouped_alpha", CHILD_USAGE, DEEPSEEK, "Junior")],
@@ -2120,23 +2100,23 @@ test("panel groups descendants by agent with combined counts, single-count spend
     models: [...DEFAULT_MODELS, modelInfo("anthropic", "claude-5-opus", 200000)],
     statuses: { ses_grouped_alpha: "running", ses_grouped_beta: "running" },
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Junior"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
-        const headings: number = frame.split("● Junior").length - 1
+        const headings = frame.split("● Junior").length - 1
         expect(headings).toBe(1)
 
-        const groupStart: number = frame.indexOf("● Junior")
-        const groupEnd: number = frame.indexOf("Total reported spend")
+        const groupStart = frame.indexOf("● Junior")
+        const groupEnd = frame.indexOf("Total reported spend")
         expect(groupEnd).toBeGreaterThan(groupStart)
-        const group: string = frame.slice(groupStart, groupEnd)
+        const group = frame.slice(groupStart, groupEnd)
         expect(group).toContain("2 running")
         expect(group).toContain("3 sessions")
         expect(group).toMatch(/Spent:\s*\$0\.0173/)
@@ -2146,9 +2126,9 @@ test("panel groups descendants by agent with combined counts, single-count spend
         expect(group).not.toContain("6.65K")
         expect(frame).toContain("Total reported spend: $0.0273")
 
-        const spent: number = group.indexOf("Spent: $0.0173")
-        const secondModel: number = group.indexOf("anthropic/claude-5-opus#medium")
-        const lastContext: number = group.lastIndexOf("Peak context:")
+        const spent = group.indexOf("Spent: $0.0173")
+        const secondModel = group.indexOf("anthropic/claude-5-opus#medium")
+        const lastContext = group.lastIndexOf("Peak context:")
         expect(spent).toBeGreaterThan(secondModel)
         expect(spent).toBeGreaterThan(lastContext)
 
@@ -2162,7 +2142,7 @@ test("panel groups descendants by agent with combined counts, single-count spend
 
         fixture.setStatus("ses_grouped_nested", "running")
         await setup.renderOnce()
-        const updated: string = setup.captureCharFrame()
+        const updated = setup.captureCharFrame()
         expect(updated).toContain("3 running · 3 sessions")
         expect(updated.split("● Junior").length - 1).toBe(1)
       },
@@ -2175,28 +2155,28 @@ const capturedForegrounds = (
   text: string,
 ): ReadonlyArray<readonly [number, number, number, number]> =>
   frame.lines.flatMap(
-    (line: CapturedLine): ReadonlyArray<readonly [number, number, number, number]> =>
+    (line) =>
       line.spans
-        .filter((span: CapturedSpan): boolean => span.text.includes(text))
-        .map((span: CapturedSpan): readonly [number, number, number, number] => span.fg.toInts()),
+        .filter((span) => span.text.includes(text))
+        .map((span) => span.fg.toInts()),
   )
 
-test("panel repaints card text when the theme changes without a data refresh", async (): Promise<void> => {
-  const fixture: Fixture = makeFixture()
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+test("panel repaints card text when the theme changes without a data refresh", async () => {
+  const fixture = makeFixture()
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Junior"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Junior"),
           { maxPasses: 20 },
         )
         expect(frame).toContain("Spent: $0.0123")
         expect(frame).not.toContain(COMMAND_TITLE)
 
-        const before: CapturedFrame = setup.captureSpans()
+        const before = setup.captureSpans()
         expect(capturedForegrounds(before, "Agents")).toEqual([
           THEME_A.text.action.primary.base.toInts(),
         ])
@@ -2207,8 +2187,8 @@ test("panel repaints card text when the theme changes without a data refresh", a
         fixture.failWith("refresh blocked")
         fixture.setTheme(THEME_B)
         await setup.renderOnce()
-        const after: CapturedFrame = setup.captureSpans()
-        const afterFrame: string = setup.captureCharFrame()
+        const after = setup.captureSpans()
+        const afterFrame = setup.captureCharFrame()
 
         expect(afterFrame).toContain("Junior")
         expect(afterFrame).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
@@ -2233,40 +2213,40 @@ test("panel repaints card text when the theme changes without a data refresh", a
   })
 })
 
-test("panel groups canonical-equivalent model references into one row without a Selected line", async (): Promise<void> => {
-  const hashRef: ModelRef = { providerID: "acme", id: "model#high" }
-  const variantRef: ModelRef = { providerID: "acme", id: "model", variant: "high" }
-  const plainRef: ModelRef = { providerID: "acme", id: "model" }
-  const emptyVariantRef: ModelRef = { providerID: "acme", id: "model", variant: "" }
-  const hashSession: SessionInfo = sessionInfo({
+test("panel groups canonical-equivalent model references into one row without a Selected line", async () => {
+  const hashRef = { providerID: "acme", id: "model#high" }
+  const variantRef = { providerID: "acme", id: "model", variant: "high" }
+  const plainRef = { providerID: "acme", id: "model" }
+  const emptyVariantRef = { providerID: "acme", id: "model", variant: "" }
+  const hashSession = sessionInfo({
     id: "ses_canon_hash",
     parentID: ROOT_SESSION,
     agent: "Junior",
     cost: 0.0100,
     model: hashRef,
   })
-  const variantSession: SessionInfo = sessionInfo({
+  const variantSession = sessionInfo({
     id: "ses_canon_variant",
     parentID: ROOT_SESSION,
     agent: "Junior",
     cost: 0.0020,
     model: variantRef,
   })
-  const plainSession: SessionInfo = sessionInfo({
+  const plainSession = sessionInfo({
     id: "ses_canon_plain",
     parentID: ROOT_SESSION,
     agent: "Junior",
     cost: 0.0004,
     model: plainRef,
   })
-  const emptyVariantSession: SessionInfo = sessionInfo({
+  const emptyVariantSession = sessionInfo({
     id: "ses_canon_empty",
     parentID: ROOT_SESSION,
     agent: "Junior",
     cost: 0.0006,
     model: emptyVariantRef,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), hashSession, variantSession, plainSession, emptyVariantSession],
     messages: {
       ses_canon_hash: [assistantMessage("msg_canon_hash", CHILD_USAGE, hashRef, "Junior")],
@@ -2280,25 +2260,25 @@ test("panel groups canonical-equivalent model references into one row without a 
     },
     models: [],
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("acme/model#high"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("acme/model#high"),
           { maxPasses: 20 },
         )
-        const lines: readonly string[] = frame.split("\n").map((line: string): string =>
+        const lines: readonly string[] = frame.split("\n").map((line) =>
           line.replace(/[│█]/g, " ").trim()
         )
         expect(frame.split("● Junior").length - 1).toBe(1)
         expect(frame).toContain("0 running · 4 sessions")
-        expect(lines.filter((line: string): boolean => line === "Model: acme/model#high").length)
+        expect(lines.filter((line) => line === "Model: acme/model#high").length)
           .toBe(1)
-        expect(lines.filter((line: string): boolean => line === "Model: acme/model").length).toBe(1)
-        expect(lines.filter((line: string): boolean => line === "2 sessions").length).toBe(2)
+        expect(lines.filter((line) => line === "Model: acme/model").length).toBe(1)
+        expect(lines.filter((line) => line === "2 sessions").length).toBe(2)
         expect(frame).not.toContain("Selected:")
         expect(frame).toContain("Spent: $0.0130")
         expect(frame).toContain("Total reported spend: $0.0130")
@@ -2307,8 +2287,8 @@ test("panel groups canonical-equivalent model references into one row without a 
   })
 })
 
-test("panel stops at the latest eligible assistant and does not fall back to older usage", async (): Promise<void> => {
-  const olderUsage: TokenUsageInfo = {
+test("panel stops at the latest eligible assistant and does not fall back to older usage", async () => {
+  const olderUsage = {
     input: 4000,
     output: 700,
     reasoning: 200,
@@ -2321,33 +2301,32 @@ test("panel stops at the latest eligible assistant and does not fall back to old
     history.push(userMessage(`msg_noise_${String(index).padStart(3, "0")}`, `noise ${index}`))
   }
   history.push(assistantMessage("msg_latest_zero", ZERO_USAGE, DEEPSEEK, "Junior"))
-  const child: SessionInfo = sessionInfo({
+  const child = sessionInfo({
     id: CHILD_SESSION,
     parentID: ROOT_SESSION,
     agent: "Junior",
     cost: 0.0123,
     model: DEEPSEEK,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), child],
     messages: { [CHILD_SESSION]: history },
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
-            candidate.includes("Model: opencode-go/deepseek-v4.1-flash#high"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Model: opencode-go/deepseek-v4.1-flash#high"),
           { maxPasses: 20 },
         )
         expect(frame).toContain("Peak context: unknown")
         expect(frame).not.toContain("Peak context: 5K")
         expect(frame).toContain("Spent: $0.0123")
         const messageCalls: readonly ApiCall[] = fixture.calls.filter(
-          (call: ApiCall): boolean => call.method === "message.list",
+          (call) => call.method === "message.list",
         )
         expect(messageCalls.length).toBe(2)
       },
@@ -2357,15 +2336,15 @@ test("panel stops at the latest eligible assistant and does not fall back to old
 
 test(
   "Sessions cards isolate failures, fall back to IDs, and keep live status through refresh errors",
-  async (): Promise<void> => {
-    const actual: ModelRef = { providerID: "anthropic", id: "claude-5-opus", variant: "high" }
-    const usage: TokenUsageInfo = {
+  async () => {
+    const actual = { providerID: "anthropic", id: "claude-5-opus", variant: "high" }
+    const usage = {
       input: 4000,
       output: 500,
       reasoning: 100,
       cache: { read: 300, write: 100 },
     }
-    const titleless: SessionInfo = sessionInfo({
+    const titleless = sessionInfo({
       id: "ses_child_a",
       parentID: ROOT_SESSION,
       agent: "Junior",
@@ -2383,7 +2362,7 @@ test(
       }),
       outcome: "succeeded",
     }
-    const fixture: Fixture = makeFixture({
+    const fixture = makeFixture({
       sessions: [rootSession(), titleless, unavailable],
       messages: {
         ses_child_a: [assistantMessage("msg_titleless", usage, actual, "Junior")],
@@ -2396,34 +2375,33 @@ test(
       statuses: { ses_child_a: "running", ses_child_b: "idle" },
     })
 
-    await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPlugin(fixture, async (render) => {
       await withPanel(
         render,
         makePanelInput(PANEL_NAME),
         { width: 120, height: 65 },
-        async (setup: TestRendererSetup): Promise<void> => {
-          const sessionsTab: KeymapCommand | undefined = findCommand(
+        async (setup) => {
+          const sessionsTab = findCommand(
             fixture,
-            (candidate: KeymapCommand): boolean => candidate.bind === "s",
+            (candidate) => candidate.bind === "s",
           )
           if (sessionsTab === undefined) {
             throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
           }
           await sessionsTab.run()
 
-          const sessions: string = await setup.waitForFrame(
-            (candidate: string): boolean =>
-              candidate.includes("● ses_child_a") && candidate.includes("Beta task"),
+          const sessions = await setup.waitForFrame(
+            (candidate) => candidate.includes("● ses_child_a") && candidate.includes("Beta task"),
             { maxPasses: 40 },
           )
-          const titlelessStart: number = sessions.indexOf("● ses_child_a")
-          const unavailableStart: number = sessions.indexOf("Beta task")
-          const totalStart: number = sessions.indexOf("Total reported spend")
+          const titlelessStart = sessions.indexOf("● ses_child_a")
+          const unavailableStart = sessions.indexOf("Beta task")
+          const totalStart = sessions.indexOf("Total reported spend")
           expect(titlelessStart).toBeGreaterThanOrEqual(0)
           expect(unavailableStart).toBeGreaterThan(titlelessStart)
           expect(totalStart).toBeGreaterThan(unavailableStart)
-          const titlelessCard: string = sessions.slice(titlelessStart, unavailableStart)
-          const unavailableCard: string = sessions.slice(unavailableStart, totalStart)
+          const titlelessCard = sessions.slice(titlelessStart, unavailableStart)
+          const unavailableCard = sessions.slice(unavailableStart, totalStart)
 
           expect(titlelessCard).toContain("Junior · ses_child_a")
           expect(titlelessCard).toContain("Model: anthropic/claude-5-opus#high")
@@ -2448,7 +2426,7 @@ test(
 
           fixture.setStatus("ses_child_a", "idle")
           await setup.renderOnce()
-          const updated: string = setup.captureCharFrame()
+          const updated = setup.captureCharFrame()
           expect(updated).toContain("● ses_child_a")
           expect(updated).toContain("Beta task")
           expect(updated).not.toContain("● Junior")
@@ -2458,8 +2436,8 @@ test(
 
           fixture.failWith("refresh exploded")
           await Bun.sleep(2200)
-          const failedRefresh: string = await setup.waitForFrame(
-            (candidate: string): boolean => candidate.includes("Refresh failed"),
+          const failedRefresh = await setup.waitForFrame(
+            (candidate) => candidate.includes("Refresh failed"),
             { maxPasses: 40 },
           )
           expect(failedRefresh).toContain("Refresh failed (values may be stale): refresh exploded")
@@ -2478,8 +2456,8 @@ test(
   15000,
 )
 
-test("focused panel switches tabs with wrapping left and right arrows", async (): Promise<void> => {
-  const child: SessionInfo = sessionInfo({
+test("focused panel switches tabs with wrapping left and right arrows", async () => {
+  const child = sessionInfo({
     id: "ses_child_arrow",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -2487,7 +2465,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
     cost: 0.0123,
     model: DEEPSEEK,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), child],
     messages: {
       ses_child_arrow: [assistantMessage("msg_arrow", CHILD_USAGE, DEEPSEEK, "Junior")],
@@ -2496,14 +2474,14 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
     statuses: { ses_child_arrow: "running" },
   })
 
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const initial: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
+      async (setup) => {
+        const initial = await setup.waitForFrame(
+          (candidate) =>
             candidate.includes("Total reported spend: $0.0123")
             && candidate.includes("● Junior"),
           { maxPasses: 40 },
@@ -2512,22 +2490,22 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
         expect(initial).not.toContain("Arrow navigation task")
         expect(initial).toContain("Total reported spend: $0.0123")
 
-        const right: KeymapCommand | undefined = findCommand(
+        const right = findCommand(
           fixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "right",
+          (candidate) => candidate.bind === "right",
         )
         if (right === undefined) {
           throw new Error("Expected the focused panel to bind 'right' to the next tab")
         }
-        const left: KeymapCommand | undefined = findCommand(
+        const left = findCommand(
           fixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "left",
+          (candidate) => candidate.bind === "left",
         )
         if (left === undefined) {
           throw new Error("Expected the focused panel to bind 'left' to the previous tab")
         }
-        const focusedArrowLayer: KeymapLayer | undefined = fixture.layers.find(
-          (layer: KeymapLayer): boolean =>
+        const focusedArrowLayer = fixture.layers.find(
+          (layer) =>
             (layer.commands ?? []).includes(left) && (layer.commands ?? []).includes(right),
         )
         if (focusedArrowLayer === undefined) {
@@ -2536,8 +2514,8 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
         expect(focusedArrowLayer.enabled).toBe(true)
 
         await right.run()
-        const sessionsFromRight: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Arrow navigation task"),
+        const sessionsFromRight = await setup.waitForFrame(
+          (candidate) => candidate.includes("Arrow navigation task"),
           { maxPasses: 40 },
         )
         expect(sessionsFromRight).toContain("● Arrow navigation task")
@@ -2546,8 +2524,8 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
         expect(sessionsFromRight).toContain("Total reported spend: $0.0123")
 
         await right.run()
-        const agentsFromRight: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
+        const agentsFromRight = await setup.waitForFrame(
+          (candidate) =>
             candidate.includes("● Junior") && !candidate.includes("Arrow navigation task"),
           { maxPasses: 40 },
         )
@@ -2555,8 +2533,8 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
         expect(agentsFromRight).toContain("Total reported spend: $0.0123")
 
         await left.run()
-        const sessionsFromLeft: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Arrow navigation task"),
+        const sessionsFromLeft = await setup.waitForFrame(
+          (candidate) => candidate.includes("Arrow navigation task"),
           { maxPasses: 40 },
         )
         expect(sessionsFromLeft).toContain("● Arrow navigation task")
@@ -2564,8 +2542,8 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
         expect(sessionsFromLeft).toContain("Total reported spend: $0.0123")
 
         await left.run()
-        const agentsFromLeft: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
+        const agentsFromLeft = await setup.waitForFrame(
+          (candidate) =>
             candidate.includes("● Junior") && !candidate.includes("Arrow navigation task"),
           { maxPasses: 40 },
         )
@@ -2575,7 +2553,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
     )
   })
 
-  const unfocusedFixture: Fixture = makeFixture({
+  const unfocusedFixture = makeFixture({
     sessions: [rootSession(), child],
     messages: {
       ses_child_arrow: [assistantMessage("msg_arrow", CHILD_USAGE, DEEPSEEK, "Junior")],
@@ -2583,33 +2561,33 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
     models: DEFAULT_MODELS,
     statuses: { ses_child_arrow: "running" },
   })
-  await withPlugin(unfocusedFixture, async (render: PanelRenderer): Promise<void> => {
-    const input: PanelInput = { ...makePanelInput(PANEL_NAME), focused: false }
+  await withPlugin(unfocusedFixture, async (render) => {
+    const input = { ...makePanelInput(PANEL_NAME), focused: false }
     await withPanel(
       render,
       input,
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
+      async (setup) => {
         await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Junior"),
+          (candidate) => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
-        const right: KeymapCommand | undefined = findCommand(
+        const right = findCommand(
           unfocusedFixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "right",
+          (candidate) => candidate.bind === "right",
         )
         if (right === undefined) {
           throw new Error("Expected the unfocused panel to register the 'right' command")
         }
-        const left: KeymapCommand | undefined = findCommand(
+        const left = findCommand(
           unfocusedFixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "left",
+          (candidate) => candidate.bind === "left",
         )
         if (left === undefined) {
           throw new Error("Expected the unfocused panel to register the 'left' command")
         }
-        const unfocusedArrowLayer: KeymapLayer | undefined = unfocusedFixture.layers.find(
-          (layer: KeymapLayer): boolean =>
+        const unfocusedArrowLayer = unfocusedFixture.layers.find(
+          (layer) =>
             (layer.commands ?? []).includes(left) && (layer.commands ?? []).includes(right),
         )
         if (unfocusedArrowLayer === undefined) {
@@ -2621,8 +2599,8 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
   })
 })
 
-test("mouse clicks switch tab pills and refocus the panel", async (): Promise<void> => {
-  const child: SessionInfo = sessionInfo({
+test("mouse clicks switch tab pills and refocus the panel", async () => {
+  const child = sessionInfo({
     id: "ses_child_click",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -2630,7 +2608,7 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
     cost: 0.0123,
     model: DEEPSEEK,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), child],
     messages: {
       ses_child_click: [assistantMessage("msg_click", CHILD_USAGE, DEEPSEEK, "Junior")],
@@ -2638,10 +2616,10 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
     models: DEFAULT_MODELS,
     statuses: { ses_child_click: "running" },
   })
-  let focusCalls: number = 0
-  const input: PanelInput = {
+  let focusCalls = 0
+  const input = {
     ...makePanelInput(PANEL_NAME),
-    focus: (): void => {
+    focus: () => {
       focusCalls += 1
     },
   }
@@ -2649,58 +2627,53 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
   const tabForegrounds = (
     frame: CapturedFrame,
     label: string,
-  ): ReadonlyArray<readonly [number, number, number, number]> => capturedForegrounds(frame, label)
+  ) => capturedForegrounds(frame, label)
   const hasColor = (
     colors: ReadonlyArray<readonly [number, number, number, number]>,
     expected: readonly [number, number, number, number],
-  ): boolean =>
-    colors.some((color: readonly [number, number, number, number]): boolean =>
-      color.every((channel: number, index: number): boolean => channel === expected[index])
-    )
+  ) => colors.some((color) => color.every((channel, index) => channel === expected[index]))
   const tabRow = (frame: string): { readonly line: string; readonly y: number } => {
     const lines: readonly string[] = frame.split("\n")
-    const y: number = lines.findIndex((line: string): boolean =>
-      line.includes("Agents") && line.includes("Sessions")
-    )
+    const y = lines.findIndex((line) => line.includes("Agents") && line.includes("Sessions"))
     if (y < 0) throw new Error("Expected both tab pill labels in one rendered row")
     return { line: lines[y] ?? "", y }
   }
-  const verifyChrome = (frame: string): void => {
+  const verifyChrome = (frame: string) => {
     expect(chromeProblems(frame, "mouse panel")).toEqual([])
   }
   const clickTab = async (
     setup: TestRendererSetup,
     label: "Agents" | "Sessions",
-  ): Promise<string> => {
-    const frame: string = setup.captureCharFrame()
-    const tabs: { readonly line: string; readonly y: number } = tabRow(frame)
-    const column: number = tabs.line.indexOf(label)
+  ) => {
+    const frame = setup.captureCharFrame()
+    const tabs = tabRow(frame)
+    const column = tabs.line.indexOf(label)
     if (column < 0) throw new Error(`Expected the ${label} tab pill to be visible`)
     await setup.mockMouse.click(column + Math.floor(label.length / 2), tabs.y)
     await setup.renderOnce()
     return setup.captureCharFrame()
   }
 
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       input,
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const initial: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Junior"),
+      async (setup) => {
+        const initial = await setup.waitForFrame(
+          (candidate) => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         expect(initial).not.toContain("Click navigation task")
         expect(initial).toContain("Total reported spend: $0.0123")
 
-        const initialStyles: CapturedFrame = setup.captureSpans()
+        const initialStyles = setup.captureSpans()
         expect(
           hasColor(tabForegrounds(initialStyles, "Sessions"), THEME_A.text.muted.toInts()),
         ).toBe(true)
         fixture.setTheme(THEME_B)
         await setup.renderOnce()
-        const themedAgents: CapturedFrame = setup.captureSpans()
+        const themedAgents = setup.captureSpans()
         expect(
           hasColor(
             tabForegrounds(themedAgents, "Agents"),
@@ -2711,9 +2684,9 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
           hasColor(tabForegrounds(themedAgents, "Sessions"), THEME_B.text.muted.toInts()),
         ).toBe(true)
 
-        const sessions: string = await clickTab(setup, "Sessions")
-        const sessionsFrame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("Click navigation task"),
+        const sessions = await clickTab(setup, "Sessions")
+        const sessionsFrame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Click navigation task"),
           { maxPasses: 40 },
         )
         expect(sessionsFrame).toContain("● Click navigation task")
@@ -2732,9 +2705,9 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
         ).toBe(true)
         expect(sessions).toContain("Click navigation task")
 
-        const agents: string = await clickTab(setup, "Agents")
-        const agentsFrame: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
+        const agents = await clickTab(setup, "Agents")
+        const agentsFrame = await setup.waitForFrame(
+          (candidate) =>
             candidate.includes("● Junior") && !candidate.includes("Click navigation task"),
           { maxPasses: 40 },
         )
@@ -2758,9 +2731,9 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
         render,
         input,
         { width: viewport.width, height: viewport.height },
-        async (setup: TestRendererSetup): Promise<void> => {
-          const smallAgents: string = await setup.waitForFrame(
-            (candidate: string): boolean => candidate.includes("Total reported spend: $0.0123"),
+        async (setup) => {
+          const smallAgents = await setup.waitForFrame(
+            (candidate) => candidate.includes("Total reported spend: $0.0123"),
             { maxPasses: 40 },
           )
           verifyChrome(smallAgents)
@@ -2771,7 +2744,7 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
             ),
           ).toBe(true)
 
-          const smallSessions: string = await clickTab(setup, "Sessions")
+          const smallSessions = await clickTab(setup, "Sessions")
           verifyChrome(smallSessions)
           expect(
             hasColor(
@@ -2781,7 +2754,7 @@ test("mouse clicks switch tab pills and refocus the panel", async (): Promise<vo
           ).toBe(true)
           expect(focusCalls).toBe(viewport.name === "42x22" ? 3 : 5)
 
-          const smallAgentsRestored: string = await clickTab(setup, "Agents")
+          const smallAgentsRestored = await clickTab(setup, "Agents")
           verifyChrome(smallAgentsRestored)
           expect(
             hasColor(
@@ -2807,20 +2780,20 @@ const expectPlainTokenSymbols = (frame: string): void => {
   expect(frame).not.toContain("♻")
 }
 
-test("panel aggregates cumulative tokens per agent card and places spend below the model lines", async (): Promise<void> => {
-  const alphaTokens: TokenUsageInfo = {
+test("panel aggregates cumulative tokens per agent card and places spend below the model lines", async () => {
+  const alphaTokens = {
     input: 1000,
     output: 200,
     reasoning: 50,
     cache: { read: 300, write: 100 },
   }
-  const betaTokens: TokenUsageInfo = {
+  const betaTokens = {
     input: 4000,
     output: 500,
     reasoning: 100,
     cache: { read: 300, write: 100 },
   }
-  const alpha: SessionInfo = sessionInfo({
+  const alpha = sessionInfo({
     id: "ses_tokens_a",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -2829,7 +2802,7 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
     model: DEEPSEEK,
     tokens: alphaTokens,
   })
-  const beta: SessionInfo = sessionInfo({
+  const beta = sessionInfo({
     id: "ses_tokens_b",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -2838,7 +2811,7 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
     model: DEEPSEEK,
     tokens: betaTokens,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), alpha, beta],
     messages: {
       ses_tokens_a: [assistantMessage("msg_tokens_a", CHILD_USAGE, DEEPSEEK, "Junior")],
@@ -2853,14 +2826,14 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
     },
     models: DEFAULT_MODELS,
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Junior"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         expect(frame).toContain("2 sessions")
@@ -2868,22 +2841,20 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
         expect(frame).not.toContain("1.77K")
 
         const lines: readonly string[] = trimmedLines(frame)
-        const title: string | undefined = lines.find((line: string): boolean =>
-          line.startsWith("● Junior")
-        )
+        const title = lines.find((line) => line.startsWith("● Junior"))
         expect(title).toBe("● Junior")
         expect(
-          lines.filter((line: string): boolean => line === "Spent: $0.0143 · ↑ 5K · ↓ 700 · ↺ 600")
+          lines.filter((line) => line === "Spent: $0.0143 · ↑ 5K · ↓ 700 · ↺ 600")
             .length,
         ).toBe(1)
         expect(frame).toContain("Total reported spend: $0.0143")
         expect(lines).toContain("Tokens: ↑ 5K · ↓ 700 · ↺ 600")
         expectPlainTokenSymbols(frame)
 
-        const status: number = frame.indexOf("0 running · 2 sessions")
-        const model: number = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
-        const context: number = frame.indexOf("Peak context: 1.65K / 10K tokens (17%)")
-        const spent: number = frame.indexOf("Spent: $0.0143")
+        const status = frame.indexOf("0 running · 2 sessions")
+        const model = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
+        const context = frame.indexOf("Peak context: 1.65K / 10K tokens (17%)")
+        const spent = frame.indexOf("Spent: $0.0143")
         expect(status).toBeGreaterThanOrEqual(0)
         expect(model).toBeGreaterThan(status)
         expect(context).toBeGreaterThan(model)
@@ -2893,20 +2864,20 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
   })
 })
 
-test("Sessions cards show each session's own cumulative tokens while the agent card sums them", async (): Promise<void> => {
-  const alphaTokens: TokenUsageInfo = {
+test("Sessions cards show each session's own cumulative tokens while the agent card sums them", async () => {
+  const alphaTokens = {
     input: 1000,
     output: 200,
     reasoning: 50,
     cache: { read: 300, write: 100 },
   }
-  const betaTokens: TokenUsageInfo = {
+  const betaTokens = {
     input: 4000,
     output: 500,
     reasoning: 100,
     cache: { read: 300, write: 100 },
   }
-  const alpha: SessionInfo = sessionInfo({
+  const alpha = sessionInfo({
     id: "ses_tokens_a",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -2915,7 +2886,7 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
     model: DEEPSEEK,
     tokens: alphaTokens,
   })
-  const beta: SessionInfo = sessionInfo({
+  const beta = sessionInfo({
     id: "ses_tokens_b",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -2924,44 +2895,43 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
     model: DEEPSEEK,
     tokens: betaTokens,
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), alpha, beta],
     messages: {},
     models: DEFAULT_MODELS,
     statuses: { ses_tokens_a: "running", ses_tokens_b: "idle" },
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const sessionsTab: KeymapCommand | undefined = findCommand(
+      async (setup) => {
+        const sessionsTab = findCommand(
           fixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "s",
+          (candidate) => candidate.bind === "s",
         )
         if (sessionsTab === undefined) {
           throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
         }
         await sessionsTab.run()
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
-            candidate.includes("Alpha task") && candidate.includes("Beta task"),
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Alpha task") && candidate.includes("Beta task"),
           { maxPasses: 40 },
         )
-        const alphaStart: number = frame.indexOf("● Alpha task")
-        const betaStart: number = frame.indexOf("● Beta task")
-        const totalStart: number = frame.indexOf("Total reported spend")
+        const alphaStart = frame.indexOf("● Alpha task")
+        const betaStart = frame.indexOf("● Beta task")
+        const totalStart = frame.indexOf("Total reported spend")
         expect(alphaStart).toBeGreaterThanOrEqual(0)
         expect(betaStart).toBeGreaterThan(alphaStart)
         expect(totalStart).toBeGreaterThan(betaStart)
-        const alphaCard: string = frame.slice(alphaStart, betaStart)
-        const betaCard: string = frame.slice(betaStart, totalStart)
+        const alphaCard = frame.slice(alphaStart, betaStart)
+        const betaCard = frame.slice(betaStart, totalStart)
 
-        const alphaStatus: number = alphaCard.indexOf("Status: running")
-        const alphaModel: number = alphaCard.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
-        const alphaContext: number = alphaCard.indexOf("Peak context: unknown")
-        const alphaSpent: number = alphaCard.indexOf(
+        const alphaStatus = alphaCard.indexOf("Status: running")
+        const alphaModel = alphaCard.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
+        const alphaContext = alphaCard.indexOf("Peak context: unknown")
+        const alphaSpent = alphaCard.indexOf(
           "Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 300",
         )
         expect(alphaStatus).toBeGreaterThanOrEqual(0)
@@ -2973,17 +2943,16 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
         expect(betaCard).toContain("Status: idle")
         expect(betaCard).toContain("Spent: $0.0020 · ↑ 4K · ↓ 500 · ↺ 300")
 
-        const agentsTab: KeymapCommand | undefined = findCommand(
+        const agentsTab = findCommand(
           fixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "a",
+          (candidate) => candidate.bind === "a",
         )
         if (agentsTab === undefined) {
           throw new Error("Expected the focused panel to bind 'a' to the Agents tab")
         }
         await agentsTab.run()
-        const aggregate: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
-            candidate.includes("Spent: $0.0143 · ↑ 5K · ↓ 700 · ↺ 600"),
+        const aggregate = await setup.waitForFrame(
+          (candidate) => candidate.includes("Spent: $0.0143 · ↑ 5K · ↓ 700 · ↺ 600"),
           { maxPasses: 40 },
         )
         expect(trimmedLines(aggregate)).toContain("Tokens: ↑ 5K · ↓ 700 · ↺ 600")
@@ -2994,8 +2963,8 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
   })
 })
 
-test("panel totals tokens across agents in the global footer", async (): Promise<void> => {
-  const explorer: SessionInfo = sessionInfo({
+test("panel totals tokens across agents in the global footer", async () => {
+  const explorer = sessionInfo({
     id: "ses_global_explorer",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -3004,7 +2973,7 @@ test("panel totals tokens across agents in the global footer", async (): Promise
     model: DEEPSEEK,
     tokens: { input: 1000, output: 200, reasoning: 25, cache: { read: 300, write: 50 } },
   })
-  const reviewer: SessionInfo = sessionInfo({
+  const reviewer = sessionInfo({
     id: "ses_global_reviewer",
     parentID: ROOT_SESSION,
     agent: "Reviewer",
@@ -3013,19 +2982,19 @@ test("panel totals tokens across agents in the global footer", async (): Promise
     model: DEEPSEEK,
     tokens: { input: 1000, output: 3000, reasoning: 10, cache: { read: 700, write: 0 } },
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), explorer, reviewer],
     messages: {},
     models: DEFAULT_MODELS,
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Reviewer"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("● Reviewer"),
           { maxPasses: 40 },
         )
         const lines: readonly string[] = trimmedLines(frame)
@@ -3033,16 +3002,16 @@ test("panel totals tokens across agents in the global footer", async (): Promise
         expect(lines).toContain("Spent: $0.0020 · ↑ 1K · ↓ 3K · ↺ 700")
         expect(lines).toContain("Tokens: ↑ 2K · ↓ 3.2K · ↺ 1K")
         expect(frame).toContain("Total reported spend: $0.0143")
-        const spend: number = frame.indexOf("Total reported spend: $0.0143")
-        const tokens: number = frame.indexOf("Tokens: ↑ 2K · ↓ 3.2K · ↺ 1K")
+        const spend = frame.indexOf("Total reported spend: $0.0143")
+        const tokens = frame.indexOf("Tokens: ↑ 2K · ↓ 3.2K · ↺ 1K")
         expect(tokens).toBeGreaterThan(spend)
       },
     )
   })
 })
 
-test("panel reports a reported zero token count as known usage", async (): Promise<void> => {
-  const zero: SessionInfo = sessionInfo({
+test("panel reports a reported zero token count as known usage", async () => {
+  const zero = sessionInfo({
     id: "ses_zero_tokens",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -3051,19 +3020,19 @@ test("panel reports a reported zero token count as known usage", async (): Promi
     model: DEEPSEEK,
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), zero],
     messages: {},
     models: DEFAULT_MODELS,
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Junior"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         const lines: readonly string[] = trimmedLines(frame)
@@ -3077,8 +3046,8 @@ test("panel reports a reported zero token count as known usage", async (): Promi
   })
 })
 
-test("panel marks tokens unavailable instead of inventing zero when a session omits them", async (): Promise<void> => {
-  const known: SessionInfo = sessionInfo({
+test("panel marks tokens unavailable instead of inventing zero when a session omits them", async () => {
+  const known = sessionInfo({
     id: "ses_known_tokens",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -3095,20 +3064,20 @@ test("panel marks tokens unavailable instead of inventing zero when a session om
     cost: 0.003,
     model: DEEPSEEK,
   })
-  const tokenless: SessionInfo = tokenlessShape as SessionInfo
-  const fixture: Fixture = makeFixture({
+  const tokenless = tokenlessShape as SessionInfo
+  const fixture = makeFixture({
     sessions: [rootSession(), known, tokenless],
     messages: {},
     models: DEFAULT_MODELS,
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const agents: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Junior"),
+      async (setup) => {
+        const agents = await setup.waitForFrame(
+          (candidate) => candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         const agentLines: readonly string[] = trimmedLines(agents)
@@ -3117,16 +3086,16 @@ test("panel marks tokens unavailable instead of inventing zero when a session om
         expect(agentLines).toContain("Tokens: unavailable")
         expect(agents).not.toContain("Tokens: ↑")
 
-        const sessionsTab: KeymapCommand | undefined = findCommand(
+        const sessionsTab = findCommand(
           fixture,
-          (candidate: KeymapCommand): boolean => candidate.bind === "s",
+          (candidate) => candidate.bind === "s",
         )
         if (sessionsTab === undefined) {
           throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
         }
         await sessionsTab.run()
-        const sessions: string = await setup.waitForFrame(
-          (candidate: string): boolean =>
+        const sessions = await setup.waitForFrame(
+          (candidate) =>
             candidate.includes("Known token task") && candidate.includes("Tokenless task"),
           { maxPasses: 40 },
         )
@@ -3141,8 +3110,8 @@ test("panel marks tokens unavailable instead of inventing zero when a session om
 
 test(
   "panel re-reads cumulative tokens on refresh without double-counting",
-  async (): Promise<void> => {
-    const initial: SessionInfo = sessionInfo({
+  async () => {
+    const initial = sessionInfo({
       id: "ses_tokens_refresh",
       parentID: ROOT_SESSION,
       agent: "Junior",
@@ -3151,7 +3120,7 @@ test(
       model: DEEPSEEK,
       tokens: { input: 1000, output: 200, reasoning: 0, cache: { read: 100, write: 0 } },
     })
-    const refreshed: SessionInfo = sessionInfo({
+    const refreshed = sessionInfo({
       id: "ses_tokens_refresh",
       parentID: ROOT_SESSION,
       agent: "Junior",
@@ -3160,29 +3129,27 @@ test(
       model: DEEPSEEK,
       tokens: { input: 3000, output: 500, reasoning: 0, cache: { read: 300, write: 0 } },
     })
-    const fixture: Fixture = makeFixture({
+    const fixture = makeFixture({
       sessions: [rootSession(), initial],
       messages: {},
       models: DEFAULT_MODELS,
     })
-    await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+    await withPlugin(fixture, async (render) => {
       await withPanel(
         render,
         makePanelInput(PANEL_NAME),
         { width: 120, height: 40 },
-        async (setup: TestRendererSetup): Promise<void> => {
-          const before: string = await setup.waitForFrame(
-            (candidate: string): boolean =>
-              candidate.includes("Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 100"),
+        async (setup) => {
+          const before = await setup.waitForFrame(
+            (candidate) => candidate.includes("Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 100"),
             { maxPasses: 40 },
           )
           expect(trimmedLines(before)).toContain("Tokens: ↑ 1K · ↓ 200 · ↺ 100")
 
           fixture.setSessions([rootSession(), refreshed])
           await Bun.sleep(2200)
-          const after: string = await setup.waitForFrame(
-            (candidate: string): boolean =>
-              candidate.includes("Spent: $0.0200 · ↑ 3K · ↓ 500 · ↺ 300"),
+          const after = await setup.waitForFrame(
+            (candidate) => candidate.includes("Spent: $0.0200 · ↑ 3K · ↓ 500 · ↺ 300"),
             { maxPasses: 40 },
           )
           const lines: readonly string[] = trimmedLines(after)
@@ -3198,8 +3165,8 @@ test(
   15000,
 )
 
-test("panel formats cumulative token counts compactly at rounding thresholds", async (): Promise<void> => {
-  const large: SessionInfo = sessionInfo({
+test("panel formats cumulative token counts compactly at rounding thresholds", async () => {
+  const large = sessionInfo({
     id: "ses_tokens_large",
     parentID: ROOT_SESSION,
     agent: "Junior",
@@ -3213,7 +3180,7 @@ test("panel formats cumulative token counts compactly at rounding thresholds", a
       cache: { read: 1500000, write: 7654321 },
     },
   })
-  const small: SessionInfo = sessionInfo({
+  const small = sessionInfo({
     id: "ses_tokens_small",
     parentID: ROOT_SESSION,
     agent: "Reviewer",
@@ -3222,19 +3189,19 @@ test("panel formats cumulative token counts compactly at rounding thresholds", a
     model: DEEPSEEK,
     tokens: { input: 999, output: 1000, reasoning: 0, cache: { read: 0, write: 0 } },
   })
-  const fixture: Fixture = makeFixture({
+  const fixture = makeFixture({
     sessions: [rootSession(), large, small],
     messages: {},
     models: DEFAULT_MODELS,
   })
-  await withPlugin(fixture, async (render: PanelRenderer): Promise<void> => {
+  await withPlugin(fixture, async (render) => {
     await withPanel(
       render,
       makePanelInput(PANEL_NAME),
       { width: 120, height: 40 },
-      async (setup: TestRendererSetup): Promise<void> => {
-        const frame: string = await setup.waitForFrame(
-          (candidate: string): boolean => candidate.includes("● Reviewer"),
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("● Reviewer"),
           { maxPasses: 40 },
         )
         const lines: readonly string[] = trimmedLines(frame)

@@ -120,7 +120,7 @@ const modelKey = (model: Option.Option<ModelRef>): ModelKey =>
 export const usagePercent = (usage: Utilization): Option.Option<number> =>
   Option.map(
     usage.limit,
-    (limit: Positive): number => contextPercent(usage.tokens, limit),
+    (limit) => contextPercent(usage.tokens, limit),
   )
 
 export const contextPercent = (tokens: Positive, limit: Positive): number =>
@@ -131,11 +131,11 @@ const eligibleEnd = (
   boundary: Option.Option<string>,
 ): Option.Option<number> =>
   Option.match(boundary, {
-    onNone: (): Option.Option<number> => Option.some(messages.length),
-    onSome: (id: string): Option.Option<number> =>
+    onNone: () => Option.some(messages.length),
+    onSome: (id) =>
       Arr.findFirstIndex(
         messages,
-        (message: SessionMessageInfo): boolean => message.id === id,
+        (message) => message.id === id,
       ),
   })
 
@@ -143,20 +143,19 @@ export const history = (
   messages: ReadonlyArray<SessionMessageInfo>,
   boundary: Option.Option<string>,
 ): HistoryAnalysis => {
-  const actual: Option.Option<ModelRef> = Arr.findLast(
+  const actual = Arr.findLast(
     messages,
-    (message: SessionMessageInfo): message is SessionMessageAssistant =>
-      message.type === "assistant",
+    (message): message is SessionMessageAssistant => message.type === "assistant",
   ).pipe(
-    Option.map((message: SessionMessageAssistant): ModelRef => message.model),
+    Option.map((message) => message.model),
   )
   return Option.match(eligibleEnd(messages, boundary), {
-    onNone: (): HistoryAnalysis => ({ _tag: "Earlier", actual }),
-    onSome: (end: number): HistoryAnalysis =>
+    onNone: () => ({ _tag: "Earlier", actual }),
+    onSome: (end) =>
       Option.match(
         Arr.findLast(
           messages,
-          (message: SessionMessageInfo, index: number): message is
+          (message, index): message is
             | (SessionMessageAssistant & { readonly tokens: TokenUsageInfo })
             | (Extract<SessionMessageInfo, { readonly type: "compaction" }> & {
               readonly status: "completed"
@@ -165,17 +164,17 @@ export const history = (
               || message.type === "compaction" && message.status === "completed"),
         ),
         {
-          onNone: (): HistoryAnalysis => ({ _tag: "Earlier", actual }),
-          onSome: (message): HistoryAnalysis => {
+          onNone: () => ({ _tag: "Earlier", actual }),
+          onSome: (message) => {
             if (message.type === "compaction") {
               return { _tag: "Settled", history: { actual, sample: Option.none() } }
             }
-            const tokens: number = message.tokens.input + message.tokens.output
+            const tokens = message.tokens.input + message.tokens.output
               + message.tokens.reasoning
               + message.tokens.cache.read + message.tokens.cache.write
-            const sample: Option.Option<Sample> = Option.map(
+            const sample = Option.map(
               Positive.option(tokens),
-              (value: Positive): Sample => ({ model: message.model, tokens: value }),
+              (value) => ({ model: message.model, tokens: value }),
             )
             return { _tag: "Settled", history: { actual, sample } }
           },
@@ -199,16 +198,12 @@ export const reading = (
   models: Result.Result<Catalog, RequestFailure>,
 ): Reading => ({
   actual: value.actual,
-  usage: Option.map(value.sample, (sample: Sample): Usage => ({
+  usage: Option.map(value.sample, (sample) => ({
     ...sample,
     limit: Result.getSuccess(models).pipe(
-      Option.flatMap((entries: Catalog): Option.Option<ReadonlyMap<string, number>> =>
-        Option.fromUndefinedOr(entries.get(sample.model.providerID))
-      ),
-      Option.flatMap((entries: ReadonlyMap<string, number>): Option.Option<number> =>
-        Option.fromUndefinedOr(entries.get(sample.model.id))
-      ),
-      Option.flatMap((limit: number): Option.Option<Positive> => Positive.option(limit)),
+      Option.flatMap((entries) => Option.fromUndefinedOr(entries.get(sample.model.providerID))),
+      Option.flatMap((entries) => Option.fromUndefinedOr(entries.get(sample.model.id))),
+      Option.flatMap((limit) => Positive.option(limit)),
     ),
   })),
   catalog: Result.map(models, (): void => undefined),
@@ -249,7 +244,7 @@ const addTokens = (totals: TokenTotals, tokens: Option.Option<TokenUsageInfo>): 
     totals.known = false
     return
   }
-  const value: TokenUsageInfo = tokens.value
+  const value = tokens.value
   totals.usage = {
     input: totals.usage.input + value.input,
     output: totals.usage.output + value.output,
@@ -300,7 +295,7 @@ const percentageOrder: Order.Order<Usage> = (left: Usage, right: Usage): -1 | 0 
 }
 
 const peak = (left: Usage, right: Usage): Usage => {
-  const order: number = percentageOrder(right, left)
+  const order = percentageOrder(right, left)
   return order > 0 || order === 0 && right.tokens > left.tokens ? right : left
 }
 
@@ -311,8 +306,8 @@ const addModel = (
   usage: Option.Option<Usage>,
   unavailable: boolean,
 ): void => {
-  const key: ModelKey = modelKey(model)
-  const existing: SessionBuilder | undefined = agent.models.get(key)
+  const key = modelKey(model)
+  const existing = agent.models.get(key)
   const current: SessionBuilder = existing
     ?? { count: oneSession, selected: new Set(), unavailable }
   if (existing !== undefined) {
@@ -322,10 +317,10 @@ const addModel = (
   if (Option.isSome(selected)) current.selected.add(canonicalModelKey(selected.value))
   agent.models.set(key, current)
   if (Option.isSome(usage)) {
-    const sample: Usage = usage.value
-    const label: CanonicalModelKey = canonicalModelKey(sample.model)
-    const previous: ContextBuilder | undefined = agent.contexts.get(label)
-    const context: ContextBuilder = previous ?? { usage: sample, unavailable }
+    const sample = usage.value
+    const label = canonicalModelKey(sample.model)
+    const previous = agent.contexts.get(label)
+    const context = previous ?? { usage: sample, unavailable }
     if (previous !== undefined) {
       context.usage = peak(context.usage, sample)
       context.unavailable ||= unavailable
@@ -337,7 +332,7 @@ const addModel = (
 const projectAgent = (agent: AgentBuilder): AgentSummary => {
   const models: Array<ModelSummary> = []
   for (const [label, group] of agent.models) {
-    const sample: ContextBuilder | undefined = label === unknownModel
+    const sample = label === unknownModel
       ? undefined
       : agent.contexts.get(label)
     models.push({
@@ -389,22 +384,21 @@ const record = (agent: AgentBuilder, observation: Observation): void => {
   agent.cost += observation.cost
   addTokens(agent.tokens, observation.tokens)
   if (Option.isSome(observation.outcome)) {
-    const outcome: NonNullable<SessionInfo["outcome"]> = observation.outcome.value
+    const outcome = observation.outcome.value
     if (outcome === "failed" || outcome === "interrupted") agent.failed++
     if (outcome === "succeeded") agent.succeeded++
   }
   if (Result.isFailure(observation.reading)) {
     addModel(agent, Option.none(), observation.selected, Option.none(), true)
   } else {
-    const value: Reading = observation.reading.success
-    const primary: Option.Option<ModelRef> = Option.isSome(value.actual)
+    const value = observation.reading.success
+    const primary = Option.isSome(value.actual)
       ? value.actual
       : observation.selected
-    const selected: Option.Option<ModelRef> =
-      Option.isSome(value.actual) && Option.isSome(observation.selected)
+    const selected = Option.isSome(value.actual) && Option.isSome(observation.selected)
         && canonicalModelKey(value.actual.value) !== canonicalModelKey(observation.selected.value)
-        ? observation.selected
-        : Option.none()
+      ? observation.selected
+      : Option.none()
     addModel(
       agent,
       primary,
@@ -418,18 +412,18 @@ const record = (agent: AgentBuilder, observation: Observation): void => {
 export const summarize = (observations: ReadonlyArray<Observation>): Snapshot => {
   const agents: Map<string, AgentBuilder> = new Map()
   const sessions: Array<SessionSummary> = []
-  let cost: number = 0
-  const tokens: TokenTotals = tokenTotals()
+  let cost = 0
+  const tokens = tokenTotals()
   for (const observation of observations) {
-    const existing: AgentBuilder | undefined = agents.get(observation.agent)
-    const agent: AgentBuilder = existing ?? newAgent(observation)
+    const existing = agents.get(observation.agent)
+    const agent = existing ?? newAgent(observation)
     if (existing !== undefined) {
       agent.sessions.push(observation.id)
       if (observation.role === "primary") agent.role = "primary"
     }
     record(agent, observation)
     agents.set(observation.agent, agent)
-    const individual: AgentBuilder = newAgent(observation)
+    const individual = newAgent(observation)
     record(individual, observation)
     sessions.push({
       ...projectAgent(individual),

@@ -1,9 +1,5 @@
 import type { OpenCodeEvent } from "@opencode/client/effect"
-import type {
-  ModelListOutput,
-  SessionContextOutput,
-  SessionSyntheticOutput,
-} from "@opencode/client/effect/api"
+import type { ModelListOutput, SessionContextOutput } from "@opencode/client/effect/api"
 import type {
   Context as PluginContext,
   Plugin as NativePlugin,
@@ -11,15 +7,8 @@ import type {
 import type { SessionHooks } from "@opencode/plugin/effect/session"
 import type { ToolHooks } from "@opencode/plugin/effect/tool"
 import { Array as Arr, Clock, Effect, Option, Ref, Result, type Scope, Stream } from "effect"
+import { decodeConfiguration, decodePositive, errorMessage, type Positive } from "./config.ts"
 import {
-  type Configuration,
-  decodeConfiguration,
-  decodePositive,
-  errorMessage,
-  type Positive,
-} from "./config.ts"
-import {
-  type CompiledEntry,
   type CompiledPolicy,
   compilePolicy,
   type ContextSample,
@@ -28,7 +17,6 @@ import {
   type SessionEvent,
   type SessionState,
   setSession,
-  type Step,
   step,
 } from "./machine.ts"
 
@@ -69,7 +57,7 @@ const readRequest = <A, E>(
   request: Effect.Effect<A, E>,
 ): Effect.Effect<Option.Option<A>> =>
   Effect.result(request).pipe(
-    Effect.flatMap((result: Result.Result<A, E>): Effect.Effect<Option.Option<A>> => {
+    Effect.flatMap((result) => {
       if (Result.isFailure(result)) {
         return Effect.logWarning(
           `Agent reminders could not read ${operation}: ${errorMessage(result.failure)}`,
@@ -83,7 +71,7 @@ const readRequest = <A, E>(
 const latestContextSample = (messages: SessionContextOutput): Option.Option<Positive> =>
   Option.flatMap(
     Arr.findLast(messages, isContextSampleBoundary),
-    (message: ContextSampleBoundary): Option.Option<Positive> => {
+    (message) => {
       if (message.type === "compaction") return Option.none()
       const usage = message.tokens
       const total = usage.input + usage.output + usage.reasoning + usage.cache.read
@@ -96,7 +84,7 @@ const contextLimit = (
   models: ModelListOutput,
   model: SessionHooks["context"]["model"],
 ): Option.Option<Positive> => {
-  const current = models.data.find((candidate: ModelListOutput["data"][number]): boolean =>
+  const current = models.data.find((candidate) =>
     candidate.providerID === model.providerID && candidate.id === model.id
   )
   if (current === undefined) return Option.none()
@@ -110,23 +98,23 @@ const readContextSample = (
   needsTokens: boolean,
   needsLimit: boolean,
 ): Effect.Effect<ContextSample> =>
-  Effect.gen(function*(): Effect.fn.Return<ContextSample> {
-    const messages: Option.Option<SessionContextOutput> = needsTokens
+  Effect.gen(function*() {
+    const messages = needsTokens
       ? yield* readRequest(
         "session context",
         context.session.context({ sessionID: event.sessionID }),
       )
       : Option.none()
-    const models: Option.Option<ModelListOutput> = needsLimit
+    const models = needsLimit
       ? yield* readRequest("model metadata", context.model.list())
       : Option.none()
-    const tokens: Option.Option<Positive> = Option.match(messages, {
+    const tokens = Option.match(messages, {
       onNone: Option.none,
       onSome: latestContextSample,
     })
-    const limit: Option.Option<Positive> = Option.flatMap(
+    const limit = Option.flatMap(
       models,
-      (value: ModelListOutput): Option.Option<Positive> => contextLimit(value, event.model),
+      (value) => contextLimit(value, event.model),
     )
     return {
       tokens,
@@ -154,8 +142,8 @@ const publishNotice = (
   message: string,
   firedAt: number,
 ): Effect.Effect<void> =>
-  Effect.gen(function*(): Effect.fn.Return<void> {
-    const result: Result.Result<SessionSyntheticOutput, unknown> = yield* Effect.result(
+  Effect.gen(function*() {
+    const result = yield* Effect.result(
       context.session.synthetic({
         sessionID: event.sessionID,
         text: message,
@@ -178,25 +166,19 @@ const makeHandlers = (
   policy: CompiledPolicy,
   states: Ref.Ref<Map<string, SessionState>>,
 ): NativeHandlers => {
-  const transition = (sessionID: string, event: SessionEvent): Effect.Effect<Step> =>
-    Ref.modify(
-      states,
-      (current: Map<string, SessionState>): readonly [Step, Map<string, SessionState>] => {
-        const [result, next]: readonly [Step, SessionState | undefined] = step(
-          policy,
-          current.get(sessionID),
-          event,
-        )
-        return [
-          result,
-          next === undefined ? current : setSession(current, sessionID, next),
-        ]
-      },
-    )
+  const transition = (sessionID: string, event: SessionEvent) =>
+    Ref.modify(states, (current) => {
+      const previous = current.get(sessionID)
+      const [result, next] = step(policy, previous, event)
+      return [
+        result,
+        next === undefined || next === previous ? current : setSession(current, sessionID, next),
+      ]
+    })
 
-  const toolBefore = (event: ToolHooks["execute.before"]): Effect.Effect<void> =>
-    Effect.gen(function*(): Effect.fn.Return<void> {
-      const now: number = yield* Clock.currentTimeMillis
+  const toolBefore = (event: ToolHooks["execute.before"]) =>
+    Effect.gen(function*() {
+      const now = yield* Clock.currentTimeMillis
       yield* transition(event.sessionID, {
         type: "tool.before",
         now,
@@ -206,9 +188,9 @@ const makeHandlers = (
       })
     })
 
-  const toolAfter = (event: ToolHooks["execute.after"]): Effect.Effect<void> =>
-    Effect.gen(function*(): Effect.fn.Return<void> {
-      const now: number = yield* Clock.currentTimeMillis
+  const toolAfter = (event: ToolHooks["execute.after"]) =>
+    Effect.gen(function*() {
+      const now = yield* Clock.currentTimeMillis
       yield* transition(event.sessionID, {
         type: "tool.after",
         now,
@@ -217,23 +199,19 @@ const makeHandlers = (
       })
     })
 
-  const sessionContext = (event: SessionHooks["context"]): Effect.Effect<void> =>
-    Effect.gen(function*(): Effect.fn.Return<void> {
-      const now: number = yield* Clock.currentTimeMillis
-      const entries: ReadonlyArray<CompiledEntry> | undefined = policyFor(policy, event.agent)
-      const needsTokens: boolean = entries?.some(
-        (entry: CompiledEntry): boolean => entry.condition.needsTokens,
-      ) ?? false
-      const needsLimit: boolean = entries?.some(
-        (entry: CompiledEntry): boolean => entry.condition.needsLimit,
-      ) ?? false
-      const sample: ContextSample = yield* readContextSample(
+  const sessionContext = (event: SessionHooks["context"]) =>
+    Effect.gen(function*() {
+      const now = yield* Clock.currentTimeMillis
+      const entries = policyFor(policy, event.agent)
+      const needsTokens = entries?.some((entry) => entry.condition.needsTokens) ?? false
+      const needsLimit = entries?.some((entry) => entry.condition.needsLimit) ?? false
+      const sample = yield* readContextSample(
         context,
         event,
         needsTokens,
         needsLimit,
       )
-      const emitted: Step = yield* transition(event.sessionID, {
+      const emitted = yield* transition(event.sessionID, {
         type: "context",
         now,
         agent: event.agent,
@@ -246,11 +224,11 @@ const makeHandlers = (
       }
     })
 
-  const eventHandler = (event: OpenCodeEvent): Effect.Effect<void> => {
+  const eventHandler = (event: OpenCodeEvent) => {
     switch (event.type) {
       case "session.agent.selected":
-        return Effect.gen(function*(): Effect.fn.Return<void> {
-          const now: number = yield* Clock.currentTimeMillis
+        return Effect.gen(function*() {
+          const now = yield* Clock.currentTimeMillis
           yield* transition(event.data.sessionID, {
             type: "agent.selected",
             now,
@@ -258,8 +236,8 @@ const makeHandlers = (
           })
         })
       case "session.compaction.ended":
-        return Effect.gen(function*(): Effect.fn.Return<void> {
-          const now: number = yield* Clock.currentTimeMillis
+        return Effect.gen(function*() {
+          const now = yield* Clock.currentTimeMillis
           yield* transition(event.data.sessionID, {
             type: "compaction.ended",
             now,
@@ -268,8 +246,7 @@ const makeHandlers = (
       case "session.deleted":
         return Ref.update(
           states,
-          (current: Map<string, SessionState>): Map<string, SessionState> =>
-            deleteSession(current, event.data.sessionID),
+          (current) => deleteSession(current, event.data.sessionID),
         )
       default:
         return Effect.void
@@ -280,19 +257,19 @@ const makeHandlers = (
 }
 
 const pluginEffect = (context: ReminderContext): Effect.Effect<void, never, Scope.Scope> =>
-  Effect.gen(function*(): Effect.fn.Return<void, never, Scope.Scope> {
-    const configuration: Configuration = yield* Effect.sync(
-      (): Configuration => decodeConfiguration(context.options),
+  Effect.gen(function*() {
+    const configuration = yield* Effect.sync(
+      () => decodeConfiguration(context.options),
     )
-    const policy: CompiledPolicy = compilePolicy(configuration)
+    const policy = compilePolicy(configuration)
     if (Object.entries(configuration.agents).length === 0) {
       yield* Effect.logWarning(
         "Agent reminders loaded with no agents configured; no reminders will fire.",
       )
     }
     const states: Ref.Ref<Map<string, SessionState>> = yield* Ref.make(new Map())
-    const handlers: NativeHandlers = makeHandlers(context, policy, states)
-    yield* Effect.addFinalizer((): Effect.Effect<void> => Ref.set(states, new Map()))
+    const handlers = makeHandlers(context, policy, states)
+    yield* Effect.addFinalizer(() => Ref.set(states, new Map()))
     yield* context.tool.hook("execute.before", handlers.toolBefore)
     yield* context.tool.hook("execute.after", handlers.toolAfter)
     yield* context.session.hook("context", handlers.sessionContext)
@@ -300,7 +277,7 @@ const pluginEffect = (context: ReminderContext): Effect.Effect<void, never, Scop
     yield* Effect.forkScoped(
       events.pipe(
         Effect.result,
-        Effect.flatMap((result: Result.Result<void, unknown>): Effect.Effect<void> =>
+        Effect.flatMap((result) =>
           Result.isFailure(result)
             ? Effect.logWarning(
               `Agent reminders event subscription stopped: ${errorMessage(result.failure)}`,

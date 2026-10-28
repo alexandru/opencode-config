@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import type { TokenUsageInfo } from "@opencode/client"
 import { Plugin } from "@opencode/plugin/tui"
-import type { Context, KeymapLayer, PanelInput } from "@opencode/plugin/tui/context"
+import type { Context, PanelInput } from "@opencode/plugin/tui/context"
 import type { ResolvedTheme } from "@opencode/theme/tui"
 import type { JSX } from "@opentui/solid"
 import { Effect, Fiber, Option, Result } from "effect"
@@ -19,7 +19,6 @@ import {
   type AgentSummary,
   contextPercent,
   type ModelSummary,
-  type Positive,
   type RequestFailure,
   type SessionSummary,
   type Snapshot,
@@ -54,8 +53,8 @@ const tokensLabel = (
   unavailable: string,
 ): string =>
   Option.match(tokens, {
-    onNone: (): string => unavailable,
-    onSome: (value: TokenUsageInfo): string =>
+    onNone: () => unavailable,
+    onSome: (value) =>
       `↑ ${compact.format(value.input)} · ↓ ${compact.format(value.output)} · ↺ ${
         compact.format(value.cache.read)
       }`,
@@ -63,11 +62,11 @@ const tokensLabel = (
 
 const usageLabel = (usage: Option.Option<Utilization>): string =>
   Option.match(usage, {
-    onNone: (): string => "unknown",
-    onSome: (value: Utilization): string =>
+    onNone: () => "unknown",
+    onSome: (value) =>
       Option.match(value.limit, {
-        onNone: (): string => `${compact.format(value.tokens)} tokens (limit unknown)`,
-        onSome: (limit: Positive): string =>
+        onNone: () => `${compact.format(value.tokens)} tokens (limit unknown)`,
+        onSome: (limit) =>
           `${compact.format(value.tokens)} / ${compact.format(limit)} tokens (${
             contextPercent(value.tokens, limit)
           }%)`,
@@ -75,7 +74,7 @@ const usageLabel = (usage: Option.Option<Utilization>): string =>
   })
 
 const usageBar = (percent: number): string => {
-  const filled: number = Math.max(0, Math.min(12, Math.round(percent / 100 * 12)))
+  const filled = Math.max(0, Math.min(12, Math.round(percent / 100 * 12)))
   return "━".repeat(filled) + "╌".repeat(12 - filled)
 }
 
@@ -93,15 +92,13 @@ const ModelCard = (
     readonly multiple: boolean
   },
 ): JSX.Element => {
-  const sample: Accessor<Option.Option<Utilization>> = (): Option.Option<Utilization> =>
+  const sample = () =>
     props.model._tag === "Context" ? Option.some(props.model.usage) : props.model.usage
-  const meter: Accessor<{ readonly percent: number } | undefined> = createMemo((): {
-    readonly percent: number
-  } | undefined =>
+  const meter = createMemo(() =>
     Option.getOrUndefined(
       Option.map(
         Option.flatMap(sample(), usagePercent),
-        (percent: number): { readonly percent: number } => ({ percent }),
+        (percent) => ({ percent }),
       ),
     )
   )
@@ -147,13 +144,13 @@ const AgentCard = (
     readonly session?: SessionSummary
   },
 ): JSX.Element => {
-  const running: Accessor<number> = createMemo((): number =>
+  const running = createMemo(() =>
     props.agent.sessions.reduce(
-      (total: number, id: string): number => total + Number(props.status(id) === "running"),
+      (total, id) => total + Number(props.status(id) === "running"),
       0,
     )
   )
-  const color: Accessor<ResolvedTheme["text"]["base"]> = (): ResolvedTheme["text"]["base"] =>
+  const color = () =>
     running() > 0
       ? props.theme.text.feedback.warning.base
       : props.agent.failed > 0
@@ -186,7 +183,7 @@ const AgentCard = (
         {(session: Accessor<SessionSummary>): JSX.Element => (
           <text fg={props.theme.text.base}>
             <span style={{ fg: color() }}>{"● "}</span>
-            <b>{Option.getOrElse(session().title, (): string => session().id)}</b>
+            <b>{Option.getOrElse(session().title, () => session().id)}</b>
           </text>
         )}
       </Show>
@@ -209,7 +206,7 @@ const AgentCard = (
             <text fg={color()}>
               Status: {running() > 0
                 ? "running"
-                : Option.getOrElse(session().outcome, (): string => "idle")}
+                : Option.getOrElse(session().outcome, () => "idle")}
             </text>
           </>
         )}
@@ -228,22 +225,21 @@ const AgentCard = (
 }
 
 const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Element => {
-  const ctx: Context = props.context
-  const status: Context["data"]["session"]["status"] = (id: string): "running" | "idle" =>
-    ctx.data.session.status(id)
+  const ctx = props.context
+  const status = (id: string) => ctx.data.session.status(id)
   const [view, setView] = createSignal<View>({ _tag: "Loading" })
   const [tab, setTab] = createSignal<StatusTab>("agents")
-  const switchTab = (): void => {
-    setTab((current: StatusTab): StatusTab => current === "agents" ? "sessions" : "agents")
+  const switchTab = () => {
+    setTab((current) => current === "agents" ? "sessions" : "agents")
   }
-  const snapshot: Accessor<Snapshot> = (): Snapshot => {
-    const current: View = view()
+  const snapshot = (): Snapshot => {
+    const current = view()
     return current._tag === "Ready"
       ? current.snapshot
       : { agents: [], sessions: [], cost: 0, tokens: Option.none() }
   }
-  const error: Accessor<Option.Option<RequestFailure>> = (): Option.Option<RequestFailure> => {
-    const current: View = view()
+  const error = (): Option.Option<RequestFailure> => {
+    const current = view()
     switch (current._tag) {
       case "Loading":
         return Option.none()
@@ -253,7 +249,7 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
         return current.error
     }
   }
-  ctx.keymap.layer((): KeymapLayer => ({
+  ctx.keymap.layer(() => ({
     mode: "global",
     enabled: props.focused,
     commands: [
@@ -263,34 +259,34 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
       {
         bind: "a",
         title: "Show agent totals",
-        run: (): void => {
+        run: () => {
           setTab("agents")
         },
       },
       {
         bind: "s",
         title: "Show agent sessions",
-        run: (): void => {
+        run: () => {
           setTab("sessions")
         },
       },
     ],
   }))
-  createEffect((): void => {
+  createEffect(() => {
     setView({ _tag: "Loading" })
-    const fiber: Fiber.Fiber<never> = Effect.runFork(
+    const fiber = Effect.runFork(
       watch(
         ctx.client,
         props.sessionID,
-        (result: Result.Result<Snapshot, RequestFailure>): void => {
-          setView((current: View): View =>
+        (result) => {
+          setView((current) =>
             Result.match(result, {
-              onSuccess: (value: Snapshot): View => ({
+              onSuccess: (value) => ({
                 _tag: "Ready",
                 snapshot: value,
                 error: Option.none(),
               }),
-              onFailure: (failure: RequestFailure): View =>
+              onFailure: (failure) =>
                 current._tag === "Ready"
                   ? { ...current, error: Option.some(failure) }
                   : { _tag: "Failed", error: failure },
@@ -299,7 +295,7 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
         },
       ),
     )
-    onCleanup((): void => {
+    onCleanup(() => {
       Effect.runFork(Fiber.interrupt(fiber))
     })
   })
@@ -319,7 +315,7 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
                   : ctx.theme.background.raised.base}
                 alignItems="center"
                 justifyContent="center"
-                onMouseDown={(): void => {
+                onMouseDown={() => {
                   props.focus()
                   setTab(name)
                 }}
@@ -400,7 +396,7 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
 export default Plugin.define({
   id: "agents-status",
   setup(ctx: Context): () => void {
-    const release: () => void = ctx.ui.slot({
+    const release = ctx.ui.slot({
       append: "session.panel",
       render: (props: PanelInput): JSX.Element => (
         <Show when={props.name === "agents-status"}>
@@ -408,7 +404,7 @@ export default Plugin.define({
         </Show>
       ),
     })
-    ctx.keymap.layer((): KeymapLayer => ({
+    ctx.keymap.layer(() => ({
       mode: "global",
       commands: [{
         id: "agents-status",
@@ -417,7 +413,7 @@ export default Plugin.define({
         palette: true,
         slash: { name: "agents-status" },
         enabled: ctx.ui.router.current().type === "session",
-        run: (): void => {
+        run: () => {
           if (ctx.ui.panel.current()?.name === "agents-status") ctx.ui.panel.close()
           else ctx.ui.panel.open("agents-status")
         },

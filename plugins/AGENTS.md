@@ -5,7 +5,7 @@ Applies to harness-authored TypeScript plugin source, tests, fixtures, and helpe
 ## TypeScript and type safety
 
 - MUST use strict TypeScript and preserve the package's strict compiler checks. Never weaken compiler settings or suppress diagnostics to make code pass.
-- MUST give every function an explicit parameter and return contract, including helpers, callbacks, and generators; declare field types. Use checked `satisfies` contracts where inference should be preserved.
+- MUST give every top-level function explicit parameter and return types; declare every field's type. Prefer type inference for local values and nested helpers when inferred types preserve the intended constraints. Add explicit annotations where inference is unavailable, loses constraints, permits unintended widening, or leaves a type unclear. Use checked `satisfies` contracts where inference should be preserved.
 - MUST NOT use `any`, type assertions (`as T`, angle-bracket casts, or double casts), non-null assertions, or diagnostic-suppression directives. Do not fabricate implementations or proofs with uninitialized `declare` members.
 - MUST treat external values as `unknown` and parse them with Effect Schema before use. Derive domain types from schemas; preserve validated invariants with brands, nonempty collections, and discriminated unions rather than widening them back to primitives.
 - MUST make missing values and failures explicit with `Option`, `Result`, or typed Effect errors. No unchecked indexing, partial collection operations, unchecked unwraps, or non-exhaustive matches.

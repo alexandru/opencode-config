@@ -108,8 +108,6 @@ const AgentReminderSchema = Schema.Struct({
   condition: ConditionSchema,
 })
 
-type DecodedEntry = Schema.Schema.Type<typeof AgentReminderSchema>
-
 const ConfigurationSchema = Schema.Struct({
   agents: Schema.optional(
     Schema.Record(Schema.NonEmptyString, Schema.NonEmptyArray(AgentReminderSchema)),
@@ -118,7 +116,7 @@ const ConfigurationSchema = Schema.Struct({
 
 export const countingTools = (condition: Condition): ReadonlyArray<ToolPattern> => {
   const tools: Array<ToolPattern> = []
-  const collect = (node: Condition): void => {
+  const collect = (node: Condition) => {
     switch (node.type) {
       case "toolCalls": {
         for (const tool of node.tools ?? DEFAULT_TOOLS) tools.push(tool)
@@ -171,8 +169,8 @@ export const decodeConfiguration = (input: unknown): Configuration => {
     for (const [agent, entries] of Object.entries(decoded.agents ?? {})) {
       agents[agent] = Array.from(
         entries,
-        (entry: DecodedEntry, index: number): AgentReminderEntry => {
-          const resolved: AgentReminderEntry = {
+        (entry, index) => {
+          const resolved = {
             message: entry.message,
             resetTools: entry.resetTools ?? DEFAULT_RESET_TOOLS,
             condition: entry.condition,
@@ -183,7 +181,7 @@ export const decodeConfiguration = (input: unknown): Configuration => {
       )
     }
     return { agents }
-  } catch (cause: unknown) {
+  } catch (cause) {
     throw new Error(`Invalid agent reminder configuration: ${errorMessage(cause)}`)
   }
 }

@@ -1,6 +1,5 @@
 import { Option } from "effect"
 import {
-  type AgentReminderEntry,
   type Condition,
   type Configuration,
   countingTools,
@@ -97,26 +96,25 @@ const toolMatcher = (
   patterns: ReadonlyArray<ToolPattern>,
 ): (tool: string) => boolean => {
   const tests: ReadonlyArray<(tool: string) => boolean> = patterns.map(
-    (pattern: ToolPattern): (tool: string) => boolean => {
+    (pattern) => {
       if (!pattern.endsWith("*")) {
-        return (tool: string): boolean => tool === pattern
+        return (tool: string) => tool === pattern
       }
-      const prefix: string = pattern.slice(0, -1)
-      return (tool: string): boolean => tool.startsWith(prefix)
+      const prefix = pattern.slice(0, -1)
+      return (tool: string) => tool.startsWith(prefix)
     },
   )
-  return (tool: string): boolean =>
-    tests.some((test: (tool: string) => boolean): boolean => test(tool))
+  return (tool) => tests.some((test) => test(tool))
 }
 
 export const compileCondition = (condition: Condition): CompiledCondition => {
   switch (condition.type) {
     case "toolCalls": {
-      const selected: (tool: string) => boolean = toolMatcher(condition.tools ?? DEFAULT_TOOLS)
+      const selected = toolMatcher(condition.tools ?? DEFAULT_TOOLS)
       return {
         needsTokens: false,
         needsLimit: false,
-        matches: (current: Interval, _now: number, _sample: ContextSample): boolean => {
+        matches: (current, _now, _sample) => {
           let count = 0
           for (const [tool, calls] of current.toolCounts) {
             if (selected(tool)) count += calls
@@ -129,14 +127,13 @@ export const compileCondition = (condition: Condition): CompiledCondition => {
       return {
         needsTokens: false,
         needsLimit: false,
-        matches: (current: Interval, now: number, _sample: ContextSample): boolean =>
-          (now - current.resetAt) / 1000 >= condition.seconds,
+        matches: (current, now, _sample) => (now - current.resetAt) / 1000 >= condition.seconds,
       }
     case "contextGrowth":
       return {
         needsTokens: true,
         needsLimit: false,
-        matches: (current: Interval, _now: number, sample: ContextSample): boolean =>
+        matches: (current, _now, sample) =>
           Option.isSome(current.contextBaseline) && Option.isSome(sample.tokens)
           && sample.tokens.value - current.contextBaseline.value >= condition.tokens,
       }
@@ -144,7 +141,7 @@ export const compileCondition = (condition: Condition): CompiledCondition => {
       return {
         needsTokens: true,
         needsLimit: true,
-        matches: (current: Interval, _now: number, sample: ContextSample): boolean =>
+        matches: (current, _now, sample) =>
           Option.isSome(current.contextBaseline) && Option.isSome(sample.tokens)
           && Option.isSome(sample.modelLimit)
           && 100 * (sample.tokens.value - current.contextBaseline.value) / sample.modelLimit.value
@@ -152,20 +149,12 @@ export const compileCondition = (condition: Condition): CompiledCondition => {
       }
     case "all":
     case "any": {
-      const children: ReadonlyArray<CompiledCondition> = condition.conditions.map(
-        (nested: Condition): CompiledCondition => compileCondition(nested),
-      )
-      const needsTokens: boolean = children.some(
-        (child: CompiledCondition): boolean => child.needsTokens,
-      )
-      const needsLimit: boolean = children.some(
-        (child: CompiledCondition): boolean => child.needsLimit,
-      )
+      const children = condition.conditions.map((nested) => compileCondition(nested))
+      const needsTokens = children.some((child) => child.needsTokens)
+      const needsLimit = children.some((child) => child.needsLimit)
       const matches: CompiledCondition["matches"] = condition.type === "all"
-        ? (current: Interval, now: number, sample: ContextSample): boolean =>
-          children.every((child: CompiledCondition): boolean => child.matches(current, now, sample))
-        : (current: Interval, now: number, sample: ContextSample): boolean =>
-          children.some((child: CompiledCondition): boolean => child.matches(current, now, sample))
+        ? (current, now, sample) => children.every((child) => child.matches(current, now, sample))
+        : (current, now, sample) => children.some((child) => child.matches(current, now, sample))
       return { needsTokens, needsLimit, matches }
     }
   }
@@ -174,7 +163,7 @@ export const compileCondition = (condition: Condition): CompiledCondition => {
 export const compilePolicy = (configuration: Configuration): CompiledPolicy => {
   const policy: Record<string, ReadonlyArray<CompiledEntry>> = {}
   for (const [agent, entries] of Object.entries(configuration.agents)) {
-    policy[agent] = entries.map((entry: AgentReminderEntry): CompiledEntry => ({
+    policy[agent] = entries.map((entry) => ({
       message: entry.message,
       resets: toolMatcher(entry.resetTools),
       counts: toolMatcher(countingTools(entry.condition)),
@@ -189,7 +178,7 @@ export const policyFor = (
   agent: string,
 ): ReadonlyArray<CompiledEntry> | undefined => {
   if (!Object.prototype.hasOwnProperty.call(policy, agent)) return undefined
-  const entries: ReadonlyArray<CompiledEntry> | undefined = policy[agent]
+  const entries = policy[agent]
   return entries
 }
 
@@ -209,9 +198,7 @@ const freshEntries = (
   definitions: ReadonlyArray<CompiledEntry>,
   now: number,
 ): ReadonlyArray<RunningEntry> =>
-  definitions.map((definition: CompiledEntry): RunningEntry =>
-    interval(definition, now, Option.none())
-  )
+  definitions.map((definition) => interval(definition, now, Option.none()))
 
 const updateIntervalSample = (current: RunningEntry, sample: ContextSample): RunningEntry => ({
   ...current,
@@ -270,7 +257,7 @@ const resolveState = (
   now: number,
 ): SessionState | undefined => {
   if (previous !== undefined && previous.agent === agent) return previous
-  const definitions: ReadonlyArray<CompiledEntry> = policyFor(policy, agent) ?? []
+  const definitions = policyFor(policy, agent) ?? []
   if (previous === undefined && definitions.length === 0) return undefined
   return {
     agent,
@@ -283,22 +270,20 @@ const applyToolBefore = (
   state: SessionState,
   event: Extract<SessionEvent, { readonly type: "tool.before" }>,
 ): SessionState => {
-  const outerTool: string | undefined = activeCall(state.activeCalls, event.call)
-  const countsTool: boolean = outerTool === undefined || outerTool !== event.tool
-  const entries: ReadonlyArray<RunningEntry> = state.entries.map(
-    (current: RunningEntry): RunningEntry => {
-      if (current.definition.resets(event.tool)) {
-        return interval(current.definition, event.now, current.latestContext)
-      }
-      if (countsTool && current.definition.counts(event.tool)) {
-        const counts = new Map(current.toolCounts)
-        counts.set(event.tool, (counts.get(event.tool) ?? 0) + 1)
-        return { ...current, toolCounts: counts }
-      }
-      return current
-    },
-  )
-  const activeCalls: ActiveCalls = outerTool === undefined
+  const outerTool = activeCall(state.activeCalls, event.call)
+  const countsTool = outerTool === undefined || outerTool !== event.tool
+  const entries = state.entries.map((current) => {
+    if (current.definition.resets(event.tool)) {
+      return interval(current.definition, event.now, current.latestContext)
+    }
+    if (countsTool && current.definition.counts(event.tool)) {
+      const counts = new Map(current.toolCounts)
+      counts.set(event.tool, (counts.get(event.tool) ?? 0) + 1)
+      return { ...current, toolCounts: counts }
+    }
+    return current
+  })
+  const activeCalls = outerTool === undefined
     ? addActiveCall(state.activeCalls, {
       messageID: event.call.messageID,
       id: event.call.id,
@@ -313,7 +298,7 @@ const stepToolBefore = (
   previous: SessionState | undefined,
   event: Extract<SessionEvent, { readonly type: "tool.before" }>,
 ): readonly [Step, SessionState | undefined] => {
-  const state: SessionState | undefined = resolveState(policy, previous, event.agent, event.now)
+  const state = resolveState(policy, previous, event.agent, event.now)
   if (state === undefined) return [CONTINUE, undefined]
   return [CONTINUE, applyToolBefore(state, event)]
 }
@@ -323,7 +308,7 @@ const stepToolAfter = (
   event: Extract<SessionEvent, { readonly type: "tool.after" }>,
 ): readonly [Step, SessionState | undefined] => {
   if (state === undefined) return [CONTINUE, undefined]
-  const outerTool: string | undefined = activeCall(state.activeCalls, event.call)
+  const outerTool = activeCall(state.activeCalls, event.call)
   if (outerTool === undefined || outerTool !== event.tool) return [CONTINUE, state]
   return [CONTINUE, { ...state, activeCalls: removeActiveCall(state.activeCalls, event.call) }]
 }
@@ -333,18 +318,16 @@ const stepContext = (
   previous: SessionState | undefined,
   event: Extract<SessionEvent, { readonly type: "context" }>,
 ): readonly [Step, SessionState | undefined] => {
-  const state: SessionState | undefined = resolveState(policy, previous, event.agent, event.now)
+  const state = resolveState(policy, previous, event.agent, event.now)
   if (state === undefined) return [CONTINUE, undefined]
   const messages: Array<string> = []
-  const entries: ReadonlyArray<RunningEntry> = state.entries.map(
-    (current: RunningEntry): RunningEntry => {
-      const measured: RunningEntry = updateIntervalSample(current, event.sample)
-      if (!current.definition.condition.matches(measured, event.now, event.sample)) return measured
-      messages.push(current.definition.message)
-      return interval(current.definition, event.now, measured.latestContext)
-    },
-  )
-  const nextState: SessionState = { ...state, entries }
+  const entries = state.entries.map((current) => {
+    const measured = updateIntervalSample(current, event.sample)
+    if (!current.definition.condition.matches(measured, event.now, event.sample)) return measured
+    messages.push(current.definition.message)
+    return interval(current.definition, event.now, measured.latestContext)
+  })
+  const nextState = { ...state, entries }
   if (messages.length === 0) return [CONTINUE, nextState]
   return [{ type: "Emit", messages }, nextState]
 }
@@ -354,7 +337,7 @@ const stepAgentSelected = (
   previous: SessionState | undefined,
   event: Extract<SessionEvent, { readonly type: "agent.selected" }>,
 ): readonly [Step, SessionState | undefined] => {
-  const state: SessionState | undefined = resolveState(policy, previous, event.agent, event.now)
+  const state = resolveState(policy, previous, event.agent, event.now)
   if (state === undefined) return [CONTINUE, undefined]
   return [CONTINUE, state]
 }
@@ -367,7 +350,7 @@ const stepCompactionEnded = (
     CONTINUE,
     {
       ...state,
-      entries: state.entries.map((current: RunningEntry): RunningEntry => ({
+      entries: state.entries.map((current) => ({
         ...current,
         contextBaseline: Option.none(),
         latestContext: Option.none(),

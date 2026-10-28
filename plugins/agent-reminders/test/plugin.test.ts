@@ -88,7 +88,7 @@ interface CapturedLog {
 }
 
 const makeCapturingLogger = (logs: Array<CapturedLog>): Logger.Logger<unknown, void> =>
-  Logger.make((options: Logger.Options<unknown>): void => {
+  Logger.make((options) => {
     logs.push({
       level: options.logLevel,
       message: options.message,
@@ -120,18 +120,16 @@ const makeReminderContext = (
 ): ReminderContext => ({
   options,
   session: {
-    context: (input: Parameters<ReminderContext["session"]["context"]>[0]): Effect.Effect<
-      SessionContextOutput
-    > =>
-      Effect.gen(function*(): Effect.fn.Return<SessionContextOutput> {
+    context: (input) =>
+      Effect.gen(function*() {
         sdk.contextReads++
         if (sdk.contextRequest !== undefined) return yield* sdk.contextRequest(input.sessionID)
         return sdk.messages.get(input.sessionID) ?? []
       }),
-    synthetic: (input: SessionSyntheticInput): Effect.Effect<SessionSyntheticOutput, unknown> =>
-      Effect.gen(function*(): Effect.fn.Return<SessionSyntheticOutput, unknown> {
+    synthetic: (input) =>
+      Effect.gen(function*() {
         sdk.syntheticCalls.push(input)
-        const failure: string | undefined = sdk.syntheticFailure
+        const failure = sdk.syntheticFailure
         if (failure !== undefined) return yield* Effect.fail(failure)
         return noticeResult
       }),
@@ -140,21 +138,20 @@ const makeReminderContext = (
       callback: (event: SessionHooks[Name]) => Effect.Effect<void>,
     ): ReturnType<ReminderContext["session"]["hook"]> =>
       Effect.acquireRelease(
-        Effect.sync((): { readonly dispose: Effect.Effect<void> } => {
+        Effect.sync(() => {
           hooks.sessionRegistrations.push(name)
           const registered = (hooks.sessionInputs[name] ?? []).map(
-            (event: SessionHooks[Name]): Effect.Effect<void> => callback(event),
+            (event) => callback(event),
           )
           hooks.sessionEffects.push(...registered)
           return {
-            dispose: Effect.sync((): void => {
+            dispose: Effect.sync(() => {
               disposeEffects(registered, hooks.sessionEffects)
               removeLast(hooks.sessionRegistrations, name)
             }),
           }
         }),
-        (registration: { readonly dispose: Effect.Effect<void> }): Effect.Effect<void> =>
-          registration.dispose,
+        (registration) => registration.dispose,
       ),
   },
   tool: {
@@ -163,15 +160,13 @@ const makeReminderContext = (
       callback: (event: ToolHooks[Name]) => Effect.Effect<void, ToolFailures[Name]>,
     ): ReturnType<ReminderContext["tool"]["hook"]> =>
       Effect.acquireRelease(
-        Effect.sync((): { readonly dispose: Effect.Effect<void> } => {
+        Effect.sync(() => {
           hooks.toolRegistrations.push(name)
           const registered = (hooks.toolInputs[name] ?? []).map(
-            (event: ToolHooks[Name]): Effect.Effect<void> =>
+            (event) =>
               callback(event).pipe(
                 Effect.result,
-                Effect.flatMap((
-                  result: Result.Result<void, ToolFailures[Name]>,
-                ): Effect.Effect<void> =>
+                Effect.flatMap((result) =>
                   Result.isFailure(result) ? Effect.die(result.failure) : Effect.void
                 ),
               ),
@@ -179,25 +174,24 @@ const makeReminderContext = (
           const effects = name === "execute.after" ? hooks.toolAfterEffects : hooks.toolEffects
           effects.push(...registered)
           return {
-            dispose: Effect.sync((): void => {
+            dispose: Effect.sync(() => {
               disposeEffects(registered, effects)
               removeLast(hooks.toolRegistrations, name)
             }),
           }
         }),
-        (registration: { readonly dispose: Effect.Effect<void> }): Effect.Effect<void> =>
-          registration.dispose,
+        (registration) => registration.dispose,
       ),
   },
   model: {
-    list: (): Effect.Effect<ModelListOutput> =>
-      Effect.sync((): ModelListOutput => {
+    list: () =>
+      Effect.sync(() => {
         sdk.modelReads++
         return sdk.models
       }),
   },
   event: {
-    subscribe: (): Stream.Stream<OpenCodeEvent, unknown> => {
+    subscribe: () => {
       hooks.eventSubscriptions++
       return eventStream
     },
@@ -224,7 +218,11 @@ const emptySdk = (): SdkResponses => ({
   syntheticCalls: [],
 })
 
-const modelInfo = (context: number, id = "gpt-test", providerID = "openai"): Model.Info => {
+const modelInfo = (
+  context: number,
+  id: string = "gpt-test",
+  providerID: string = "openai",
+): Model.Info => {
   const model = Model.Info.default(
     Schema.decodeUnknownSync(Provider.ID)(providerID),
     Schema.decodeUnknownSync(Model.ID)(id),
@@ -234,9 +232,9 @@ const modelInfo = (context: number, id = "gpt-test", providerID = "openai"): Mod
 
 const contextEvent = (
   session: string,
-  agent = "build",
-  modelID = "gpt-test",
-  providerID = "openai",
+  agent: string = "build",
+  modelID: string = "gpt-test",
+  providerID: string = "openai",
 ): SessionHooks["context"] => ({
   sessionID: Schema.decodeUnknownSync(Session.ID)(session),
   agent: Schema.decodeUnknownSync(Agent.ID)(agent),
@@ -253,7 +251,7 @@ const sessionIDFrom = (session: string): Schema.Schema.Type<typeof Session.ID> =
 const notice = (
   session: string,
   text: string,
-  agent = "build",
+  agent: string = "build",
 ): SessionSyntheticInput => ({
   sessionID: sessionIDFrom(session),
   text,
@@ -270,8 +268,8 @@ interface NoticeJournal {
 const noticeJournal = (sdk: SdkResponses): NoticeJournal => {
   let consumed = 0
   return {
-    take: (): ReadonlyArray<SessionSyntheticInput> => {
-      const pending: ReadonlyArray<SessionSyntheticInput> = sdk.syntheticCalls.slice(consumed)
+    take: () => {
+      const pending = sdk.syntheticCalls.slice(consumed)
       consumed = sdk.syntheticCalls.length
       return pending
     },
@@ -384,9 +382,9 @@ const completedCompaction = (id: string): SessionContextOutput[number] =>
 const beforeEvent = (
   tool: string,
   call: string,
-  session = "ses_test",
-  message = "msg_test",
-  agent = "build",
+  session: string = "ses_test",
+  message: string = "msg_test",
+  agent: string = "build",
 ): ToolHooks["execute.before"] => ({
   tool,
   sessionID: Schema.decodeUnknownSync(Session.ID)(session),
@@ -432,37 +430,37 @@ const requiredEffect = (
 ): Effect.Effect<void> => effects[index] ?? Effect.die("test hook event was not registered")
 
 const makeEventPublisher = (): Effect.Effect<EventPublisher, never, Scope.Scope> =>
-  Effect.gen(function*(): Effect.fn.Return<EventPublisher, never, Scope.Scope> {
+  Effect.gen(function*() {
     const queue = yield* Effect.acquireRelease(
       Queue.unbounded<EventEnvelope>(),
-      (events: Queue.Queue<EventEnvelope>): Effect.Effect<void> => Queue.shutdown(events),
+      (events) => Queue.shutdown(events),
     )
     const terminated = yield* Deferred.make<void>()
     let previous: EventEnvelope | undefined
-    const pull: Effect.Effect<OpenCodeEvent> = Effect.gen(
-      function*(): Effect.fn.Return<OpenCodeEvent> {
+    const pull = Effect.gen(
+      function*() {
         if (previous !== undefined) yield* Deferred.succeed(previous.acknowledgment, undefined)
         const envelope: EventEnvelope = yield* Queue.take(queue)
         previous = envelope
         return envelope.event
       },
     )
-    const stream: Stream.Stream<OpenCodeEvent, unknown> = Stream.fromEffectRepeat(pull).pipe(
+    const stream = Stream.fromEffectRepeat(pull).pipe(
       Stream.ensuring(
         Effect.flatMap(
           Deferred.succeed(terminated, undefined),
-          (): Effect.Effect<void> => Effect.void,
+          () => Effect.void,
         ),
       ),
     )
-    const publish = (event: OpenCodeEvent): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    const publish = (event: OpenCodeEvent) =>
+      Effect.gen(function*() {
         const acknowledgment = yield* Deferred.make<void>()
         yield* Queue.offer(queue, { event, acknowledgment })
         yield* Effect.raceFirst(
           Deferred.await(acknowledgment),
           Deferred.await(terminated).pipe(
-            Effect.flatMap((): Effect.Effect<never> => Effect.interrupt),
+            Effect.flatMap(() => Effect.interrupt),
           ),
         )
       })
@@ -476,8 +474,8 @@ const runPlugin = async <A>(
   exercise: (publisher: EventPublisher) => Effect.Effect<A>,
   loggers?: ReadonlyArray<Logger.Logger<unknown, void>>,
 ): Promise<A> => {
-  const program = Effect.scoped(Effect.gen(function*(): Effect.fn.Return<A, never, Scope.Scope> {
-    const publisher: EventPublisher = yield* makeEventPublisher()
+  const program = Effect.scoped(Effect.gen(function*() {
+    const publisher = yield* makeEventPublisher()
     const context = makeReminderContext(
       options,
       hooks,
@@ -532,12 +530,12 @@ const machineCompaction = (now: number): SessionEvent => ({ type: "compaction.en
 const sampleValue = (option: Option.Option<Positive> | undefined): number | undefined =>
   option === undefined ? undefined : Option.isSome(option) ? option.value : undefined
 
-test("a matching outer shell call admits its configured session notice", async (): Promise<void> => {
+test("a matching outer shell call admits its configured session notice", async () => {
   const outgoing = contextEvent("ses_test")
   const before = beforeEvent("shell", "call_shell")
   const hooks = makeHooks({ contexts: [outgoing, outgoing], before: [before] })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
   await runPlugin(
     {
       agents: {
@@ -551,8 +549,8 @@ test("a matching outer shell call admits its configured session notice", async (
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
@@ -573,7 +571,7 @@ test("a matching outer shell call admits its configured session notice", async (
   expect(hooks.toolAfterEffects).toEqual([])
 })
 
-test("a fired reminder emits one annotated info log and no trigger log below or after reset", async (): Promise<void> => {
+test("a fired reminder emits one annotated info log and no trigger log below or after reset", async () => {
   const session = "ses_reminder_log"
   const agent = "orchestrator"
   const message = "Delegate before continuing."
@@ -582,10 +580,10 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
   const afterReset = contextEvent(session, agent)
   const shell = beforeEvent("shell", "call_reminder_log", session, "msg_reminder_log", agent)
   const hooks = makeHooks({ contexts: [initial, afterTrigger, afterReset], before: [shell] })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
   const logs: Array<CapturedLog> = []
-  const logger: Logger.Logger<unknown, void> = makeCapturingLogger(logs)
+  const logger = makeCapturingLogger(logs)
 
   await runPlugin(
     {
@@ -597,8 +595,8 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         expect(notices.take()).toEqual([])
         expect(logs).toEqual([])
@@ -622,11 +620,10 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
             },
           },
         ])
-        const rendered: ReadonlyArray<string> = logs.map(
-          (log: CapturedLog): string =>
-            `${Formatter.format(log.message)} ${Formatter.format(log.annotations)}`,
+        const rendered = logs.map(
+          (log) => `${Formatter.format(log.message)} ${Formatter.format(log.annotations)}`,
         )
-        expect(rendered.some((entry: string): boolean => entry.includes(message))).toBe(false)
+        expect(rendered.some((entry) => entry.includes(message))).toBe(false)
 
         yield* requiredEffect(hooks.sessionEffects, 2)
         expect(notices.take()).toEqual([])
@@ -636,7 +633,7 @@ test("a fired reminder emits one annotated info log and no trigger log below or 
   )
 })
 
-test("a failing session notice is reported without suppressing other reminders or reviving reset state", async (): Promise<void> => {
+test("a failing session notice is reported without suppressing other reminders or reviving reset state", async () => {
   const session = "ses_reminder_notice_failure"
   const agent = "orchestrator"
   const initial = contextEvent(session, agent)
@@ -650,8 +647,8 @@ test("a failing session notice is reported without suppressing other reminders o
     agent,
   )
   const hooks = makeHooks({ contexts: [initial, outgoing, afterReset], before: [shell] })
-  const sdk: SdkResponses = { ...emptySdk(), syntheticFailure: "notice down" }
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = { ...emptySdk(), syntheticFailure: "notice down" }
+  const notices = noticeJournal(sdk)
   const logs: Array<CapturedLog> = []
 
   await runPlugin(
@@ -671,8 +668,8 @@ test("a failing session notice is reported without suppressing other reminders o
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* TestClock.adjust("5 seconds")
@@ -695,8 +692,8 @@ test("a failing session notice is reported without suppressing other reminders o
             ],
           },
         ])
-        expect(logs.filter((log: CapturedLog): boolean => log.level === "Warn")).toHaveLength(2)
-        expect(logs.filter((log: CapturedLog): boolean => log.level === "Info")).toHaveLength(0)
+        expect(logs.filter((log) => log.level === "Warn")).toHaveLength(2)
+        expect(logs.filter((log) => log.level === "Info")).toHaveLength(0)
 
         yield* requiredEffect(hooks.sessionEffects, 2)
         expect(notices.take()).toEqual([])
@@ -705,18 +702,18 @@ test("a failing session notice is reported without suppressing other reminders o
   )
 })
 
-test("loading without configured agents warns once and disables all reminders", async (): Promise<void> => {
+test("loading without configured agents warns once and disables all reminders", async () => {
   const contexts = [contextEvent("ses_no_agents")]
   const hooks = makeHooks({ contexts })
-  const sdk: SdkResponses = emptySdk()
+  const sdk = emptySdk()
   const logs: Array<CapturedLog> = []
 
   await runPlugin(
     { agents: {} },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         expect(logs).toMatchObject([
           {
             level: "Warn",
@@ -725,7 +722,7 @@ test("loading without configured agents warns once and disables all reminders", 
             ],
           },
         ])
-        expect(logs.filter((log: CapturedLog): boolean => log.level === "Info")).toHaveLength(0)
+        expect(logs.filter((log) => log.level === "Info")).toHaveLength(0)
 
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* TestClock.adjust("1 hour")
@@ -736,7 +733,7 @@ test("loading without configured agents warns once and disables all reminders", 
   )
 })
 
-test("default tools ignore execute wrapper calls", async (): Promise<void> => {
+test("default tools ignore execute wrapper calls", async () => {
   const session = "ses_default_execute"
   const initial = contextEvent(session)
   const outgoing = contextEvent(session)
@@ -746,7 +743,7 @@ test("default tools ignore execute wrapper calls", async (): Promise<void> => {
     before: [execute],
     after: [completedAfterEvent(execute)],
   })
-  const sdk: SdkResponses = emptySdk()
+  const sdk = emptySdk()
 
   await runPlugin(
     {
@@ -758,8 +755,8 @@ test("default tools ignore execute wrapper calls", async (): Promise<void> => {
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
@@ -769,7 +766,7 @@ test("default tools ignore execute wrapper calls", async (): Promise<void> => {
   )
 })
 
-test("default tools count direct shell success and failure", async (): Promise<void> => {
+test("default tools count direct shell success and failure", async () => {
   const session = "ses_default_shell"
   const contexts = [
     contextEvent(session),
@@ -789,8 +786,8 @@ test("default tools count direct shell success and failure", async (): Promise<v
       failedAfterEvent(failedShell),
     ],
   })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -802,8 +799,8 @@ test("default tools count direct shell success and failure", async (): Promise<v
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
@@ -823,7 +820,7 @@ test("default tools count direct shell success and failure", async (): Promise<v
   )
 })
 
-test("concurrent execute calls keep nested registered tool counts separate", async (): Promise<void> => {
+test("concurrent execute calls keep nested registered tool counts separate", async () => {
   const session = "ses_concurrent_execute"
   const initial = contextEvent(session)
   const outgoing = contextEvent(session)
@@ -846,8 +843,8 @@ test("concurrent execute calls keep nested registered tool counts separate", asy
       failedAfterEvent(outerA),
     ],
   })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -862,8 +859,8 @@ test("concurrent execute calls keep nested registered tool counts separate", asy
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         for (let index = 0; index < 4; index++) yield* requiredEffect(hooks.toolEffects, index)
         for (let index = 0; index < 4; index++) yield* requiredEffect(hooks.toolAfterEffects, index)
@@ -873,7 +870,7 @@ test("concurrent execute calls keep nested registered tool counts separate", asy
   )
 })
 
-test("sessions keep independent tool counters and reminder reset cycles", async (): Promise<void> => {
+test("sessions keep independent tool counters and reminder reset cycles", async () => {
   const sessionA = "ses_independent_a"
   const sessionB = "ses_independent_b"
   const contexts = [
@@ -895,8 +892,8 @@ test("sessions keep independent tool counters and reminder reset cycles", async 
     beforeEvent("shell", "call_a2", sessionA, "msg_a"),
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -911,8 +908,8 @@ test("sessions keep independent tool counters and reminder reset cycles", async 
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
         yield* requiredEffect(hooks.toolEffects, 0)
@@ -934,7 +931,7 @@ test("sessions keep independent tool counters and reminder reset cycles", async 
   )
 })
 
-test("duplicate names in a custom tool list do not double-count one invocation", async (): Promise<void> => {
+test("duplicate names in a custom tool list do not double-count one invocation", async () => {
   const session = "ses_duplicate_tool_names"
   const contexts = [contextEvent(session), contextEvent(session), contextEvent(session)]
   const calls = [
@@ -942,8 +939,8 @@ test("duplicate names in a custom tool list do not double-count one invocation",
     beforeEvent("shell", "call_duplicate_two", session, "msg_duplicate"),
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -958,8 +955,8 @@ test("duplicate names in a custom tool list do not double-count one invocation",
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
@@ -974,14 +971,12 @@ test("duplicate names in a custom tool list do not double-count one invocation",
   )
 })
 
-test("context growth uses reported occupied tokens, excludes the initial sample, and resets after delivery", async (): Promise<void> => {
+test("context growth uses reported occupied tokens, excludes the initial sample, and resets after delivery", async () => {
   const session = "ses_context_growth"
-  const contexts = [0, 1, 2, 3].map((_index: number): SessionHooks["context"] =>
-    contextEvent(session)
-  )
+  const contexts = [0, 1, 2, 3].map((_index) => contextEvent(session))
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = []
 
@@ -998,8 +993,8 @@ test("context growth uses reported occupied tokens, excludes the initial sample,
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         history = [...history, assistantUsage("msg_usage_initial", { input: 10_000 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 0)
@@ -1043,14 +1038,12 @@ test("context growth uses reported occupied tokens, excludes the initial sample,
   )
 })
 
-test("zero and missing usage leave the context baseline unknown until a positive sample arrives", async (): Promise<void> => {
+test("zero and missing usage leave the context baseline unknown until a positive sample arrives", async () => {
   const session = "ses_zero_usage"
-  const contexts = [0, 1, 2, 3].map((_index: number): SessionHooks["context"] =>
-    contextEvent(session)
-  )
+  const contexts = [0, 1, 2, 3].map((_index) => contextEvent(session))
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = []
 
@@ -1067,8 +1060,8 @@ test("zero and missing usage leave the context baseline unknown until a positive
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         expect(notices.take()).toEqual([])
 
@@ -1090,14 +1083,14 @@ test("zero and missing usage leave the context baseline unknown until a positive
   )
 })
 
-test("a latest zero-usage assistant invalidates an older positive context sample", async (): Promise<void> => {
+test("a latest zero-usage assistant invalidates an older positive context sample", async () => {
   const session = "ses_latest_zero_usage"
-  const contexts = [0, 1, 2].map((_index: number): SessionHooks["context"] => contextEvent(session))
+  const contexts = [0, 1, 2].map((_index) => contextEvent(session))
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
-  let history: SessionContextOutput = [
+  let history = [
     assistantUsage("msg_old_positive", { input: 100 }),
     assistantUsage("msg_latest_zero", { input: 0 }),
   ]
@@ -1116,8 +1109,8 @@ test("a latest zero-usage assistant invalidates an older positive context sample
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         expect(notices.take()).toEqual([])
 
@@ -1134,14 +1127,14 @@ test("a latest zero-usage assistant invalidates an older positive context sample
   )
 })
 
-test("a tokenless assistant is skipped so the earlier usable sample remains the growth baseline", async (): Promise<void> => {
+test("a tokenless assistant is skipped so the earlier usable sample remains the growth baseline", async () => {
   const session = "ses_missing_token_data"
   const contexts = [contextEvent(session), contextEvent(session)]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
-  let history: SessionContextOutput = [
+  let history = [
     assistantUsage("msg_token_usage", { input: 100 }),
     assistantWithoutUsage("msg_without_usage"),
   ]
@@ -1160,8 +1153,8 @@ test("a tokenless assistant is skipped so the earlier usable sample remains the 
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         expect(notices.take()).toEqual([])
 
@@ -1173,7 +1166,7 @@ test("a tokenless assistant is skipped so the earlier usable sample remains the 
   )
 })
 
-test("recursive all/any conditions sum each leaf's selected tools and reset after reminders", async (): Promise<void> => {
+test("recursive all/any conditions sum each leaf's selected tools and reset after reminders", async () => {
   const session = "ses_composite_tools"
   const toolNames = [
     "shell",
@@ -1189,9 +1182,9 @@ test("recursive all/any conditions sum each leaf's selected tools and reset afte
   ]
   const contexts = Array.from(
     { length: toolNames.length + 1 },
-    (_value: unknown, _index: number): SessionHooks["context"] => contextEvent(session),
+    (_value, _index) => contextEvent(session),
   )
-  const before = toolNames.map((tool: string, index: number): ToolHooks["execute.before"] =>
+  const before = toolNames.map((tool, index) =>
     beforeEvent(tool, `call_composite_${index}`, session, `msg_composite_${index}`)
   )
   const hooks = makeHooks({
@@ -1200,7 +1193,7 @@ test("recursive all/any conditions sum each leaf's selected tools and reset afte
     after: before.map(failedAfterEvent),
   })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1227,8 +1220,8 @@ test("recursive all/any conditions sum each leaf's selected tools and reset afte
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         for (let index = 0; index < toolNames.length; index++) {
           yield* requiredEffect(hooks.toolEffects, index)
@@ -1248,7 +1241,7 @@ test("recursive all/any conditions sum each leaf's selected tools and reset afte
   )
 })
 
-test("context utilization uses the current model limit and percentage-point growth", async (): Promise<void> => {
+test("context utilization uses the current model limit and percentage-point growth", async () => {
   const session = "ses_context_utilization"
   const contexts = [
     contextEvent(session),
@@ -1259,7 +1252,7 @@ test("context utilization uses the current model limit and percentage-point grow
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = []
   sdk.models = {
@@ -1280,8 +1273,8 @@ test("context utilization uses the current model limit and percentage-point grow
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         history = [...history, assistantUsage("msg_usage_initial", { input: 100 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 0)
@@ -1309,7 +1302,7 @@ test("context utilization uses the current model limit and percentage-point grow
   )
 })
 
-test("missing and invalid model limits cannot satisfy utilization conditions", async (): Promise<void> => {
+test("missing and invalid model limits cannot satisfy utilization conditions", async () => {
   const session = "ses_missing_limit"
   const contexts = [
     contextEvent(session),
@@ -1319,9 +1312,9 @@ test("missing and invalid model limits cannot satisfy utilization conditions", a
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
-  let history: SessionContextOutput = [assistantUsage("msg_limit_initial", { input: 100 })]
+  let history = [assistantUsage("msg_limit_initial", { input: 100 })]
   sdk.messages.set(sessionID, history)
 
   await runPlugin(
@@ -1337,8 +1330,8 @@ test("missing and invalid model limits cannot satisfy utilization conditions", a
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
 
         history = [...history, assistantUsage("msg_limit_growth", { input: 200 })]
@@ -1357,7 +1350,7 @@ test("missing and invalid model limits cannot satisfy utilization conditions", a
   )
 })
 
-test("configured agents receive their own messages and other agents receive none", async (): Promise<void> => {
+test("configured agents receive their own messages and other agents receive none", async () => {
   const buildSession = "ses_role_build"
   const reviewSession = "ses_role_review"
   const contexts = [
@@ -1373,7 +1366,7 @@ test("configured agents receive their own messages and other agents receive none
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1394,8 +1387,8 @@ test("configured agents receive their own messages and other agents receive none
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
         yield* requiredEffect(hooks.toolEffects, 0)
@@ -1417,7 +1410,7 @@ test("configured agents receive their own messages and other agents receive none
   )
 })
 
-test("malformed recursive conditions fail plugin initialization clearly", async (): Promise<void> => {
+test("malformed recursive conditions fail plugin initialization clearly", async () => {
   const invalidConfigurations: ReadonlyArray<ReminderContext["options"]> = [
     {
       agents: {
@@ -1480,14 +1473,14 @@ test("malformed recursive conditions fail plugin initialization clearly", async 
         options,
         makeHooks({ contexts: [] }),
         emptySdk(),
-        (): Effect.Effect<void> => Effect.void,
+        () => Effect.void,
       ),
     )
       .rejects.toThrow("Invalid agent reminder configuration")
   }
 })
 
-test("elapsed-time reminders wait for an ordinary continuation and use inclusive wall-clock thresholds", async (): Promise<void> => {
+test("elapsed-time reminders wait for an ordinary continuation and use inclusive wall-clock thresholds", async () => {
   const contexts = [
     contextEvent("ses_elapsed"),
     contextEvent("ses_elapsed"),
@@ -1495,8 +1488,8 @@ test("elapsed-time reminders wait for an ordinary continuation and use inclusive
     contextEvent("ses_elapsed"),
   ]
   const hooks = makeHooks({ contexts })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1508,8 +1501,8 @@ test("elapsed-time reminders wait for an ordinary continuation and use inclusive
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* TestClock.adjust("59 seconds")
         expect(notices.take()).toEqual([])
@@ -1527,20 +1520,20 @@ test("elapsed-time reminders wait for an ordinary continuation and use inclusive
   )
 })
 
-test("prototype property names are not treated as configured agents", async (): Promise<void> => {
+test("prototype property names are not treated as configured agents", async () => {
   const contexts = [
     contextEvent("ses_constructor", "constructor"),
     contextEvent("ses_to_string", "toString"),
   ]
   const hooks = makeHooks({ contexts })
-  const sdk: SdkResponses = emptySdk()
+  const sdk = emptySdk()
 
   await runPlugin(
     { agents: {} },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
         expect(sdk.syntheticCalls).toEqual([])
@@ -1548,7 +1541,7 @@ test("prototype property names are not treated as configured agents", async (): 
   )
 })
 
-test("explicitly configured prototype-like agent names receive reminders while a missing prototype-like name receives none", async (): Promise<void> => {
+test("explicitly configured prototype-like agent names receive reminders while a missing prototype-like name receives none", async () => {
   const constructorSession = "ses_prototype_constructor"
   const toStringSession = "ses_prototype_to_string"
   const missingSession = "ses_prototype_missing"
@@ -1584,8 +1577,8 @@ test("explicitly configured prototype-like agent names receive reminders while a
     ),
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1606,8 +1599,8 @@ test("explicitly configured prototype-like agent names receive reminders while a
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.sessionEffects, 1)
         yield* requiredEffect(hooks.sessionEffects, 2)
@@ -1634,7 +1627,7 @@ test("explicitly configured prototype-like agent names receive reminders while a
   )
 })
 
-test("agent-selected events reset at switch time while redundant selections leave intervals intact", async (): Promise<void> => {
+test("agent-selected events reset at switch time while redundant selections leave intervals intact", async () => {
   const session = "ses_agent_switch"
   const contexts = [
     contextEvent(session, "build"),
@@ -1645,8 +1638,8 @@ test("agent-selected events reset at switch time while redundant selections leav
     contextEvent(session, "review"),
   ]
   const hooks = makeHooks({ contexts })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1661,8 +1654,8 @@ test("agent-selected events reset at switch time while redundant selections leav
     },
     hooks,
     sdk,
-    (events: EventPublisher): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    (events) =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* TestClock.adjust("30 seconds")
         yield* events.publish(agentSelectedEvent(session, "build", "build"))
@@ -1690,12 +1683,12 @@ test("agent-selected events reset at switch time while redundant selections leav
   )
 })
 
-test("the first configured agent-selected event starts the elapsed interval immediately", async (): Promise<void> => {
+test("the first configured agent-selected event starts the elapsed interval immediately", async () => {
   const session = "ses_first_agent_event"
   const outgoing = contextEvent(session, "build")
   const hooks = makeHooks({ contexts: [outgoing] })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -1710,8 +1703,8 @@ test("the first configured agent-selected event starts the elapsed interval imme
     },
     hooks,
     sdk,
-    (events: EventPublisher): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    (events) =>
+      Effect.gen(function*() {
         yield* events.publish(agentSelectedEvent(session, "build"))
         yield* TestClock.adjust("60 seconds")
         yield* requiredEffect(hooks.sessionEffects, 0)
@@ -1720,7 +1713,7 @@ test("the first configured agent-selected event starts the elapsed interval imme
   )
 })
 
-test("an agent switch establishes the new context baseline on its first usable sample", async (): Promise<void> => {
+test("an agent switch establishes the new context baseline on its first usable sample", async () => {
   const session = "ses_agent_context_baseline"
   const contexts = [
     contextEvent(session, "build"),
@@ -1729,9 +1722,9 @@ test("an agent switch establishes the new context baseline on its first usable s
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
-  let history: SessionContextOutput = [assistantUsage("msg_before_agent_switch", { input: 100 })]
+  let history = [assistantUsage("msg_before_agent_switch", { input: 100 })]
   sdk.messages.set(sessionID, history)
 
   await runPlugin(
@@ -1753,8 +1746,8 @@ test("an agent switch establishes the new context baseline on its first usable s
     },
     hooks,
     sdk,
-    (events: EventPublisher): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    (events) =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* events.publish(agentSelectedEvent(session, "review", "build"))
         history = [...history, assistantUsage("msg_after_agent_switch", { input: 150 })]
@@ -1770,7 +1763,7 @@ test("an agent switch establishes the new context baseline on its first usable s
   )
 })
 
-test("an unconfigured role's accumulated context does not count when switching back", async (): Promise<void> => {
+test("an unconfigured role's accumulated context does not count when switching back", async () => {
   const session = "ses_unconfigured_context_switch"
   const contexts = [
     contextEvent(session, "build"),
@@ -1780,9 +1773,9 @@ test("an unconfigured role's accumulated context does not count when switching b
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
-  let history: SessionContextOutput = [assistantUsage("msg_before_idle", { input: 100 })]
+  let history = [assistantUsage("msg_before_idle", { input: 100 })]
   sdk.messages.set(sessionID, history)
 
   await runPlugin(
@@ -1804,8 +1797,8 @@ test("an unconfigured role's accumulated context does not count when switching b
     },
     hooks,
     sdk,
-    (events: EventPublisher): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    (events) =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* events.publish(agentSelectedEvent(session, "idle", "build"))
 
@@ -1825,7 +1818,7 @@ test("an unconfigured role's accumulated context does not count when switching b
   )
 })
 
-test("an agent change observed at the context hook starts with a fresh baseline", async (): Promise<void> => {
+test("an agent change observed at the context hook starts with a fresh baseline", async () => {
   const session = "ses_context_fallback_switch"
   const contexts = [
     contextEvent(session, "build"),
@@ -1834,9 +1827,9 @@ test("an agent change observed at the context hook starts with a fresh baseline"
   ]
   const hooks = makeHooks({ contexts })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
-  let history: SessionContextOutput = [
+  let history = [
     assistantUsage("msg_before_context_fallback", { input: 100 }),
   ]
   sdk.messages.set(sessionID, history)
@@ -1860,8 +1853,8 @@ test("an agent change observed at the context hook starts with a fresh baseline"
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         history = [...history, assistantUsage("msg_first_context_fallback", { input: 150 })]
         sdk.messages.set(sessionID, history)
@@ -1876,7 +1869,7 @@ test("an agent change observed at the context hook starts with a fresh baseline"
   )
 })
 
-test("an agent change observed at a tool hook starts with a fresh baseline", async (): Promise<void> => {
+test("an agent change observed at a tool hook starts with a fresh baseline", async () => {
   const session = "ses_tool_fallback_switch"
   const contexts = [
     contextEvent(session, "build"),
@@ -1892,9 +1885,9 @@ test("an agent change observed at a tool hook starts with a fresh baseline", asy
   )
   const hooks = makeHooks({ contexts, before: [switchTool], after: [failedAfterEvent(switchTool)] })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
-  let history: SessionContextOutput = [assistantUsage("msg_before_tool_fallback", { input: 100 })]
+  let history = [assistantUsage("msg_before_tool_fallback", { input: 100 })]
   sdk.messages.set(sessionID, history)
 
   await runPlugin(
@@ -1916,8 +1909,8 @@ test("an agent change observed at a tool hook starts with a fresh baseline", asy
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
@@ -1934,7 +1927,7 @@ test("an agent change observed at a tool hook starts with a fresh baseline", asy
   )
 })
 
-test("successful compaction rebases context per entry while preserving per-entry counts and elapsed time", async (): Promise<void> => {
+test("successful compaction rebases context per entry while preserving per-entry counts and elapsed time", async () => {
   const session = "ses_compaction"
   const contexts = [
     contextEvent(session),
@@ -1949,9 +1942,9 @@ test("successful compaction rebases context per entry while preserving per-entry
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
-  let history: SessionContextOutput = [assistantUsage("msg_pre_compaction", { input: 1_000 })]
+  let history = [assistantUsage("msg_pre_compaction", { input: 1_000 })]
   sdk.messages.set(sessionID, history)
 
   await runPlugin(
@@ -1978,8 +1971,8 @@ test("successful compaction rebases context per entry while preserving per-entry
     },
     hooks,
     sdk,
-    (events: EventPublisher): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    (events) =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
@@ -2013,7 +2006,7 @@ test("successful compaction rebases context per entry while preserving per-entry
   )
 })
 
-test("session deletion clears interval state and scoped hook registrations are disposed", async (): Promise<void> => {
+test("session deletion clears interval state and scoped hook registrations are disposed", async () => {
   const session = "ses_deleted"
   const contexts = [
     contextEvent(session),
@@ -2027,8 +2020,8 @@ test("session deletion clears interval state and scoped hook registrations are d
     beforeEvent("shell", "call_after_delete_2", session, "msg_deleted"),
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
   const options = {
     agents: {
       build: [
@@ -2044,8 +2037,8 @@ test("session deletion clears interval state and scoped hook registrations are d
     options,
     hooks,
     sdk,
-    (events: EventPublisher): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    (events) =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
@@ -2070,7 +2063,7 @@ test("session deletion clears interval state and scoped hook registrations are d
   expect(hooks.toolAfterEffects).toEqual([])
 })
 
-test("scope closure prevents an in-flight context hook from delivering a stale reminder", async (): Promise<void> => {
+test("scope closure prevents an in-flight context hook from delivering a stale reminder", async () => {
   const session = "ses_scope_close_in_flight"
   const initial = contextEvent(session)
   const pending = contextEvent(session)
@@ -2099,8 +2092,8 @@ test("scope closure prevents an in-flight context hook from delivering a stale r
   }
 
   const program = Effect.scoped(
-    Effect.gen(function*(): Effect.fn.Return<void, never, Scope.Scope> {
-      const publisher: EventPublisher = yield* makeEventPublisher()
+    Effect.gen(function*() {
+      const publisher = yield* makeEventPublisher()
       const pluginScope = yield* Scope.make()
       const context = makeReminderContext(options, hooks, sdk, publisher.stream)
       yield* Effect.provideService(agentReminders.effect(context), Scope.Scope, pluginScope)
@@ -2110,13 +2103,13 @@ test("scope closure prevents an in-flight context hook from delivering a stale r
 
       const contextReadStarted = yield* Deferred.make<void>()
       const contextResponse = yield* Deferred.make<SessionContextOutput>()
-      sdk.contextRequest = (_sessionID: string): Effect.Effect<SessionContextOutput> =>
-        Effect.gen(function*(): Effect.fn.Return<SessionContextOutput> {
+      sdk.contextRequest = (_sessionID) =>
+        Effect.gen(function*() {
           yield* Deferred.succeed(contextReadStarted, undefined)
           return yield* Deferred.await(contextResponse)
         })
 
-      const contextCallback: Effect.Effect<void> = requiredEffect(hooks.sessionEffects, 1)
+      const contextCallback = requiredEffect(hooks.sessionEffects, 1)
       const callerFiber = yield* contextCallback.pipe(Effect.forkChild)
       yield* Deferred.await(contextReadStarted)
       yield* Scope.close(pluginScope, Exit.succeed(undefined))
@@ -2131,7 +2124,7 @@ test("scope closure prevents an in-flight context hook from delivering a stale r
   await Effect.runPromise(Effect.provide(program, TestClock.layer()))
 })
 
-test("a fresh plugin scope starts with fresh intervals after reload", async (): Promise<void> => {
+test("a fresh plugin scope starts with fresh intervals after reload", async () => {
   const options = {
     agents: {
       build: [
@@ -2149,8 +2142,8 @@ test("a fresh plugin scope starts with fresh intervals after reload", async (): 
     options,
     firstHooks,
     emptySdk(),
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(firstHooks.sessionEffects, 0)
         yield* requiredEffect(firstHooks.toolEffects, 0)
       }),
@@ -2163,13 +2156,13 @@ test("a fresh plugin scope starts with fresh intervals after reload", async (): 
     contexts: [reloadedContext, nextContext],
     before: [afterReloadCall],
   })
-  const reloadedSdk: SdkResponses = emptySdk()
+  const reloadedSdk = emptySdk()
   await runPlugin(
     options,
     reloadedHooks,
     reloadedSdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(reloadedHooks.sessionEffects, 0)
         yield* requiredEffect(reloadedHooks.toolEffects, 0)
         yield* requiredEffect(reloadedHooks.sessionEffects, 1)
@@ -2178,7 +2171,7 @@ test("a fresh plugin scope starts with fresh intervals after reload", async (): 
   )
 })
 
-test("delegation resets to the latest known context sample", async (): Promise<void> => {
+test("delegation resets to the latest known context sample", async () => {
   const session = "ses_delegation_context"
   const contexts = [contextEvent(session), contextEvent(session), contextEvent(session)]
   const outer = beforeEvent("execute", "call_delegate", session, "msg_delegate")
@@ -2189,7 +2182,7 @@ test("delegation resets to the latest known context sample", async (): Promise<v
     after: [failedAfterEvent(delegation), failedAfterEvent(outer)],
   })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
   let history: SessionContextOutput = []
 
@@ -2206,8 +2199,8 @@ test("delegation resets to the latest known context sample", async (): Promise<v
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         history = [...history, assistantUsage("msg_before_delegate", { input: 100 })]
         sdk.messages.set(sessionID, history)
         yield* requiredEffect(hooks.sessionEffects, 0)
@@ -2229,11 +2222,11 @@ test("delegation resets to the latest known context sample", async (): Promise<v
   )
 })
 
-test("delegation resets tool counts and elapsed time in the same interval", async (): Promise<void> => {
+test("delegation resets tool counts and elapsed time in the same interval", async () => {
   const session = "ses_delegation_interval"
   const contexts = Array.from(
     { length: 5 },
-    (_value: unknown, _index: number): SessionHooks["context"] => contextEvent(session),
+    (_value, _index) => contextEvent(session),
   )
   const shellBefore = beforeEvent(
     "shell",
@@ -2276,8 +2269,8 @@ test("delegation resets tool counts and elapsed time in the same interval", asyn
       failedAfterEvent(shellAfterTwo),
     ],
   })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -2298,8 +2291,8 @@ test("delegation resets tool counts and elapsed time in the same interval", asyn
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
@@ -2329,11 +2322,9 @@ test("delegation resets tool counts and elapsed time in the same interval", asyn
   )
 })
 
-test("a reset tool resets only its own entry and leaves other entries' counters and baselines intact", async (): Promise<void> => {
+test("a reset tool resets only its own entry and leaves other entries' counters and baselines intact", async () => {
   const session = "ses_multi_entry_reset"
-  const contexts = [0, 1, 2, 3].map((_index: number): SessionHooks["context"] =>
-    contextEvent(session)
-  )
+  const contexts = [0, 1, 2, 3].map((_index) => contextEvent(session))
   const calls = [
     beforeEvent("shell", "call_shell_1", session, "msg_multi"),
     beforeEvent("shell", "call_shell_2", session, "msg_multi"),
@@ -2344,9 +2335,9 @@ test("a reset tool resets only its own entry and leaves other entries' counters 
   ]
   const hooks = makeHooks({ contexts, before: calls, after: calls.map(failedAfterEvent) })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const sessionID = sessionIDFrom(session)
-  let history: SessionContextOutput = [assistantUsage("msg_multi_initial", { input: 100 })]
+  let history = [assistantUsage("msg_multi_initial", { input: 100 })]
   sdk.messages.set(sessionID, history)
 
   await runPlugin(
@@ -2379,8 +2370,8 @@ test("a reset tool resets only its own entry and leaves other entries' counters 
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
 
         yield* requiredEffect(hooks.toolEffects, 0)
@@ -2417,7 +2408,7 @@ test("a reset tool resets only its own entry and leaves other entries' counters 
   )
 })
 
-test("two entries matching the same request emit both messages in order with one log per message", async (): Promise<void> => {
+test("two entries matching the same request emit both messages in order with one log per message", async () => {
   const session = "ses_two_entries"
   const initial = contextEvent(session)
   const outgoing = contextEvent(session)
@@ -2428,7 +2419,7 @@ test("two entries matching the same request emit both messages in order with one
     after: [failedAfterEvent(shell)],
   })
   const sdk = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const notices = noticeJournal(sdk)
   const logs: Array<CapturedLog> = []
 
   await runPlugin(
@@ -2448,8 +2439,8 @@ test("two entries matching the same request emit both messages in order with one
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
@@ -2467,7 +2458,7 @@ test("two entries matching the same request emit both messages in order with one
   )
 })
 
-test("resetTools with an empty array allows a condition to count subagent calls", async (): Promise<void> => {
+test("resetTools with an empty array allows a condition to count subagent calls", async () => {
   const session = "ses_empty_reset_tools"
   const initial = contextEvent(session)
   const outgoing = contextEvent(session)
@@ -2477,8 +2468,8 @@ test("resetTools with an empty array allows a condition to count subagent calls"
     before: [delegation],
     after: [failedAfterEvent(delegation)],
   })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -2494,8 +2485,8 @@ test("resetTools with an empty array allows a condition to count subagent calls"
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolAfterEffects, 0)
@@ -2505,7 +2496,7 @@ test("resetTools with an empty array allows a condition to count subagent calls"
   )
 })
 
-test("prefix patterns count nested MCP-style tool calls inside an execute call", async (): Promise<void> => {
+test("prefix patterns count nested MCP-style tool calls inside an execute call", async () => {
   const session = "ses_prefix_pattern"
   const initial = contextEvent(session)
   const outgoing = contextEvent(session)
@@ -2521,8 +2512,8 @@ test("prefix patterns count nested MCP-style tool calls inside an execute call",
       failedAfterEvent(outer),
     ],
   })
-  const sdk: SdkResponses = emptySdk()
-  const notices: NoticeJournal = noticeJournal(sdk)
+  const sdk = emptySdk()
+  const notices = noticeJournal(sdk)
 
   await runPlugin(
     {
@@ -2537,8 +2528,8 @@ test("prefix patterns count nested MCP-style tool calls inside an execute call",
     },
     hooks,
     sdk,
-    (): Effect.Effect<void> =>
-      Effect.gen(function*(): Effect.fn.Return<void> {
+    () =>
+      Effect.gen(function*() {
         yield* requiredEffect(hooks.sessionEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 0)
         yield* requiredEffect(hooks.toolEffects, 1)
@@ -2552,7 +2543,7 @@ test("prefix patterns count nested MCP-style tool calls inside an execute call",
   )
 })
 
-test("entries that count and reset overlapping tool patterns are rejected at load", async (): Promise<void> => {
+test("entries that count and reset overlapping tool patterns are rejected at load", async () => {
   const invalidConfigurations: ReadonlyArray<ReminderContext["options"]> = [
     {
       agents: {
@@ -2606,14 +2597,14 @@ test("entries that count and reset overlapping tool patterns are rejected at loa
         options,
         makeHooks({ contexts: [] }),
         emptySdk(),
-        (): Effect.Effect<void> => Effect.void,
+        () => Effect.void,
       ),
     )
       .rejects.toThrow("Invalid agent reminder configuration")
   }
 })
 
-test("invalid tool reference patterns are rejected at load", async (): Promise<void> => {
+test("invalid tool reference patterns are rejected at load", async () => {
   const invalidConfigurations: ReadonlyArray<ReminderContext["options"]> = [
     {
       agents: {
@@ -2666,14 +2657,14 @@ test("invalid tool reference patterns are rejected at load", async (): Promise<v
         options,
         makeHooks({ contexts: [] }),
         emptySdk(),
-        (): Effect.Effect<void> => Effect.void,
+        () => Effect.void,
       ),
     )
       .rejects.toThrow("Invalid agent reminder configuration")
   }
 })
 
-test("machine step creates state for configured agents only and resets all entries on agent switch", (): void => {
+test("machine step creates state for configured agents only and resets all entries on agent switch", () => {
   const policy = policyFrom({
     agents: {
       build: [
@@ -2721,7 +2712,7 @@ test("machine step creates state for configured agents only and resets all entri
   expect(none).toBeUndefined()
 })
 
-test("machine step counts nested calls under their own tool names without re-counting the outer call", (): void => {
+test("machine step counts nested calls under their own tool names without re-counting the outer call", () => {
   const policy = policyFrom({
     agents: {
       build: [
@@ -2769,7 +2760,7 @@ test("machine step counts nested calls under their own tool names without re-cou
   expect(outerAgain?.activeCalls.get("msg_b")?.get("call_b")).toBe("shell")
 })
 
-test("machine step resets only the matching entry and carries its latest context sample", (): void => {
+test("machine step resets only the matching entry and carries its latest context sample", () => {
   const policy = policyFrom({
     agents: {
       build: [
@@ -2818,7 +2809,7 @@ test("machine step resets only the matching entry and carries its latest context
   expect(resetSecond?.entries[0]?.toolCounts.get("shell")).toBeUndefined()
 })
 
-test("machine step compaction clears context fields across entries and preserves counts and elapsed time", (): void => {
+test("machine step compaction clears context fields across entries and preserves counts and elapsed time", () => {
   const policy = policyFrom({
     agents: {
       build: [
@@ -2845,7 +2836,35 @@ test("machine step compaction clears context fields across entries and preserves
   expect(compacted?.entries[1]?.resetAt).toBe(0)
 })
 
-test("machine step counts a tool once per call across duplicate list entries and matches prefix patterns", (): void => {
+test("machine step leaves the previous state object untouched for no-op transitions", () => {
+  const policy = policyFrom({
+    agents: {
+      build: [
+        { message: "Build.", condition: { type: "toolCalls", count: 2, tools: ["shell"] } },
+      ],
+    },
+  })
+
+  const [, started] = step(
+    policy,
+    undefined,
+    machineBefore(0, "execute", "build", "msg_a", "call_a"),
+  )
+  expect(started).toBeDefined()
+
+  const [, selected] = step(policy, started, machineSelected(5, "build"))
+  expect(selected).toBe(started)
+
+  const [, completed] = step(policy, started, {
+    type: "tool.after",
+    now: 6,
+    tool: "read",
+    call: { messageID: "msg_a", id: "call_a" },
+  })
+  expect(completed).toBe(started)
+})
+
+test("machine step counts a tool once per call across duplicate list entries and matches prefix patterns", () => {
   const policy = policyFrom({
     agents: {
       build: [
@@ -2892,7 +2911,7 @@ test("machine step counts a tool once per call across duplicate list entries and
   expect(mcpFired).toEqual({ type: "Emit", messages: ["Prefixed."] })
 })
 
-test("machine matchers bound exact names and prefix patterns to full case-sensitive literals", (): void => {
+test("machine matchers bound exact names and prefix patterns to full case-sensitive literals", () => {
   const policy = policyFrom({
     agents: {
       build: [
