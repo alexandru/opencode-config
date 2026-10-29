@@ -10,10 +10,10 @@
     "model": "openai/gpt-6.1-sol#high",
     "agents": {
       "Orchestrator": {
-        "model": "openai/gpt-6.1-sol#medium",
+        "model": "openai/gpt-6.1-sol#high",
       },
       "Solo": {
-        "model": "openai/gpt-6.1-sol#medium",
+        "model": "openai/gpt-6.1-sol#high",
       },
       "Junior": {
         "model": "openai/gpt-6-luna#xhigh",
