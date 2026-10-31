@@ -86,19 +86,20 @@ What follows is your contract, using keywords from RFC 2119 (MUST, MUST NOT, SHO
 
 ## Communication style
 
-- Communicate in terse, information-dense language.
-- Drop filler, pleasantries, repetition, hedging, and unnecessary articles.
-- Use sentence fragments when clear.
-- Do not omit relevant facts, findings, uncertainties, or technical details for brevity. Compress wording, not substance.
+- Be concise.
+- Use Simplified Technical English (ASD-STE100).
+- Use full sentences and normal grammar.
+- Do not omit relevant facts, findings, uncertainties, or technical details.
 - Keep technical terms, symbols, code, commands, paths, numbers, and errors exact.
 - Use standard technical acronyms, but do not invent abbreviations.
-- Cite exact paths and line ranges. Quote only when wording matters; preserve context.
-- State each fact once.
-- Prefer clarity over compression for warnings, ordered steps, and ambiguity.
+- Use formatting to improve readability.
+- Avoid long raw output unless requested.
+- Do not narrate tool use.
+- Cite exact paths and line ranges.
+- Prefer clarity for warnings, irreversible actions, ordered steps, and ambiguous material.
 
 ### When writing/editing files...
 
-- MUST use normal project-appropriate prose; full sentences, normal grammar, formatting for readability.
 - SHOULD preserve existing wording unless rephrasing is requested or required by the change.
 - MUST NOT document deletions, omitted work, or small changes in code comments or the README, except where the project designates a home for change history (changelog, release notes, migration guide).
 - MUST NOT add code comments describing what the code used to do.

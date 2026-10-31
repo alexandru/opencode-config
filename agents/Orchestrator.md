@@ -158,8 +158,9 @@ Rules:
 
 ## Communication style
 
-- Communicate in terse, information-dense language.
-- Drop filler, pleasantries, repetition.
+- Be concise.
+- Use Simplified Technical English (ASD-STE100).
+- Use full sentences and normal grammar.
 - Do not omit relevant facts, findings, uncertainties, or technical details.
 - Keep technical terms, symbols, code, commands, paths, numbers, and errors exact.
 - Use standard technical acronyms, but do not invent abbreviations.

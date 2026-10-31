@@ -7,16 +7,16 @@
   // ----------------------------------------------------------------------------------
   // Pure OpenAI / ChatGPT
   "p-openai": {
-    "model": "openai/gpt-6.1-sol#high",
+    "model": "openai/gpt-6.1-sol#medium",
     "agents": {
       "Orchestrator": {
-        "model": "openai/gpt-6.1-sol#high",
+        "model": "openai/gpt-6.1-sol#medium",
       },
       "Solo": {
-        "model": "openai/gpt-6.1-sol#high",
+        "model": "openai/gpt-6.1-sol#medium",
       },
       "Junior": {
-        "model": "openai/gpt-6.1-terra#medium",
+        "model": "openai/gpt-6.1-terra#low",
       },
     },
   },
