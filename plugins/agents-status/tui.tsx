@@ -18,11 +18,16 @@ import { watch } from "./data.ts"
 import {
   type AgentSummary,
   contextPercent,
+  emptySpend,
   type ModelSummary,
   type RequestFailure,
   type SessionSummary,
   type Snapshot,
-  usagePercent,
+  type SpendAmount,
+  type SpendAttribution,
+  type SpendRow,
+  type SpendSource,
+  type SpendTotal,
   type Utilization,
 } from "./model.ts"
 
@@ -73,35 +78,101 @@ const usageLabel = (usage: Option.Option<Utilization>): string =>
       }),
   })
 
-const usageBar = (percent: number): string => {
-  const filled = Math.max(0, Math.min(12, Math.round(percent / 100 * 12)))
-  return "━".repeat(filled) + "╌".repeat(12 - filled)
+const spendSourceLabel = (source: SpendSource): string =>
+  source._tag === "Unattributed" ? "Unattributed" : `${source.model.providerID}/${source.model.id}`
+
+const attributionMark = (attribution: SpendAttribution): string =>
+  attribution._tag === "MixedModelSession" ? " (!)" : ""
+
+const spendAmountLabel = (amount: SpendAmount, attribution: SpendAttribution): string =>
+  amount._tag === "Estimated"
+    ? `${money.format(amount.usd)}${attributionMark(attribution)}`
+    : `unavailable · ${amount.reason}`
+
+const spendTotalLabel = (total: SpendTotal, attribution: SpendAttribution): string => {
+  switch (total._tag) {
+    case "Estimated":
+      return `${money.format(total.usd)}${attributionMark(attribution)}`
+    case "Partial":
+      return `${money.format(total.usd)}${attributionMark(attribution)} (recorded usage)`
+    case "Unavailable":
+      return "unavailable"
+  }
 }
 
-const usageColor = (percent: number, theme: ResolvedTheme): ResolvedTheme["text"]["base"] =>
-  percent >= 90
-    ? theme.text.feedback.error.base
-    : percent >= 75
-    ? theme.text.feedback.warning.base
-    : theme.text.feedback.info.base
+interface ModelSpend {
+  readonly model: ModelSummary
+  readonly spend: Option.Option<SpendRow>
+}
+
+interface SpendLayout {
+  readonly models: ReadonlyArray<ModelSpend>
+  readonly unmatched: ReadonlyArray<SpendRow>
+}
+
+const spendRowKey = (row: SpendRow): Option.Option<string> =>
+  row.source._tag === "Model"
+    ? Option.some(`${row.source.model.providerID}/${row.source.model.id}`)
+    : Option.none()
+
+const matchesModelLabel = (label: string, key: string): boolean =>
+  label === key || label.startsWith(`${key}#`)
+
+const modelSpendLayout = (
+  models: ReadonlyArray<ModelSummary>,
+  rows: ReadonlyArray<SpendRow>,
+): SpendLayout => {
+  const assigned: Set<SpendRow> = new Set()
+  const entries: ReadonlyArray<ModelSpend> = models.map((model): ModelSpend => {
+    const available = rows.filter((row) => !assigned.has(row))
+    const exact = available.find((row) =>
+      Option.match(spendRowKey(row), {
+        onNone: () => false,
+        onSome: (key) => model.label === key,
+      })
+    )
+    const match = exact ?? available.find((row) =>
+      Option.match(spendRowKey(row), {
+        onNone: () => false,
+        onSome: (key) => matchesModelLabel(model.label, key),
+      })
+    )
+    if (match === undefined) return { model, spend: Option.none() }
+    assigned.add(match)
+    return { model, spend: Option.some(match) }
+  })
+  return {
+    models: entries,
+    unmatched: rows.filter((row) => !assigned.has(row) && row.source._tag === "Model"),
+  }
+}
+
+const SpendRowView = (
+  props: {
+    readonly row: SpendRow
+    readonly theme: ResolvedTheme
+  },
+): JSX.Element => (
+  <text
+    fg={props.row.amount._tag === "Estimated"
+      ? props.theme.text.muted
+      : props.theme.text.feedback.warning.base}
+  >
+    ¤ {spendAmountLabel(props.row.amount, props.row.attribution)} ·{" "}
+    {tokensLabel(Option.some(props.row.tokens), "tokens unavailable")}
+  </text>
+)
 
 const ModelCard = (
   props: {
     readonly model: ModelSummary
+    readonly spend: Option.Option<SpendRow>
     readonly theme: ResolvedTheme
     readonly multiple: boolean
   },
 ): JSX.Element => {
   const sample = () =>
     props.model._tag === "Context" ? Option.some(props.model.usage) : props.model.usage
-  const meter = createMemo(() =>
-    Option.getOrUndefined(
-      Option.map(
-        Option.flatMap(sample(), usagePercent),
-        (percent) => ({ percent }),
-      ),
-    )
-  )
   return (
     <box flexDirection="column" flexShrink={0} marginTop={props.multiple ? 1 : 0}>
       <text fg={props.theme.text.base}>
@@ -122,14 +193,12 @@ const ModelCard = (
           </>
         )}
       </Show>
-      <text fg={props.theme.text.muted}>Peak context: {usageLabel(sample())}</text>
+      <text fg={props.theme.text.muted}>◇ {usageLabel(sample())}</text>
       <Show when={props.model.unavailable}>
         <text fg={props.theme.text.feedback.warning.base}>Context data unavailable</text>
       </Show>
-      <Show when={meter()}>
-        {(value: Accessor<{ readonly percent: number }>): JSX.Element => (
-          <text fg={usageColor(value().percent, props.theme)}>{usageBar(value().percent)}</text>
-        )}
+      <Show when={Option.getOrUndefined(props.spend)}>
+        {(row: Accessor<SpendRow>): JSX.Element => <SpendRowView row={row()} theme={props.theme} />}
       </Show>
     </box>
   )
@@ -158,6 +227,7 @@ const AgentCard = (
       : props.agent.succeeded === props.agent.sessions.length
       ? props.theme.text.feedback.success.base
       : props.theme.text.muted
+  const spendLayout = createMemo(() => modelSpendLayout(props.agent.models, props.agent.spend.rows))
   return (
     <box
       flexDirection="column"
@@ -211,15 +281,33 @@ const AgentCard = (
           </>
         )}
       </Show>
-      <For each={props.agent.models}>
-        {(model: ModelSummary): JSX.Element => (
-          <ModelCard model={model} theme={props.theme} multiple={props.agent.models.length > 1} />
+      <For each={spendLayout().models}>
+        {(entry: ModelSpend): JSX.Element => (
+          <ModelCard
+            model={entry.model}
+            spend={entry.spend}
+            theme={props.theme}
+            multiple={props.agent.models.length > 1}
+          />
         )}
       </For>
-      <text fg={props.theme.text.muted}>
-        Spent: {money.format(props.agent.cost)} ·{" "}
-        {tokensLabel(props.agent.tokens, "tokens unavailable")}
-      </text>
+      <For each={spendLayout().unmatched}>
+        {(row: SpendRow, index: Accessor<number>): JSX.Element => (
+          <box
+            flexDirection="column"
+            flexShrink={0}
+            marginTop={props.agent.models.length > 0 || index() > 0 ? 1 : 0}
+          >
+            <text fg={props.theme.text.base}>Model: {spendSourceLabel(row.source)}</text>
+            <SpendRowView row={row} theme={props.theme} />
+          </box>
+        )}
+      </For>
+      <Show when={props.agent.spend.usedModels > 1}>
+        <text fg={props.theme.text.base} marginTop={1}>
+          Estimated total: {spendTotalLabel(props.agent.spend.total, props.agent.spend.attribution)}
+        </text>
+      </Show>
     </box>
   )
 }
@@ -236,7 +324,7 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
     const current = view()
     return current._tag === "Ready"
       ? current.snapshot
-      : { agents: [], sessions: [], cost: 0, tokens: Option.none() }
+      : { agents: [], sessions: [], spend: emptySpend, tokens: Option.none() }
   }
   const error = (): Option.Option<RequestFailure> => {
     const current = view()
@@ -276,7 +364,7 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
     setView({ _tag: "Loading" })
     const fiber = Effect.runFork(
       watch(
-        ctx.client,
+        () => ctx.client,
         props.sessionID,
         (result) => {
           setView((current) =>
@@ -384,7 +472,7 @@ const StatusPanel = (props: PanelInput & { readonly context: Context }): JSX.Ele
         </Show>
       </scrollbox>
       <text fg={ctx.theme.text.base} flexShrink={0} height={1}>
-        Total reported spend: {money.format(snapshot().cost)}
+        Estimated API spend: {spendTotalLabel(snapshot().spend.total, snapshot().spend.attribution)}
       </text>
       <text fg={ctx.theme.text.muted} flexShrink={0} height={1}>
         Tokens: {tokensLabel(snapshot().tokens, "unavailable")}

@@ -23,6 +23,7 @@ import { ensureSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 import { expect, test } from "bun:test"
 import { Effect, Option, type Scope } from "effect"
 import type { Store } from "solid-js/store"
+import type { ModelPrice, Price } from "../rpc.ts"
 
 ensureSolidTransformPlugin()
 
@@ -163,6 +164,11 @@ const panelClaim = (claim: SlotClaim): Option.Option<SlotClaim<"session.panel">>
 interface ApiCall {
   readonly method: string
   readonly signal: AbortSignal | undefined
+  readonly sessionID?: string
+  readonly parentID?: string
+  readonly order?: "asc" | "desc"
+  readonly cursor?: string
+  readonly limit?: number
 }
 
 interface FixtureOptions {
@@ -170,10 +176,17 @@ interface FixtureOptions {
   readonly messages?: Readonly<Record<string, readonly SessionMessageInfo[]>>
   readonly models?: readonly ModelInfo[]
   readonly modelsByDirectory?: Readonly<Record<string, readonly ModelInfo[]>>
+  readonly prices?: readonly ModelPrice[]
+  readonly pricesByDirectory?: Readonly<Record<string, readonly ModelPrice[]>>
+  readonly priceFailures?: Readonly<Record<string, string>>
+  readonly missingPrices?: readonly string[]
+  readonly malformedPrices?: readonly string[]
+  readonly deriveTokens?: boolean
   readonly pageSize?: number
   readonly statuses?: Readonly<Record<string, "idle" | "running">>
   readonly catalogFailures?: Readonly<Record<string, string>>
   readonly messageFailures?: Readonly<Record<string, string>>
+  readonly messagePageFailures?: Readonly<Record<string, readonly (string | undefined)[]>>
 }
 
 interface Fixture {
@@ -187,6 +200,7 @@ interface Fixture {
   readonly setMessages: (sessionID: string, messages: readonly SessionMessageInfo[]) => void
   readonly setStatus: (sessionID: string, status: "idle" | "running") => void
   readonly setTheme: (theme: ResolvedTheme) => void
+  readonly setPriceFailure: (directory: string, message?: string) => void
   readonly failWith: (message: string) => void
 }
 
@@ -196,6 +210,53 @@ const ZERO_USAGE: TokenUsageInfo = {
   reasoning: 0,
   cache: { read: 0, write: 0 },
 }
+
+const zeroUsage = (tokens: TokenUsageInfo): boolean =>
+  tokens.input === 0
+  && tokens.output === 0
+  && tokens.reasoning === 0
+  && tokens.cache.read === 0
+  && tokens.cache.write === 0
+
+const addUsage = (left: TokenUsageInfo, right: TokenUsageInfo): TokenUsageInfo => ({
+  input: left.input + right.input,
+  output: left.output + right.output,
+  reasoning: left.reasoning + right.reasoning,
+  cache: {
+    read: left.cache.read + right.cache.read,
+    write: left.cache.write + right.cache.write,
+  },
+})
+
+const messageTokenTotals = (messages: readonly SessionMessageInfo[]): TokenUsageInfo =>
+  messages.reduce(
+    (total, message) =>
+      message.type === "assistant" && message.tokens !== undefined
+        ? addUsage(total, message.tokens)
+        : message.type === "compaction" && message.status !== "running"
+            && message.tokens !== undefined
+        ? addUsage(total, message.tokens)
+        : total,
+    ZERO_USAGE,
+  )
+
+const BASIC_PRICE: Price = {
+  input: 10,
+  output: 20,
+  cache: { read: 5, write: 5 },
+}
+
+const PREMIUM_PRICE: Price = {
+  input: 20,
+  output: 40,
+  cache: { read: 10, write: 10 },
+}
+
+const DEFAULT_PRICES: readonly ModelPrice[] = [
+  { providerID: "openai", id: "gpt-6.1-sol", cost: [BASIC_PRICE] },
+  { providerID: "opencode-go", id: "deepseek-v4.1-flash", cost: [BASIC_PRICE] },
+  { providerID: "anthropic", id: "claude-5-opus", cost: [PREMIUM_PRICE] },
+]
 
 const sessionInfo = (input: {
   readonly id: string
@@ -236,6 +297,8 @@ const modelInfo = (providerID: string, modelID: string, context: number): ModelI
 })
 
 const DEEPSEEK: ModelRef = { providerID: "opencode-go", id: "deepseek-v4.1-flash", variant: "high" }
+const PAGED_OLD_MODEL: ModelRef = { providerID: "zhipu", id: "glm-5" }
+const PAGED_NEW_MODEL: ModelRef = { providerID: "anthropic", id: "claude-5-opus" }
 
 const assistantMessage = (
   id: string,
@@ -281,6 +344,42 @@ const explorerUsage: SessionMessageAssistant = assistantMessage(
   "Junior",
 )
 
+interface DeepPagedHistory {
+  readonly boundary: string
+  readonly messages: ReadonlyArray<SessionMessageInfo>
+}
+
+const deepPagedHistory = (): DeepPagedHistory => {
+  const boundary = "msg_deep_boundary"
+  const oldestUsage: TokenUsageInfo = {
+    input: 100,
+    output: 10,
+    reasoning: 0,
+    cache: { read: 0, write: 0 },
+  }
+  const newestUsage: TokenUsageInfo = {
+    input: 2000,
+    output: 200,
+    reasoning: 0,
+    cache: { read: 0, write: 0 },
+  }
+  const history: Array<SessionMessageInfo> = [
+    assistantMessage("msg_deep_oldest", oldestUsage, PAGED_OLD_MODEL, "Junior"),
+  ]
+  for (let index = 0; index < 37; index++) {
+    history.push(
+      userMessage(`msg_deep_before_${String(index).padStart(2, "0")}`, `before ${index}`),
+    )
+  }
+  history.push(assistantMessage("msg_deep_context", CHILD_USAGE, DEEPSEEK, "Junior"))
+  history.push(userMessage(boundary, "stage revert here"))
+  for (let index = 0; index < 209; index++) {
+    history.push(userMessage(`msg_deep_after_${String(index).padStart(3, "0")}`, `after ${index}`))
+  }
+  history.push(assistantMessage("msg_deep_newest", newestUsage, PAGED_NEW_MODEL, "Junior"))
+  return { boundary, messages: history }
+}
+
 const rootSession = (): SessionInfo =>
   sessionInfo({
     id: ROOT_SESSION,
@@ -297,8 +396,6 @@ const DEFAULT_MODELS: readonly ModelInfo[] = [
 ]
 
 const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
-  const client = OpenCode.make({ baseUrl: "http://127.0.0.1:1" })
-  const sessions = [...(options?.sessions ?? defaultSessions())]
   const messages = {
     ...(options?.messages ?? { [CHILD_SESSION]: [explorerUsage] }),
   }
@@ -306,61 +403,190 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
   const modelsByDirectory: Readonly<Record<string, readonly ModelInfo[]>> = {
     ...(options?.modelsByDirectory ?? {}),
   }
+  const prices = [...(options?.prices ?? DEFAULT_PRICES)]
+  const pricesByDirectory: Readonly<Record<string, readonly ModelPrice[]>> = {
+    ...(options?.pricesByDirectory ?? {}),
+  }
+  const priceFailures = { ...(options?.priceFailures ?? {}) }
+  const missingPrices = new Set(options?.missingPrices ?? [])
+  const malformedPrices = new Set(options?.malformedPrices ?? [])
   const catalogFailures = { ...(options?.catalogFailures ?? {}) }
   const messageFailures = { ...(options?.messageFailures ?? {}) }
+  const messagePageFailures = { ...(options?.messagePageFailures ?? {}) }
+  const deriveTokens = options?.deriveTokens ?? true
   const pageSize = options?.pageSize ?? 200
   const calls: ApiCall[] = []
   let failure: string | undefined
+  const record = (
+    method: string,
+    request: { readonly signal?: AbortSignal } | undefined,
+    input?: {
+      readonly sessionID?: string
+      readonly parentID?: string
+      readonly order?: "asc" | "desc"
+      readonly cursor?: string
+      readonly limit?: number
+    },
+  ) => {
+    calls.push({
+      method,
+      signal: request?.signal,
+      sessionID: input?.sessionID,
+      parentID: input?.parentID,
+      order: input?.order,
+      cursor: input?.cursor,
+      limit: input?.limit,
+    })
+    if (failure !== undefined) throw new Error(failure)
+  }
+
+  const transport: typeof fetch = Object.assign(async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.href
+      : input.url
+    const parsed = new URL(url)
+    const signal = init?.signal
+      ?? (typeof input === "string" || input instanceof URL ? undefined : input.signal)
+    record("rpc.call", { signal })
+    const directory = parsed.searchParams.get("location[directory]") ?? DIRECTORY
+    if (missingPrices.has(directory)) {
+      return new Response(
+        JSON.stringify({
+          type: "rpc.method_not_found",
+          message: "Price catalog method is unavailable",
+        }),
+        { status: 404, headers: { "content-type": "application/json" } },
+      )
+    }
+    const priceFailure = priceFailures[directory]
+    if (priceFailure !== undefined) {
+      return new Response(
+        JSON.stringify({ type: "unavailable", message: priceFailure }),
+        { status: 500, headers: { "content-type": "application/json" } },
+      )
+    }
+    const models = malformedPrices.has(directory)
+      ? [{ providerID: 42, id: "broken", cost: [] }]
+      : [...pricesByDirectory[directory] ?? prices]
+    return new Response(JSON.stringify({ output: { models } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })
+  }, { preconnect: globalThis.fetch.preconnect })
+  const client = OpenCode.make({ baseUrl: "http://127.0.0.1:1", fetch: transport })
+
   const [statuses, setStatuses] = createSignal<Readonly<Record<string, "idle" | "running">>>(
     options?.statuses ?? { [CHILD_SESSION]: "running" },
   )
   const [theme, setThemeState] = createSignal<ResolvedTheme>(THEME_A)
 
-  const record = (method: string, request: { readonly signal?: AbortSignal } | undefined) => {
-    calls.push({ method, signal: request?.signal })
-    if (failure !== undefined) throw new Error(failure)
+  const derived = (session: SessionInfo): SessionInfo => {
+    const tokens: TokenUsageInfo | undefined = session.tokens
+    if (!deriveTokens || tokens === undefined || !zeroUsage(tokens)) return session
+    const totals = messageTokenTotals(messages[session.id] ?? [])
+    return zeroUsage(totals) ? session : { ...session, tokens: totals }
+  }
+  const sessions: SessionInfo[] = [...(options?.sessions ?? defaultSessions())]
+  interface SessionCursor {
+    readonly parentID: string | null | undefined
+    readonly offset: number
+    readonly limit: number
+    readonly order: "asc" | "desc" | undefined
+  }
+  interface MessageCursor {
+    readonly sessionID: string
+    readonly offset: number
+    readonly limit: number
+    readonly order: "asc" | "desc" | undefined
+  }
+  const sessionCursors: Map<string, SessionCursor> = new Map()
+  const messageCursors: Map<string, MessageCursor> = new Map()
+  let cursorSequence = 0
+  const nextCursor = (): string => {
+    cursorSequence += 1
+    return `cursor_${cursorSequence}`
   }
 
   client.session.get = async (
     input,
     request,
   ) => {
-    record("session.get", request)
+    record("session.get", request, { sessionID: input.sessionID })
     const found = sessions.find((session) => session.id === input.sessionID)
     if (found === undefined) throw new Error(`Unexpected session.get for ${input.sessionID}`)
-    return found
+    return derived(found)
   }
 
   client.session.list = async (
     input,
     request,
   ) => {
-    record("session.list", request)
-    const parentID = input?.parentID
-    const limit = Math.min(input?.limit ?? pageSize, pageSize)
-    const offset = input?.cursor ? Number(input.cursor) : 0
+    if (input?.cursor !== undefined && input.order !== undefined) {
+      throw new Error("session.list cursor requests must not repeat order")
+    }
+    const state = input?.cursor === undefined ? undefined : sessionCursors.get(input.cursor)
+    if (input?.cursor !== undefined && state === undefined) {
+      throw new Error(`Unknown session cursor ${input.cursor}`)
+    }
+    const parentID = state === undefined ? input?.parentID : state.parentID
+    record("session.list", request, {
+      parentID: parentID ?? undefined,
+      order: input?.order,
+      cursor: input?.cursor,
+      limit: input?.limit,
+    })
+    const limit = Math.min(input?.limit ?? state?.limit ?? pageSize, pageSize)
+    const offset = state?.offset ?? 0
+    const order = state?.order ?? input?.order
     const children = sessions
       .filter((session) => session.parentID === parentID)
       .sort((left, right) => left.id < right.id ? -1 : 1)
-    const page = children.slice(offset, offset + limit)
-    const next = offset + limit < children.length ? String(offset + limit) : null
-    return { data: page, cursor: { next } }
+    const ordered = order === "desc" ? children.reverse() : children
+    const page = ordered.slice(offset, offset + limit)
+    const following = offset + limit
+    const token = following < ordered.length ? nextCursor() : null
+    if (token !== null) {
+      sessionCursors.set(token, { parentID, offset: following, limit, order })
+    }
+    return { data: page.map(derived), cursor: { next: token } }
   }
 
   client.message.list = async (
     input,
     request,
   ) => {
-    record("message.list", request)
-    const messageFailure = messageFailures[input.sessionID]
+    record("message.list", request, input)
+    if (input.cursor !== undefined && input.order !== undefined) {
+      throw new Error("message.list cursor requests must not repeat order")
+    }
+    const state = input.cursor === undefined ? undefined : messageCursors.get(input.cursor)
+    if (input.cursor !== undefined && state === undefined) {
+      throw new Error(`Unknown message cursor ${input.cursor}`)
+    }
+    const sessionID = state?.sessionID ?? input.sessionID
+    const messageFailure = messageFailures[sessionID]
     if (messageFailure !== undefined) throw new Error(messageFailure)
-    const list: readonly SessionMessageInfo[] = messages[input.sessionID] ?? []
-    const ordered = input.order === "desc" ? [...list].reverse() : [...list]
-    const limit = input.limit ?? ordered.length
-    const offset = input.cursor ? Number(input.cursor) : 0
+    const pageFailure = messagePageFailures[sessionID]?.[
+      state === undefined ? 0 : state.offset / state.limit
+    ]
+    if (pageFailure !== undefined) throw new Error(pageFailure)
+    const list: readonly SessionMessageInfo[] = messages[sessionID] ?? []
+    const order = state?.order ?? input.order
+    const ordered = order === "desc" ? [...list].reverse() : [...list]
+    const limit = input.limit ?? state?.limit ?? ordered.length
+    const offset = state?.offset ?? 0
     const page = ordered.slice(offset, offset + limit)
-    const next = offset + limit < ordered.length ? String(offset + limit) : null
-    return { data: page, cursor: { next } }
+    const following = offset + limit
+    const token = following < ordered.length ? nextCursor() : null
+    if (token !== null) {
+      messageCursors.set(token, { sessionID, offset: following, limit, order })
+    }
+    return { data: page, cursor: { next: token } }
   }
 
   client.model.list = async (
@@ -565,6 +791,10 @@ const makeFixture = (options?: Partial<FixtureOptions>): Fixture => {
     setTheme: (next) => {
       setThemeState(next)
     },
+    setPriceFailure: (directory, message) => {
+      if (message === undefined) delete priceFailures[directory]
+      else priceFailures[directory] = message
+    },
     failWith: (message) => {
       failure = message
     },
@@ -708,8 +938,28 @@ test("/agents-status opens the session panel that reports child agent usage", as
         )
         expect(frame).toContain("Junior")
         expect(frame).toContain("opencode-go/deepseek-v4.1-flash#high")
-        expect(frame).toContain("Peak context: 1.65K / 10K tokens (17%)")
-        expect(frame).toContain("$0.0123")
+        expect(frame).toContain("◇ 1.65K / 10K tokens (17%)")
+        expect(frame).toContain(
+          "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+        )
+        expect(frame).toContain("Estimated API spend: $0.0170")
+        const card = frame.slice(frame.indexOf("● Junior"), frame.indexOf("Estimated API spend"))
+        const cardLines = trimmedLines(card)
+        const modelLine = cardLines.findIndex((line) =>
+          line === "Model: opencode-go/deepseek-v4.1-flash#high"
+        )
+        const spentLine = cardLines.findIndex((line) => line === "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(modelLine).toBeGreaterThanOrEqual(0)
+        expect(spentLine).toBeGreaterThan(modelLine)
+        expect(
+          cardLines.filter((line) => line.startsWith("¤")).every((line) => !line.includes("/")),
+        )
+          .toBe(true)
+        expect(card).not.toContain("Tokens:")
+        expect(card).not.toContain("Estimated total:")
+        expect(trimmedLines(frame).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 1K · ↓ 200 · ↺ 300",
+        ])
         expect(frame).not.toContain("Unrelated")
         expect(frame).not.toContain(COMMAND_TITLE)
       },
@@ -739,7 +989,7 @@ test("command toggles the panel, Escape closes it when focused, and unrelated pa
       async (otherSetup) => {
         await otherSetup.flush()
         const otherFrame = otherSetup.captureCharFrame()
-        expect(otherFrame).not.toContain("Total reported spend")
+        expect(otherFrame).not.toContain("Estimated API spend")
         expect(otherFrame).not.toContain("Junior")
         expect(fixture.calls).toEqual([])
       },
@@ -842,9 +1092,11 @@ test("panel walks paginated descendants once, keeps same-agent sessions, and exc
         )
         expect(frame.split("● Junior").length - 1).toBe(1)
         expect(frame).toContain("3 sessions")
-        expect(frame).toContain("Spent: $0.0183")
+        expect(frame).toContain(
+          "¤ $0.0000 · ↑ 0 · ↓ 0 · ↺ 0",
+        )
         expect(frame).toContain("● Architect")
-        expect(frame).toContain("Total reported spend: $0.0293")
+        expect(frame).toContain("Estimated API spend: $0.0000")
         expect(frame).not.toContain("Alpha task")
         expect(frame).not.toContain("Beta task")
         expect(frame).not.toContain("Gamma task")
@@ -852,6 +1104,22 @@ test("panel walks paginated descendants once, keeps same-agent sessions, and exc
         expect(frame).not.toContain("Stranger")
         expect(frame).not.toContain("$9.9999")
         expect(frame).not.toContain("$0.5000")
+
+        const rootPages = fixture.calls.filter((call) =>
+          call.method === "session.list" && call.parentID === ROOT_SESSION
+        )
+        expect(rootPages.length).toBe(2)
+        const firstPage = rootPages.at(0)
+        const secondPage = rootPages.at(1)
+        if (firstPage === undefined || secondPage === undefined) {
+          throw new Error("Expected two session pages for the root session")
+        }
+        expect(firstPage.cursor).toBeUndefined()
+        expect(firstPage.limit).toBe(200)
+        expect(firstPage.order).toBe("asc")
+        expect(secondPage.cursor).toBeDefined()
+        expect(secondPage.limit).toBe(200)
+        expect(secondPage.order).toBeUndefined()
       },
     )
   })
@@ -889,7 +1157,7 @@ const contextCases: readonly ContextCase[] = [
     child: sessionInfo({ id: "ses_ghost", parentID: ROOT_SESSION, agent: "Ghost" }),
     messages: {},
     models: DEFAULT_MODELS,
-    contains: ["Model: unknown", "Peak context: unknown"],
+    contains: ["Model: unknown", "◇ unknown"],
     missing: [],
   },
   {
@@ -908,8 +1176,8 @@ const contextCases: readonly ContextCase[] = [
       ],
     },
     models: DEFAULT_MODELS,
-    contains: ["Peak context: 1.65K / 10K tokens (17%)"],
-    missing: ["Peak context: 5K", "50%"],
+    contains: ["◇ 1.65K / 10K tokens (17%)"],
+    missing: ["◇ 5K", "50%"],
   },
   {
     name: "absent revert boundary leaves context unknown",
@@ -924,7 +1192,7 @@ const contextCases: readonly ContextCase[] = [
       ses_reverted: [assistantMessage("msg_reverted", CHILD_USAGE, DEEPSEEK, "Reverted")],
     },
     models: DEFAULT_MODELS,
-    contains: ["Peak context: unknown"],
+    contains: ["◇ unknown"],
     missing: ["1.65K"],
   },
   {
@@ -939,7 +1207,7 @@ const contextCases: readonly ContextCase[] = [
       ses_limitless: [assistantMessage("msg_limitless", CHILD_USAGE, DEEPSEEK, "Limitless")],
     },
     models: [modelInfo("openai", "gpt-6.1-sol", 200000)],
-    contains: ["Peak context: 1.65K tokens (limit unknown)"],
+    contains: ["◇ 1.65K tokens (limit unknown)"],
     missing: ["/ 10K tokens", "17%"],
   },
 ]
@@ -1009,10 +1277,12 @@ test(
             (candidate) => candidate.includes("opencode-go/deepseek-v4.1-flash#low"),
             { maxPasses: 20 },
           )
-          expect(initial).toContain("Peak context: 1.65K / 10K tokens (17%)")
-          expect(initial).toContain("Spent: $0.0123")
+          expect(initial).toContain("◇ 1.65K / 10K tokens (17%)")
+          expect(initial).toContain(
+            "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+          )
           expect(initial).toContain("1 running · 1 session")
-          expect(initial).toContain("Total reported spend: $0.0223")
+          expect(initial).toContain("Estimated API spend: $0.0170")
           expect(fixture.calls.length).toBeGreaterThan(0)
 
           const refreshedUsage = {
@@ -1051,14 +1321,16 @@ test(
             (candidate) => candidate.includes("opencode-go/deepseek-v4.1-flash#high"),
             { maxPasses: 40 },
           )
-          expect(refreshed).toContain("Peak context: 2K / 10K tokens (20%)")
-          expect(refreshed).toContain("Spent: $0.0200")
-          expect(refreshed).toContain("Spent: $0.0030")
+          expect(refreshed).toContain("◇ 2K / 10K tokens (20%)")
+          expect(refreshed).toContain(
+            "¤ $0.0220 · ↑ 1.2K · ↓ 300 · ↺ 300",
+          )
+          expect(refreshed).toContain("¤ $0.0000 · ↑ 0 · ↓ 0 · ↺ 0")
           expect(refreshed).toContain("Reviewer")
           expect(refreshed).toContain("0 running · 1 session")
           expect(refreshed).not.toContain("1 running")
           expect(refreshed).not.toContain("#low")
-          expect(refreshed).toContain("Total reported spend: $0.0330")
+          expect(refreshed).toContain("Estimated API spend: $0.0220")
 
           const before = fixture.calls.length
           setup.renderer.destroy()
@@ -1083,7 +1355,7 @@ test("panel warns with stale values when a refresh fails", async () => {
       { width: 120, height: 40 },
       async (setup) => {
         const initial = await setup.waitForFrame(
-          (candidate) => candidate.includes("Spent: $0.0123"),
+          (candidate) => candidate.includes("¤ $0.0170"),
           { maxPasses: 20 },
         )
         expect(initial).toContain("Junior")
@@ -1097,8 +1369,10 @@ test("panel warns with stale values when a refresh fails", async () => {
         )
         expect(failed).toContain("Refresh failed (values may be stale): refresh exploded")
         expect(failed).toContain("Junior")
-        expect(failed).toContain("Spent: $0.0123")
-        expect(failed).toContain("Total reported spend: $0.0123")
+        expect(failed).toContain(
+          "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+        )
+        expect(failed).toContain("Estimated API spend: $0.0170")
 
         setup.renderer.destroy()
       },
@@ -1131,21 +1405,21 @@ const findScrollBox = (renderable: Renderable): ScrollBoxLike | undefined => {
 const HEADER_FOREIGN: readonly string[] = [
   "Refreshes",
   "Esc",
-  "Spent:",
+  "¤",
   "ses_",
   "Model:",
   "Context:",
-  "Peak context:",
+  "◇",
   "Tokens:",
 ]
 const FOOTER_FOREIGN: readonly string[] = [
-  "Spent:",
+  "¤",
   "ses_",
   "Model:",
   "Context:",
-  "Peak context:",
+  "◇",
 ]
-const FOOTER_SHAPE: RegExp = /^Total[ :]*(?:reported spend)?[ :]*\$/
+const FOOTER_SHAPE: RegExp = /^Estimated API spend: (?:\$|unavailable)/
 const TOKENS_SHAPE: RegExp = /^Tokens[ :]*(?:↑|unavailable)/
 const HELP_TEXTS: readonly string[] = [
   "Refreshes every",
@@ -1160,7 +1434,7 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
     line.includes("Agents") && line.includes("Sessions")
   )
   const header = headers[0]
-  const footerIndex = lines.findIndex((line) => line.includes("Total"))
+  const footerIndex = lines.findIndex((line) => line.includes("Estimated API spend"))
   const headerIndex = lines.findIndex((line) =>
     line.includes("Agents") && line.includes("Sessions")
   )
@@ -1234,7 +1508,9 @@ const chromeProblems = (frame: string, position: string): readonly string[] => {
     }
   }
   if (footer === undefined) {
-    problems.push(`${position}: footer row containing 'Total' is missing or overwritten`)
+    problems.push(
+      `${position}: footer row containing 'Estimated API spend' is missing or overwritten`,
+    )
   } else {
     if (!FOOTER_SHAPE.test(footer)) {
       problems.push(`${position}: footer row is not intact: ${JSON.stringify(footer)}`)
@@ -1383,7 +1659,7 @@ test(
             scrollbox.scrollTop = scrollbox.scrollHeight
             await setup.renderOnce()
             const scrolled = await setup.waitForFrame(
-              (candidate) => candidate.includes("Agent 3"),
+              (candidate) => candidate.includes("$0.0000"),
               { maxPasses: 40 },
             )
             problems.push(...chromeProblems(scrolled, `${viewport.name} agents bottom`))
@@ -1414,7 +1690,7 @@ test(
             scrollbox.scrollTop = scrollbox.scrollHeight
             await setup.renderOnce()
             const sessionsBottom = await setup.waitForFrame(
-              (candidate) => candidate.includes("Spent: $0.0040"),
+              (candidate) => candidate.includes("$0.0000"),
               { maxPasses: 40 },
             )
             problems.push(
@@ -1518,11 +1794,14 @@ test("panel isolates an unavailable model catalog to the affected card", async (
         )
         expect(frame).toContain("build · main")
         expect(frame).toContain("0 running · 2 sessions")
-        expect(frame).toContain("Peak context: 1.65K / 10K tokens (17%)")
+        expect(frame).toContain("◇ 1.65K / 10K tokens (17%)")
         expect(frame).toContain("Model: anthropic/claude-5-opus")
-        expect(frame).toContain("Spent: $0.0050")
-        expect(frame).toContain("Peak context: 1.65K tokens (limit unknown)")
-        expect(frame).toContain("Total reported spend: $0.0150")
+        expect(frame).toContain("¤ $0.0340 · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(frame).toContain(
+          "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+        )
+        expect(frame).toContain("◇ 1.65K tokens (limit unknown)")
+        expect(frame).toContain("Estimated API spend: $0.0510")
         expect(frame).not.toContain("Refresh failed (values may be stale)")
 
         const failedModelRow = frame.indexOf("Model: anthropic/claude-5-opus")
@@ -1579,13 +1858,13 @@ test("panel paginates message history past the first page to honor a staged reve
       { width: 120, height: 40 },
       async (setup) => {
         const frame = await setup.waitForFrame(
-          (candidate) => candidate.includes("Peak context: 1.65K / 10K tokens (17%)"),
+          (candidate) => candidate.includes("◇ 1.65K / 10K tokens (17%)"),
           { maxPasses: 60 },
         )
         expect(frame).not.toContain("Paged history")
-        expect(frame).toContain("Peak context: 1.65K / 10K tokens (17%)")
+        expect(frame).toContain("◇ 1.65K / 10K tokens (17%)")
         expect(frame).toContain("Model: anthropic/claude-5-opus")
-        expect(frame).not.toContain("Peak context: 5K")
+        expect(frame).not.toContain("◇ 5K")
 
         const anthropicStart = frame.indexOf("Model: anthropic/claude-5-opus")
         const contextStart = frame.indexOf(
@@ -1595,21 +1874,163 @@ test("panel paginates message history past the first page to honor a staged reve
         expect(contextStart).toBeGreaterThan(anthropicStart)
 
         const anthropicGroup = frame.slice(anthropicStart, contextStart)
-        expect(anthropicGroup).toContain("Peak context: unknown")
+        expect(anthropicGroup).toContain("◇ unknown")
         expect(anthropicGroup).not.toContain("1.65K")
         expect(anthropicGroup).not.toContain("17%")
 
         const contextGroup = frame.slice(
           contextStart,
-          frame.indexOf("Total reported spend"),
+          frame.indexOf("Estimated API spend"),
         )
-        expect(contextGroup).toMatch(/Peak context:\s*1\.65K\s*\/\s*10K tokens\s*\(17%\)/)
+        expect(contextGroup).toMatch(/◇\s*1\.65K\s*\/\s*10K tokens\s*\(17%\)/)
+
+        const messageCalls = fixture.calls.filter((call) =>
+          call.method === "message.list" && call.sessionID === "ses_child_paged"
+        )
+        expect(messageCalls.length).toBe(2)
+        const firstPage = messageCalls.at(0)
+        const secondPage = messageCalls.at(1)
+        if (firstPage === undefined || secondPage === undefined) {
+          throw new Error("Expected two message pages for the reverted session")
+        }
+        expect(firstPage.cursor).toBeUndefined()
+        expect(firstPage.limit).toBe(100)
+        expect(firstPage.order).toBe("desc")
+        expect(secondPage.cursor).toBeDefined()
+        expect(secondPage.limit).toBe(100)
+        expect(secondPage.order).toBeUndefined()
       },
     )
   })
 })
 
-test("panel does not report the selected model as actual when message history is unavailable", async () => {
+test("panel accumulates uneven message pages in chronological order around a staged revert boundary", async () => {
+  const paged = deepPagedHistory()
+  const child = sessionInfo({
+    id: "ses_child_deep_paged",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Deep paged history",
+    model: PAGED_NEW_MODEL,
+    revert: { messageID: paged.boundary },
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: { [child.id]: paged.messages },
+    prices: [...DEFAULT_PRICES, { providerID: "zhipu", id: "glm-5", cost: [BASIC_PRICE] }],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 60 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) =>
+            candidate.includes("Context model: opencode-go/deepseek-v4.1-flash#high")
+            && candidate.includes("Model: anthropic/claude-5-opus"),
+          { maxPasses: 80 },
+        )
+        const lines = trimmedLines(frame)
+        const newestHeading = lines.indexOf("Model: anthropic/claude-5-opus")
+        const contextHeading = lines.indexOf(
+          "Context model: opencode-go/deepseek-v4.1-flash#high",
+        )
+        const oldestHeading = lines.indexOf("Model: zhipu/glm-5")
+        const totalHeading = lines.findIndex((line) => line.startsWith("Estimated total:"))
+        expect(newestHeading).toBeGreaterThanOrEqual(0)
+        expect(contextHeading).toBeGreaterThan(newestHeading)
+        expect(oldestHeading).toBeGreaterThan(contextHeading)
+        expect(totalHeading).toBeGreaterThan(oldestHeading)
+
+        const newestSection = lines.slice(newestHeading, contextHeading).join("\n")
+        expect(newestSection).toContain("◇ unknown")
+        expect(newestSection).toContain("↑ 2K · ↓ 200 · ↺ 0")
+        expect(newestSection).not.toContain("1.65K")
+
+        const contextSection = lines.slice(contextHeading, oldestHeading).join("\n")
+        expect(contextSection).toContain("◇ 1.65K / 10K tokens (17%)")
+        expect(contextSection).toContain("↑ 1K · ↓ 200 · ↺ 300")
+        expect(contextSection).not.toContain("2.2K")
+
+        const oldestSection = lines.slice(oldestHeading, totalHeading).join("\n")
+        expect(oldestSection).not.toContain("◇")
+        expect(oldestSection).toContain("↑ 100 · ↓ 10 · ↺ 0")
+
+        const messageCalls = fixture.calls.filter((call) =>
+          call.method === "message.list" && call.sessionID === "ses_child_deep_paged"
+        )
+        expect(messageCalls.length).toBe(3)
+        const firstPage = messageCalls.at(0)
+        if (firstPage === undefined) throw new Error("Expected a first message page")
+        expect(firstPage.cursor).toBeUndefined()
+        expect(firstPage.limit).toBe(100)
+        expect(firstPage.order).toBe("desc")
+        for (const page of messageCalls.slice(1)) {
+          expect(page.cursor).toBeDefined()
+          expect(page.limit).toBe(100)
+          expect(page.order).toBeUndefined()
+        }
+      },
+    )
+  })
+})
+
+test("panel reports a late message-page failure without partial history or spend", async () => {
+  const paged = deepPagedHistory()
+  const child = sessionInfo({
+    id: "ses_child_deep_failed",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Deep paged failure",
+    model: PAGED_NEW_MODEL,
+    revert: { messageID: paged.boundary },
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: { [child.id]: paged.messages },
+    deriveTokens: false,
+    messagePageFailures: {
+      [child.id]: [undefined, undefined, "late message page failed"],
+    },
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 60 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Context data unavailable"),
+          { maxPasses: 80 },
+        )
+        const card = frame.slice(frame.indexOf("● Junior"), frame.indexOf("Estimated API spend"))
+        expect(card).toContain("Model: unknown")
+        expect(card).toContain("◇ unknown")
+        expect(card).not.toContain("Model: zhipu/glm-5")
+        expect(card).not.toContain("Context model:")
+        expect(card).not.toContain("1.65K")
+        expect(card).not.toContain("110 tokens")
+        expect(card).not.toContain("2.2K")
+        const spendRows = trimmedLines(card).filter((line) => line.startsWith("¤"))
+        expect(spendRows).toEqual(["¤ $0.0000 · ↑ 0 · ↓ 0 · ↺ 0"])
+        expect(frame).toContain("Estimated API spend: $0.0000")
+
+        const messageCalls = fixture.calls.filter((call) =>
+          call.method === "message.list" && call.sessionID === "ses_child_deep_failed"
+        )
+        expect(messageCalls.length).toBe(3)
+        const failedPage = messageCalls.at(2)
+        if (failedPage === undefined) throw new Error("Expected a failing third message page")
+        expect(failedPage.cursor).toBeDefined()
+        expect(failedPage.limit).toBe(100)
+        expect(failedPage.order).toBeUndefined()
+      },
+    )
+  })
+})
+
+test("panel keeps the selected model out of actual context when message history is unavailable", async () => {
   const root = sessionInfo({
     id: ROOT_SESSION,
     agent: "build",
@@ -1624,6 +2045,7 @@ test("panel does not report the selected model as actual when message history is
     title: "Lost history",
     cost: 0.003,
     model: DEEPSEEK,
+    tokens: { input: 1000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   })
   const fixture = makeFixture({
     sessions: [root, child],
@@ -1641,16 +2063,21 @@ test("panel does not report the selected model as actual when message history is
           { maxPasses: 40 },
         )
         const cardStart = frame.indexOf("● Junior")
-        const cardEnd = frame.indexOf("Total reported spend")
+        const cardEnd = frame.indexOf("Estimated API spend")
         expect(cardStart).toBeGreaterThanOrEqual(0)
         expect(cardEnd).toBeGreaterThan(cardStart)
         const card = frame.slice(cardStart, cardEnd)
-        expect(card).toContain("Spent: $0.0030")
+        expect(card).toContain("¤ $0.0100 · ↑ 1K · ↓ 0 · ↺ 0")
+        expect(card).not.toContain("Spend unavailable")
+        expect(card).not.toContain("Spend incomplete")
+        expect(card).not.toContain("Estimated total:")
         expect(card).toContain("Model: unknown")
         expect(card).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
         expect(card).toContain("Context data unavailable")
         expect(card).not.toContain("Model: opencode-go/deepseek-v4.1-flash#high")
-        expect(frame).toContain("Total reported spend: $0.0130")
+        expect(frame).toContain("Estimated API spend: $0.0100")
+        expect(frame).not.toContain("(!)")
+        expect(frame).not.toContain("message history unavailable: message history unavailable")
         expect(frame).not.toContain("Refresh failed (values may be stale)")
       },
     )
@@ -1743,13 +2170,13 @@ test("panel picks the highest known context percentage per model across location
       { width: 120, height: 40 },
       async (setup) => {
         const frame = await setup.waitForFrame(
-          (candidate) => candidate.includes("Peak context: 5K / 10K tokens (50%)"),
+          (candidate) => candidate.includes("◇ 5K / 10K tokens (50%)"),
           { maxPasses: 40 },
         )
         expect(frame).toContain("2 sessions")
         expect(frame).toContain("opencode-go/deepseek-v4.1-flash#high")
-        expect(frame).not.toContain("Peak context: 20K / 100K tokens (20%)")
-        expect(frame).not.toContain("20K")
+        expect(frame).not.toContain("◇ 20K / 100K tokens (20%)")
+        expect(frame).not.toContain("◇ 20K")
         expect(frame).not.toContain("25K")
       },
     )
@@ -1800,12 +2227,15 @@ test("focused panel switches between aggregate agents and per-session usage", as
       { width: 120, height: 65 },
       async (setup) => {
         const aggregate = await setup.waitForFrame(
-          (candidate) => candidate.includes("Total reported spend: $0.0143"),
+          (candidate) => candidate.includes("Estimated API spend: $0.1250"),
           { maxPasses: 40 },
         )
         expect(aggregate.split("● Junior").length - 1).toBe(1)
         expect(aggregate).toContain("2 sessions")
-        expect(aggregate).toContain("Spent: $0.0143")
+        expect(aggregate).toContain("¤ $0.0170")
+        expect(aggregate).toContain("¤ $0.1080")
+        expect(aggregate).toContain("Tokens: ↑ 5K · ↓ 700 · ↺ 600")
+        expect(aggregate).toContain("Estimated total: $0.1250")
         expect(aggregate).not.toContain("Alpha task")
         expect(aggregate).not.toContain("Beta task")
         expect(aggregate).not.toContain("Unrelated")
@@ -1825,7 +2255,7 @@ test("focused panel switches between aggregate agents and per-session usage", as
         )
         const alphaStart = sessions.indexOf("Alpha task")
         const betaStart = sessions.indexOf("Beta task")
-        const totalStart = sessions.indexOf("Total reported spend")
+        const totalStart = sessions.indexOf("Estimated API spend")
         expect(alphaStart).toBeGreaterThanOrEqual(0)
         expect(betaStart).toBeGreaterThan(alphaStart)
         expect(totalStart).toBeGreaterThan(betaStart)
@@ -1834,27 +2264,36 @@ test("focused panel switches between aggregate agents and per-session usage", as
 
         expect(alphaCard).toContain("Junior")
         expect(alphaCard).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
-        expect(alphaCard).toContain("Peak context: 1.65K / 10K tokens (17%)")
-        expect(alphaCard).toContain("Spent: $0.0123")
+        expect(alphaCard).toContain("◇ 1.65K / 10K tokens (17%)")
+        expect(alphaCard).toContain(
+          "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+        )
         expect(alphaCard).toMatch(/running/i)
+        expect(alphaCard).not.toContain("Tokens:")
         expect(alphaCard).not.toContain("Selected:")
         expect(alphaCard).not.toContain("Beta task")
         expect(alphaCard).not.toContain("claude-5-opus")
-        expect(alphaCard).not.toContain("Peak context: 5K")
-        expect(alphaCard).not.toContain("$0.0020")
+        expect(alphaCard).not.toContain("◇ 5K")
+        expect(alphaCard).not.toContain("$0.1080")
         expect(alphaCard).not.toMatch(/idle/i)
 
         expect(betaCard).toContain("Junior")
         expect(betaCard).toContain("Model: anthropic/claude-5-opus#high")
         expect(betaCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
-        expect(betaCard).toContain("Peak context: 5K / 20K tokens (25%)")
-        expect(betaCard).toContain("Spent: $0.0020")
+        expect(betaCard).toContain("◇ 5K / 20K tokens (25%)")
+        expect(betaCard).toContain(
+          "¤ $0.1080 · ↑ 4K · ↓ 500 · ↺ 300",
+        )
         expect(betaCard).toMatch(/idle/i)
+        expect(betaCard).not.toContain("Tokens:")
         expect(betaCard).not.toContain("Alpha task")
         expect(betaCard).not.toContain("1.65K")
-        expect(betaCard).not.toContain("$0.0123")
+        expect(betaCard).not.toContain("$0.0170")
         expect(betaCard).not.toMatch(/running/i)
-        expect(sessions).toContain("Total reported spend: $0.0143")
+        expect(sessions).toContain("Estimated API spend: $0.1250")
+        expect(trimmedLines(sessions).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 5K · ↓ 700 · ↺ 600",
+        ])
         expect(sessions).not.toContain("Unrelated")
 
         const agentsTab = findCommand(
@@ -1868,14 +2307,14 @@ test("focused panel switches between aggregate agents and per-session usage", as
 
         const restoredAggregate = await setup.waitForFrame(
           (candidate) =>
-            candidate.includes("Total reported spend: $0.0143")
+            candidate.includes("Estimated API spend: $0.1250")
             && !candidate.includes("Alpha task")
             && !candidate.includes("Beta task"),
           { maxPasses: 40 },
         )
         expect(restoredAggregate.split("● Junior").length - 1).toBe(1)
         expect(restoredAggregate).toContain("2 sessions")
-        expect(restoredAggregate).toContain("Spent: $0.0143")
+        expect(restoredAggregate).toContain("Estimated total: $0.1250")
       },
     )
   })
@@ -1953,20 +2392,21 @@ test("panel attributes a usage sample to its own model when the latest assistant
         expect(contextStart).toBeGreaterThan(anthropicStart)
 
         const anthropicGroup = frame.slice(anthropicStart, contextStart)
-        expect(anthropicGroup).toMatch(/Peak context:\s*2K\s*\/\s*200K tokens\s*\(1%\)/)
-        expect(anthropicGroup).not.toContain("5K")
+        expect(anthropicGroup).toMatch(/◇\s*2K\s*\/\s*200K tokens\s*\(1%\)/)
+        expect(anthropicGroup).not.toContain("◇ 5K")
         expect(anthropicGroup).not.toContain("50%")
 
         const contextGroup = frame.slice(
           contextStart,
-          frame.indexOf("Total reported spend"),
+          frame.indexOf("Estimated API spend"),
         )
         expect(contextGroup).toContain("Context model: opencode-go/deepseek-v4.1-flash#high")
-        expect(contextGroup).toMatch(/Peak context:\s*5K\s*\/\s*10K tokens\s*\(50%\)/)
+        expect(contextGroup).toMatch(/◇\s*5K\s*\/\s*10K tokens\s*\(50%\)/)
         expect(contextGroup).not.toContain("session")
 
-        expect(frame.split("Spent: $0.0143").length - 1).toBe(1)
-        expect(frame.split("Total reported spend: $0.0243").length - 1).toBe(1)
+        expect(frame.split("¤ $0.0585").length - 1).toBe(1)
+        expect(frame.split("¤ $0.0470").length - 1).toBe(1)
+        expect(frame.split("Estimated API spend: $0.1055").length - 1).toBe(1)
       },
     )
   })
@@ -2020,7 +2460,8 @@ test("panel keeps distinct variant rows with per-variant peak context for a main
         expect(frame.split("● Junior").length - 1).toBe(1)
         expect(frame).toContain("● Junior · main")
         expect(frame).toContain("2 sessions")
-        expect(frame.split("Spent: $0.0143").length - 1).toBe(1)
+        expect(frame.split("¤ $0.0405").length - 1).toBe(1)
+        expect(frame).not.toContain("Estimated total:")
 
         const highStart = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
         const lowStart = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#low")
@@ -2028,14 +2469,16 @@ test("panel keeps distinct variant rows with per-variant peak context for a main
         expect(lowStart).toBeGreaterThan(highStart)
 
         const highGroup = frame.slice(highStart, lowStart)
-        expect(highGroup).toMatch(/Peak context:\s*1\.65K\s*\/\s*10K tokens\s*\(17%\)/)
+        expect(highGroup).toMatch(/◇\s*1\.65K\s*\/\s*10K tokens\s*\(17%\)/)
         expect(highGroup).toContain("1 session")
+        expect(highGroup).toContain("¤ $0.0405 · ↑ 2.5K · ↓ 500 · ↺ 400")
         expect(highGroup).not.toContain("2K")
         expect(highGroup).not.toContain("20%")
 
-        const lowGroup = frame.slice(lowStart, frame.indexOf("Total reported spend"))
-        expect(lowGroup).toMatch(/Peak context:\s*2K\s*\/\s*10K tokens\s*\(20%\)/)
+        const lowGroup = frame.slice(lowStart, frame.indexOf("Estimated API spend"))
+        expect(lowGroup).toMatch(/◇\s*2K\s*\/\s*10K tokens\s*\(20%\)/)
         expect(lowGroup).toContain("1 session")
+        expect(lowGroup).not.toContain("¤")
         expect(lowGroup).not.toContain("1.65K")
         expect(lowGroup).not.toContain("17%")
       },
@@ -2114,23 +2557,48 @@ test("panel groups descendants by agent with combined counts, single-count spend
         expect(headings).toBe(1)
 
         const groupStart = frame.indexOf("● Junior")
-        const groupEnd = frame.indexOf("Total reported spend")
+        const groupEnd = frame.indexOf("Estimated API spend")
         expect(groupEnd).toBeGreaterThan(groupStart)
         const group = frame.slice(groupStart, groupEnd)
         expect(group).toContain("2 running")
         expect(group).toContain("3 sessions")
-        expect(group).toMatch(/Spent:\s*\$0\.0173/)
+        expect(group).toContain(
+          "¤ $0.0755 · ↑ 5K · ↓ 900 · ↺ 400",
+        )
+        expect(group).toContain("¤ $0.0470 · ↑ 1.5K · ↓ 300 · ↺ 100")
         expect(group).toContain("opencode-go/deepseek-v4.1-flash#high")
         expect(group).toContain("anthropic/claude-5-opus#medium")
-        expect(group).toMatch(/Peak context:\s*5K\s*\/\s*10K tokens\s*\(50%\)/)
+        const groupLines = trimmedLines(group)
+        const deepseekHeading = groupLines.findIndex((line) =>
+          line === "Model: opencode-go/deepseek-v4.1-flash#high"
+        )
+        const deepseekSpend = groupLines.findIndex((line) =>
+          line === "¤ $0.0755 · ↑ 5K · ↓ 900 · ↺ 400"
+        )
+        const anthropicHeading = groupLines.findIndex((line) =>
+          line === "Model: anthropic/claude-5-opus#medium"
+        )
+        const anthropicSpend = groupLines.findIndex((line) =>
+          line === "¤ $0.0470 · ↑ 1.5K · ↓ 300 · ↺ 100"
+        )
+        expect(deepseekHeading).toBeGreaterThanOrEqual(0)
+        expect(deepseekSpend).toBeGreaterThan(deepseekHeading)
+        expect(anthropicHeading).toBeGreaterThan(deepseekSpend)
+        expect(anthropicSpend).toBeGreaterThan(anthropicHeading)
+        expect(group).not.toContain("Tokens:")
+        expect(trimmedLines(frame).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 6.5K · ↓ 1.2K · ↺ 500",
+        ])
+        expect(group).toMatch(/◇\s*5K\s*\/\s*10K tokens\s*\(50%\)/)
         expect(group).not.toContain("6.65K")
-        expect(frame).toContain("Total reported spend: $0.0273")
+        expect(frame).toContain("Estimated API spend: $0.1225")
 
-        const spent = group.indexOf("Spent: $0.0173")
+        const spent = group.indexOf("Estimated total: $0.1225")
         const secondModel = group.indexOf("anthropic/claude-5-opus#medium")
-        const lastContext = group.lastIndexOf("Peak context:")
+        const lastContext = group.lastIndexOf("◇")
         expect(spent).toBeGreaterThan(secondModel)
         expect(spent).toBeGreaterThan(lastContext)
+        expect(group).toContain("Estimated total: $0.1225")
 
         expect(frame).not.toContain("Root grouped task")
         expect(frame).not.toContain("Alpha grouped task")
@@ -2173,7 +2641,9 @@ test("panel repaints card text when the theme changes without a data refresh", a
           (candidate) => candidate.includes("Junior"),
           { maxPasses: 20 },
         )
-        expect(frame).toContain("Spent: $0.0123")
+        expect(frame).toContain(
+          "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+        )
         expect(frame).not.toContain(COMMAND_TITLE)
 
         const before = setup.captureSpans()
@@ -2182,7 +2652,12 @@ test("panel repaints card text when the theme changes without a data refresh", a
         ])
         expect(capturedForegrounds(before, "Sessions")).toEqual([THEME_A.text.muted.toInts()])
         expect(capturedForegrounds(before, "Junior")).toEqual([THEME_A.text.base.toInts()])
-        expect(capturedForegrounds(before, "Spent: $0.0123")).toEqual([THEME_A.text.muted.toInts()])
+        expect(
+          capturedForegrounds(
+            before,
+            "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+          ),
+        ).toEqual([THEME_A.text.muted.toInts()])
 
         fixture.failWith("refresh blocked")
         fixture.setTheme(THEME_B)
@@ -2192,8 +2667,10 @@ test("panel repaints card text when the theme changes without a data refresh", a
 
         expect(afterFrame).toContain("Junior")
         expect(afterFrame).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
-        expect(afterFrame).toContain("Spent: $0.0123")
-        expect(afterFrame).toContain("Total reported spend: $0.0123")
+        expect(afterFrame).toContain(
+          "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+        )
+        expect(afterFrame).toContain("Estimated API spend: $0.0170")
         expect(afterFrame).toContain("▸ Agents")
         expect(afterFrame).toContain("Sessions")
         expect(afterFrame).not.toContain(COMMAND_TITLE)
@@ -2207,7 +2684,12 @@ test("panel repaints card text when the theme changes without a data refresh", a
         expect(
           capturedForegrounds(after, "Model: opencode-go/deepseek-v4.1-flash#high"),
         ).toEqual([THEME_B.text.base.toInts()])
-        expect(capturedForegrounds(after, "Spent: $0.0123")).toEqual([THEME_B.text.muted.toInts()])
+        expect(
+          capturedForegrounds(
+            after,
+            "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+          ),
+        ).toEqual([THEME_B.text.muted.toInts()])
       },
     )
   })
@@ -2280,8 +2762,38 @@ test("panel groups canonical-equivalent model references into one row without a 
         expect(lines.filter((line) => line === "Model: acme/model").length).toBe(1)
         expect(lines.filter((line) => line === "2 sessions").length).toBe(2)
         expect(frame).not.toContain("Selected:")
-        expect(frame).toContain("Spent: $0.0130")
-        expect(frame).toContain("Total reported spend: $0.0130")
+        const juniorStart = lines.findIndex((line) => line.startsWith("● Junior"))
+        const footerStart = lines.findIndex((line) => line.startsWith("Estimated API spend"))
+        expect(juniorStart).toBeGreaterThanOrEqual(0)
+        expect(footerStart).toBeGreaterThan(juniorStart)
+        const cardLines = lines.slice(juniorStart, footerStart)
+        const spendLines = cardLines.filter((line) => line.startsWith("¤"))
+        expect(spendLines.length).toBe(2)
+        expect(spendLines.every((line) => !line.includes("acme/"))).toBe(true)
+        const modelIndex = lines.indexOf("Model: acme/model")
+        const highIndex = lines.indexOf("Model: acme/model#high")
+        const totalIndex = lines.indexOf("Estimated total: unavailable")
+        expect(modelIndex).toBeGreaterThanOrEqual(0)
+        expect(highIndex).toBeGreaterThan(modelIndex)
+        expect(totalIndex).toBeGreaterThan(highIndex)
+        const modelSection = lines.slice(modelIndex, highIndex)
+        const highSection = lines.slice(highIndex, totalIndex)
+        expect(modelSection).toContain(
+          "¤ unavailable · no catalog price · ↑ 3K · ↓ 600 · ↺ 900",
+        )
+        expect(modelSection).not.toContain(
+          "¤ unavailable · no catalog price · ↑ 1K · ↓ 200 · ↺ 300",
+        )
+        expect(highSection).toContain(
+          "¤ unavailable · no catalog price · ↑ 1K · ↓ 200 · ↺ 300",
+        )
+        expect(highSection).not.toContain(
+          "¤ unavailable · no catalog price · ↑ 3K · ↓ 600 · ↺ 900",
+        )
+        expect(frame).toContain("Tokens: ↑ 4K · ↓ 800 · ↺ 1.2K")
+        expect(frame).toContain("Estimated total: unavailable")
+        expect(trimmedLines(frame).filter((line) => line.startsWith("Estimated API spend:")))
+          .toEqual(["Estimated API spend: unavailable"])
       },
     )
   })
@@ -2322,13 +2834,15 @@ test("panel stops at the latest eligible assistant and does not fall back to old
           (candidate) => candidate.includes("Model: opencode-go/deepseek-v4.1-flash#high"),
           { maxPasses: 20 },
         )
-        expect(frame).toContain("Peak context: unknown")
-        expect(frame).not.toContain("Peak context: 5K")
-        expect(frame).toContain("Spent: $0.0123")
+        expect(frame).toContain("◇ unknown")
+        expect(frame).not.toContain("◇ 5K")
+        expect(frame).toContain(
+          "¤ $0.0585 · ↑ 4K · ↓ 700 · ↺ 100",
+        )
         const messageCalls: readonly ApiCall[] = fixture.calls.filter(
           (call) => call.method === "message.list",
         )
-        expect(messageCalls.length).toBe(2)
+        expect(messageCalls.length).toBe(3)
       },
     )
   })
@@ -2396,7 +2910,7 @@ test(
           )
           const titlelessStart = sessions.indexOf("● ses_child_a")
           const unavailableStart = sessions.indexOf("Beta task")
-          const totalStart = sessions.indexOf("Total reported spend")
+          const totalStart = sessions.indexOf("Estimated API spend")
           expect(titlelessStart).toBeGreaterThanOrEqual(0)
           expect(unavailableStart).toBeGreaterThan(titlelessStart)
           expect(totalStart).toBeGreaterThan(unavailableStart)
@@ -2406,9 +2920,12 @@ test(
           expect(titlelessCard).toContain("Junior · ses_child_a")
           expect(titlelessCard).toContain("Model: anthropic/claude-5-opus#high")
           expect(titlelessCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
-          expect(titlelessCard).toContain("Peak context: 5K / 20K tokens (25%)")
-          expect(titlelessCard).toContain("Spent: $0.0123")
+          expect(titlelessCard).toContain("◇ 5K / 20K tokens (25%)")
+          expect(titlelessCard).toContain(
+            "¤ $0.1080 · ↑ 4K · ↓ 500 · ↺ 300",
+          )
           expect(titlelessCard).toContain("Status: running")
+          expect(titlelessCard).not.toContain("Tokens:")
           expect(titlelessCard).not.toContain("Beta task")
           expect(titlelessCard).not.toContain("Context data unavailable")
 
@@ -2416,13 +2933,15 @@ test(
           expect(unavailableCard).toContain("Model: unknown")
           expect(unavailableCard).toContain("Selected: opencode-go/deepseek-v4.1-flash#high")
           expect(unavailableCard).toContain("Context data unavailable")
-          expect(unavailableCard).toContain("Spent: $0.0020")
+          expect(unavailableCard).not.toContain("Tokens:")
+          expect(unavailableCard).toContain("¤ $0.0000 · ↑ 0 · ↓ 0 · ↺ 0")
           expect(unavailableCard).toContain("Status: succeeded")
           expect(unavailableCard).not.toContain("claude-5-opus")
           expect(unavailableCard).not.toContain("5K")
-          expect(unavailableCard).not.toContain("$0.0123")
+          expect(unavailableCard).not.toContain("$0.1080")
           expect(unavailableCard).not.toContain("Status: running")
-          expect(sessions).toContain("Total reported spend: $0.0143")
+          expect(sessions).toContain("Estimated API spend: $0.1080")
+          expect(sessions).not.toContain("recorded usage")
 
           fixture.setStatus("ses_child_a", "idle")
           await setup.renderOnce()
@@ -2444,11 +2963,14 @@ test(
           expect(failedRefresh).toContain("● ses_child_a")
           expect(failedRefresh).toContain("Beta task")
           expect(failedRefresh).not.toContain("● Junior")
-          expect(failedRefresh).toContain("Peak context: 5K / 20K tokens (25%)")
-          expect(failedRefresh).toContain("Spent: $0.0123")
+          expect(failedRefresh).toContain("◇ 5K / 20K tokens (25%)")
+          expect(failedRefresh).toContain(
+            "¤ $0.1080 · ↑ 4K · ↓ 500 · ↺ 300",
+          )
           expect(failedRefresh).toContain("Status: idle")
           expect(failedRefresh).toContain("Status: succeeded")
-          expect(failedRefresh).toContain("Total reported spend: $0.0143")
+          expect(failedRefresh).toContain("Estimated API spend: $0.1080")
+          expect(failedRefresh).not.toContain("recorded usage")
         },
       )
     })
@@ -2482,13 +3004,13 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
       async (setup) => {
         const initial = await setup.waitForFrame(
           (candidate) =>
-            candidate.includes("Total reported spend: $0.0123")
+            candidate.includes("Estimated API spend: $0.0170")
             && candidate.includes("● Junior"),
           { maxPasses: 40 },
         )
         expect(initial.split("● Junior").length - 1).toBe(1)
         expect(initial).not.toContain("Arrow navigation task")
-        expect(initial).toContain("Total reported spend: $0.0123")
+        expect(initial).toContain("Estimated API spend: $0.0170")
 
         const right = findCommand(
           fixture,
@@ -2521,7 +3043,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
         expect(sessionsFromRight).toContain("● Arrow navigation task")
         expect(sessionsFromRight).toContain("Junior · ses_child_arrow")
         expect(sessionsFromRight).not.toContain("● Junior")
-        expect(sessionsFromRight).toContain("Total reported spend: $0.0123")
+        expect(sessionsFromRight).toContain("Estimated API spend: $0.0170")
 
         await right.run()
         const agentsFromRight = await setup.waitForFrame(
@@ -2530,7 +3052,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
           { maxPasses: 40 },
         )
         expect(agentsFromRight.split("● Junior").length - 1).toBe(1)
-        expect(agentsFromRight).toContain("Total reported spend: $0.0123")
+        expect(agentsFromRight).toContain("Estimated API spend: $0.0170")
 
         await left.run()
         const sessionsFromLeft = await setup.waitForFrame(
@@ -2539,7 +3061,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
         )
         expect(sessionsFromLeft).toContain("● Arrow navigation task")
         expect(sessionsFromLeft).not.toContain("● Junior")
-        expect(sessionsFromLeft).toContain("Total reported spend: $0.0123")
+        expect(sessionsFromLeft).toContain("Estimated API spend: $0.0170")
 
         await left.run()
         const agentsFromLeft = await setup.waitForFrame(
@@ -2548,7 +3070,7 @@ test("focused panel switches tabs with wrapping left and right arrows", async ()
           { maxPasses: 40 },
         )
         expect(agentsFromLeft.split("● Junior").length - 1).toBe(1)
-        expect(agentsFromLeft).toContain("Total reported spend: $0.0123")
+        expect(agentsFromLeft).toContain("Estimated API spend: $0.0170")
       },
     )
   })
@@ -2665,7 +3187,7 @@ test("mouse clicks switch tab pills and refocus the panel", async () => {
           { maxPasses: 40 },
         )
         expect(initial).not.toContain("Click navigation task")
-        expect(initial).toContain("Total reported spend: $0.0123")
+        expect(initial).toContain("Estimated API spend: $0.0170")
 
         const initialStyles = setup.captureSpans()
         expect(
@@ -2692,7 +3214,7 @@ test("mouse clicks switch tab pills and refocus the panel", async () => {
         expect(sessionsFrame).toContain("● Click navigation task")
         expect(sessionsFrame).toContain("Junior · ses_child_click")
         expect(sessionsFrame).not.toContain("● Junior")
-        expect(sessionsFrame).toContain("Total reported spend: $0.0123")
+        expect(sessionsFrame).toContain("Estimated API spend: $0.0170")
         expect(focusCalls).toBe(1)
         expect(
           hasColor(
@@ -2712,7 +3234,7 @@ test("mouse clicks switch tab pills and refocus the panel", async () => {
           { maxPasses: 40 },
         )
         expect(agentsFrame.split("● Junior").length - 1).toBe(1)
-        expect(agentsFrame).toContain("Total reported spend: $0.0123")
+        expect(agentsFrame).toContain("Estimated API spend: $0.0170")
         expect(focusCalls).toBe(2)
         expect(agents).not.toContain("Click navigation task")
       },
@@ -2733,7 +3255,7 @@ test("mouse clicks switch tab pills and refocus the panel", async () => {
         { width: viewport.width, height: viewport.height },
         async (setup) => {
           const smallAgents = await setup.waitForFrame(
-            (candidate) => candidate.includes("Total reported spend: $0.0123"),
+            (candidate) => candidate.includes("Estimated API spend: $0.0170"),
             { maxPasses: 40 },
           )
           verifyChrome(smallAgents)
@@ -2780,7 +3302,7 @@ const expectPlainTokenSymbols = (frame: string): void => {
   expect(frame).not.toContain("♻")
 }
 
-test("panel aggregates cumulative tokens per agent card and places spend below the model lines", async () => {
+test("panel shows cumulative tokens in the single spend row and only in the global token footer", async () => {
   const alphaTokens = {
     input: 1000,
     output: 200,
@@ -2815,14 +3337,7 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
     sessions: [rootSession(), alpha, beta],
     messages: {
       ses_tokens_a: [assistantMessage("msg_tokens_a", CHILD_USAGE, DEEPSEEK, "Junior")],
-      ses_tokens_b: [
-        assistantMessage(
-          "msg_tokens_b",
-          { input: 100, output: 20, reasoning: 0, cache: { read: 0, write: 0 } },
-          DEEPSEEK,
-          "Junior",
-        ),
-      ],
+      ses_tokens_b: [assistantMessage("msg_tokens_b", betaTokens, DEEPSEEK, "Junior")],
     },
     models: DEFAULT_MODELS,
   })
@@ -2837,24 +3352,30 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
           { maxPasses: 40 },
         )
         expect(frame).toContain("2 sessions")
-        expect(frame).toContain("Peak context: 1.65K / 10K tokens (17%)")
+        expect(frame).toContain("◇ 5K / 10K tokens (50%)")
         expect(frame).not.toContain("1.77K")
 
         const lines: readonly string[] = trimmedLines(frame)
         const title = lines.find((line) => line.startsWith("● Junior"))
         expect(title).toBe("● Junior")
         expect(
-          lines.filter((line) => line === "Spent: $0.0143 · ↑ 5K · ↓ 700 · ↺ 600")
-            .length,
+          lines.filter(
+            (line) => line === "¤ $0.0710 · ↑ 5K · ↓ 700 · ↺ 600",
+          ).length,
         ).toBe(1)
-        expect(frame).toContain("Total reported spend: $0.0143")
-        expect(lines).toContain("Tokens: ↑ 5K · ↓ 700 · ↺ 600")
+        expect(frame).toContain("Estimated API spend: $0.0710")
+        expect(frame).not.toContain("Estimated total:")
+        expect(lines.filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 5K · ↓ 700 · ↺ 600",
+        ])
+        const card = frame.slice(frame.indexOf("● Junior"), frame.indexOf("Estimated API spend"))
+        expect(card).not.toContain("Tokens:")
         expectPlainTokenSymbols(frame)
 
         const status = frame.indexOf("0 running · 2 sessions")
         const model = frame.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
-        const context = frame.indexOf("Peak context: 1.65K / 10K tokens (17%)")
-        const spent = frame.indexOf("Spent: $0.0143")
+        const context = frame.indexOf("◇ 5K / 10K tokens (50%)")
+        const spent = frame.indexOf("¤ $0.0710")
         expect(status).toBeGreaterThanOrEqual(0)
         expect(model).toBeGreaterThan(status)
         expect(context).toBeGreaterThan(model)
@@ -2864,7 +3385,7 @@ test("panel aggregates cumulative tokens per agent card and places spend below t
   })
 })
 
-test("Sessions cards show each session's own cumulative tokens while the agent card sums them", async () => {
+test("Sessions cards show each session's tokens in its spend row while the agent card sums them", async () => {
   const alphaTokens = {
     input: 1000,
     output: 200,
@@ -2897,7 +3418,10 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
   })
   const fixture = makeFixture({
     sessions: [rootSession(), alpha, beta],
-    messages: {},
+    messages: {
+      ses_tokens_a: [assistantMessage("msg_tokens_a", alphaTokens, DEEPSEEK, "Junior")],
+      ses_tokens_b: [assistantMessage("msg_tokens_b", betaTokens, DEEPSEEK, "Junior")],
+    },
     models: DEFAULT_MODELS,
     statuses: { ses_tokens_a: "running", ses_tokens_b: "idle" },
   })
@@ -2921,7 +3445,7 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
         )
         const alphaStart = frame.indexOf("● Alpha task")
         const betaStart = frame.indexOf("● Beta task")
-        const totalStart = frame.indexOf("Total reported spend")
+        const totalStart = frame.indexOf("Estimated API spend")
         expect(alphaStart).toBeGreaterThanOrEqual(0)
         expect(betaStart).toBeGreaterThan(alphaStart)
         expect(totalStart).toBeGreaterThan(betaStart)
@@ -2930,18 +3454,25 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
 
         const alphaStatus = alphaCard.indexOf("Status: running")
         const alphaModel = alphaCard.indexOf("Model: opencode-go/deepseek-v4.1-flash#high")
-        const alphaContext = alphaCard.indexOf("Peak context: unknown")
+        const alphaContext = alphaCard.indexOf("◇ 1.65K / 10K tokens (17%)")
         const alphaSpent = alphaCard.indexOf(
-          "Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 300",
+          "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
         )
         expect(alphaStatus).toBeGreaterThanOrEqual(0)
         expect(alphaModel).toBeGreaterThan(alphaStatus)
         expect(alphaContext).toBeGreaterThan(alphaModel)
         expect(alphaSpent).toBeGreaterThan(alphaContext)
         expect(alphaCard).not.toContain("↑ 5K")
+        expect(alphaCard).not.toContain("Tokens:")
 
         expect(betaCard).toContain("Status: idle")
-        expect(betaCard).toContain("Spent: $0.0020 · ↑ 4K · ↓ 500 · ↺ 300")
+        expect(betaCard).toContain(
+          "¤ $0.0540 · ↑ 4K · ↓ 500 · ↺ 300",
+        )
+        expect(betaCard).not.toContain("Tokens:")
+        expect(trimmedLines(frame).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 5K · ↓ 700 · ↺ 600",
+        ])
 
         const agentsTab = findCommand(
           fixture,
@@ -2952,12 +3483,399 @@ test("Sessions cards show each session's own cumulative tokens while the agent c
         }
         await agentsTab.run()
         const aggregate = await setup.waitForFrame(
-          (candidate) => candidate.includes("Spent: $0.0143 · ↑ 5K · ↓ 700 · ↺ 600"),
+          (candidate) =>
+            candidate.includes(
+              "¤ $0.0710 · ↑ 5K · ↓ 700 · ↺ 600",
+            ),
           { maxPasses: 40 },
         )
-        expect(trimmedLines(aggregate)).toContain("Tokens: ↑ 5K · ↓ 700 · ↺ 600")
+        expect(trimmedLines(aggregate).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 5K · ↓ 700 · ↺ 600",
+        ])
+        const agentCard = aggregate.slice(
+          aggregate.indexOf("● Junior"),
+          aggregate.indexOf("Estimated API spend"),
+        )
+        expect(agentCard).not.toContain("Tokens:")
+        expect(aggregate).not.toContain("Estimated total:")
         expect(aggregate).not.toContain("Alpha task")
         expect(aggregate).not.toContain("Beta task")
+      },
+    )
+  })
+})
+
+test("panel shows aggregate balances and the base-rate correction in one spend row", async () => {
+  const sol = { providerID: "openai", id: "gpt-6.1-sol" }
+  const aggregateTokens: TokenUsageInfo = {
+    input: 108_220,
+    output: 10_540,
+    reasoning: 0,
+    cache: { read: 3_960_000, write: 0 },
+  }
+  const recordedTokens: TokenUsageInfo = {
+    input: 107_600,
+    output: 10_530,
+    reasoning: 0,
+    cache: { read: 3_960_000, write: 0 },
+  }
+  const child = sessionInfo({
+    id: "ses_near_tokens",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Near token task",
+    model: sol,
+    tokens: aggregateTokens,
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_near_tokens: [
+        assistantMessage("msg_near_tokens", recordedTokens, sol, "Junior"),
+      ],
+    },
+    models: [modelInfo("openai", "gpt-6.1-sol", 200_000)],
+    prices: [{
+      providerID: "openai",
+      id: "gpt-6.1-sol",
+      cost: [{ input: 1, output: 2, cache: { read: 0.16556, write: 0 } }],
+    }],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("¤ $0.7849"),
+          { maxPasses: 40 },
+        )
+        const card = frame.slice(frame.indexOf("● Junior"), frame.indexOf("Estimated API spend"))
+        const cardLines = trimmedLines(card)
+        const modelLine = cardLines.findIndex((line) => line === "Model: openai/gpt-6.1-sol")
+        const spentLine = cardLines.findIndex((line) =>
+          line === "¤ $0.7849 · ↑ 108.22K · ↓ 10.54K · ↺ 3.96M"
+        )
+        expect(modelLine).toBeGreaterThanOrEqual(0)
+        expect(spentLine).toBeGreaterThan(modelLine)
+        expect(card.split("↑ 108.22K · ↓ 10.54K · ↺ 3.96M").length - 1).toBe(1)
+        expect(card).not.toContain("¤ openai/")
+        expect(card).not.toContain("Tokens:")
+        expect(card).not.toContain("107.6K")
+        expect(frame).toContain("Estimated API spend: $0.7849")
+        expect(frame).not.toContain("(recorded usage)")
+        expect(trimmedLines(frame).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 108.22K · ↓ 10.54K · ↺ 3.96M",
+        ])
+        expect(frame).not.toContain("Unattributed")
+        expect(frame).not.toContain("Estimated total:")
+        expect(frame).not.toContain("(!)")
+      },
+    )
+  })
+})
+
+test("panel shows multiple model spend rows without a standalone Tokens row on either tab", async () => {
+  const anthropic = { providerID: "anthropic", id: "claude-5-opus" }
+  const deepseekTokens: TokenUsageInfo = {
+    input: 1000,
+    output: 200,
+    reasoning: 0,
+    cache: { read: 300, write: 0 },
+  }
+  const anthropicTokens: TokenUsageInfo = {
+    input: 4000,
+    output: 500,
+    reasoning: 0,
+    cache: { read: 700, write: 0 },
+  }
+  const deepseekSession = sessionInfo({
+    id: "ses_multi_a",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "DeepSeek task",
+    model: DEEPSEEK,
+    tokens: deepseekTokens,
+  })
+  const anthropicSession = sessionInfo({
+    id: "ses_multi_b",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Anthropic task",
+    model: anthropic,
+    tokens: anthropicTokens,
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), deepseekSession, anthropicSession],
+    messages: {
+      ses_multi_a: [
+        assistantMessage("msg_multi_deepseek", deepseekTokens, DEEPSEEK, "Junior"),
+      ],
+      ses_multi_b: [
+        assistantMessage("msg_multi_anthropic", anthropicTokens, anthropic, "Junior"),
+      ],
+    },
+    models: [...DEFAULT_MODELS, modelInfo("anthropic", "claude-5-opus", 200_000)],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 45 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Estimated total: $0.1225"),
+          { maxPasses: 40 },
+        )
+        const agentCard = frame.slice(
+          frame.indexOf("● Junior"),
+          frame.indexOf("Estimated API spend"),
+        )
+        const agentLines = trimmedLines(agentCard)
+        const deepseekHeading = agentLines.findIndex((line) =>
+          line === "Model: opencode-go/deepseek-v4.1-flash#high"
+        )
+        const deepseekSpend = agentLines.findIndex((line) =>
+          line === "¤ $0.0155 · ↑ 1K · ↓ 200 · ↺ 300"
+        )
+        const anthropicHeading = agentLines.findIndex((line) =>
+          line === "Model: anthropic/claude-5-opus"
+        )
+        const anthropicSpend = agentLines.findIndex((line) =>
+          line === "¤ $0.1070 · ↑ 4K · ↓ 500 · ↺ 700"
+        )
+        expect(deepseekHeading).toBeGreaterThanOrEqual(0)
+        expect(deepseekSpend).toBeGreaterThan(deepseekHeading)
+        expect(anthropicHeading).toBeGreaterThan(deepseekSpend)
+        expect(anthropicSpend).toBeGreaterThan(anthropicHeading)
+        expect(agentCard).not.toContain("Tokens:")
+        expect(agentCard.split("↑ 1K · ↓ 200 · ↺ 300").length - 1).toBe(1)
+        expect(agentCard.split("↑ 4K · ↓ 500 · ↺ 700").length - 1).toBe(1)
+        expect(
+          agentLines.filter((line) => line.startsWith("¤")).every((line) => !line.includes("/")),
+        )
+          .toBe(true)
+        expect(agentCard).toContain("Estimated total: $0.1225")
+        expect(agentCard).not.toContain("(!)")
+        expect(frame).not.toContain("(!)")
+        expect(trimmedLines(frame).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 5K · ↓ 700 · ↺ 1K",
+        ])
+
+        const sessionsTab = findCommand(
+          fixture,
+          (candidate) => candidate.bind === "s",
+        )
+        if (sessionsTab === undefined) {
+          throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
+        }
+        await sessionsTab.run()
+        const sessions = await setup.waitForFrame(
+          (candidate) =>
+            candidate.includes("● DeepSeek task") && candidate.includes("● Anthropic task"),
+          { maxPasses: 40 },
+        )
+        const deepseekCard = sessions.slice(
+          sessions.indexOf("● DeepSeek task"),
+          sessions.indexOf("● Anthropic task"),
+        )
+        const anthropicCard = sessions.slice(
+          sessions.indexOf("● Anthropic task"),
+          sessions.indexOf("Estimated API spend"),
+        )
+        expect(deepseekCard).not.toContain("Tokens:")
+        expect(deepseekCard).toContain("Model: opencode-go/deepseek-v4.1-flash#high")
+        expect(deepseekCard).toContain("¤ $0.0155 · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(deepseekCard).not.toContain("¤ $0.1070")
+        expect(anthropicCard).not.toContain("Tokens:")
+        expect(anthropicCard).toContain("Model: anthropic/claude-5-opus")
+        expect(anthropicCard).toContain("¤ $0.1070 · ↑ 4K · ↓ 500 · ↺ 700")
+        expect(anthropicCard).not.toContain("¤ $0.0155")
+        expect(anthropicCard).not.toContain("Estimated total:")
+        expect(sessions).not.toContain("(!)")
+        expect(trimmedLines(sessions).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 5K · ↓ 700 · ↺ 1K",
+        ])
+      },
+    )
+  })
+})
+
+test("panel assigns residual to the current model and marks a mixed-model session", async () => {
+  const anthropic = { providerID: "anthropic", id: "claude-5-opus" }
+  const child = sessionInfo({
+    id: "ses_mixed_models",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Mixed model task",
+    model: DEEPSEEK,
+    tokens: { input: 1000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_mixed_models: [
+        assistantMessage(
+          "msg_mixed_deepseek",
+          { input: 400, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          DEEPSEEK,
+          "Junior",
+        ),
+        assistantMessage(
+          "msg_mixed_anthropic",
+          { input: 300, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          anthropic,
+          "Junior",
+        ),
+      ],
+    },
+    models: [...DEFAULT_MODELS, modelInfo("anthropic", "claude-5-opus", 200_000)],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Estimated total: $0.0130 (!)"),
+          { maxPasses: 40 },
+        )
+        const card = frame.slice(frame.indexOf("● Junior"), frame.indexOf("Estimated API spend"))
+        const lines = trimmedLines(card)
+        expect(lines).toContain("¤ $0.0060 (!) · ↑ 300 · ↓ 0 · ↺ 0")
+        expect(lines).toContain("¤ $0.0070 (!) · ↑ 700 · ↓ 0 · ↺ 0")
+        expect(lines.filter((line) => line.startsWith("¤")).length).toBe(2)
+        expect(card).not.toContain("Tokens:")
+        expect(card).not.toContain("Unattributed")
+        expect(card).toContain("Estimated total: $0.0130 (!)")
+        expect(frame).toContain("Estimated API spend: $0.0130 (!)")
+        expect(trimmedLines(frame).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 1K · ↓ 0 · ↺ 0",
+        ])
+        expect(frame).not.toContain("recorded usage")
+      },
+    )
+  })
+})
+
+test("panel does not mark variant-only model switching as a mixed session", async () => {
+  const low: ModelRef = { providerID: "opencode-go", id: "deepseek-v4.1-flash", variant: "low" }
+  const high: ModelRef = { providerID: "opencode-go", id: "deepseek-v4.1-flash", variant: "high" }
+  const child = sessionInfo({
+    id: "ses_variant_only",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Variant task",
+    model: high,
+    tokens: { input: 400_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_variant_only: [
+        assistantMessage(
+          "msg_variant_low",
+          { input: 200_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          low,
+          "Junior",
+        ),
+        assistantMessage(
+          "msg_variant_high",
+          { input: 200_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          high,
+          "Junior",
+        ),
+      ],
+    },
+    models: [modelInfo("opencode-go", "deepseek-v4.1-flash", 500_000)],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 35 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Estimated API spend: $4.0000"),
+          { maxPasses: 40 },
+        )
+        const card = frame.slice(frame.indexOf("● Junior"), frame.indexOf("Estimated API spend"))
+        expect(trimmedLines(card)).toContain("¤ $4.0000 · ↑ 400K · ↓ 0 · ↺ 0")
+        expect(trimmedLines(card).filter((line) => line.startsWith("¤")).length).toBe(1)
+        expect(card).not.toContain("Tokens:")
+        expect(card).not.toContain("(!)")
+        expect(frame).not.toContain("(!)")
+        expect(frame).not.toContain("Estimated total:")
+      },
+    )
+  })
+})
+
+test("panel keeps a partial model id out of a longer model section", async () => {
+  const short = { providerID: "openai", id: "gpt-6.1" }
+  const sol = { providerID: "openai", id: "gpt-6.1-sol" }
+  const shortTokens: TokenUsageInfo = {
+    input: 1000,
+    output: 100,
+    reasoning: 0,
+    cache: { read: 0, write: 0 },
+  }
+  const solTokens: TokenUsageInfo = {
+    input: 2000,
+    output: 200,
+    reasoning: 0,
+    cache: { read: 0, write: 0 },
+  }
+  const child = sessionInfo({
+    id: "ses_partial_tokens",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Partial token task",
+    model: sol,
+    tokens: { input: 3000, output: 300, reasoning: 0, cache: { read: 0, write: 0 } },
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_partial_tokens: [
+        assistantMessage("msg_partial_short", shortTokens, short, "Junior"),
+        assistantMessage("msg_partial_sol", solTokens, sol, "Junior"),
+      ],
+    },
+    models: [modelInfo("openai", "gpt-6.1-sol", 200_000)],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Estimated total: $0.0240 (!) (recorded usage)"),
+          { maxPasses: 40 },
+        )
+        const lines = trimmedLines(frame)
+        const solHeading = lines.indexOf("Model: openai/gpt-6.1-sol")
+        const shortHeading = lines.indexOf("Model: openai/gpt-6.1")
+        const totalIndex = lines.indexOf("Estimated total: $0.0240 (!) (recorded usage)")
+        expect(solHeading).toBeGreaterThanOrEqual(0)
+        expect(shortHeading).toBeGreaterThan(solHeading)
+        expect(totalIndex).toBeGreaterThan(shortHeading)
+        const solSection = lines.slice(solHeading, shortHeading)
+        const shortSection = lines.slice(shortHeading, totalIndex)
+        expect(solSection).toContain("¤ $0.0240 (!) · ↑ 2K · ↓ 200 · ↺ 0")
+        expect(solSection).not.toContain("¤ unavailable · no catalog price")
+        expect(shortSection).toContain(
+          "¤ unavailable · no catalog price · ↑ 1K · ↓ 100 · ↺ 0",
+        )
+        expect(shortSection).not.toContain("◇")
+        expect(shortSection).not.toContain("¤ $0.0240")
+        expect(frame).toContain("Estimated API spend: $0.0240 (!) (recorded usage)")
+        expect(trimmedLines(frame).filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 3K · ↓ 300 · ↺ 0",
+        ])
       },
     )
   })
@@ -2998,11 +3916,19 @@ test("panel totals tokens across agents in the global footer", async () => {
           { maxPasses: 40 },
         )
         const lines: readonly string[] = trimmedLines(frame)
-        expect(lines).toContain("Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 300")
-        expect(lines).toContain("Spent: $0.0020 · ↑ 1K · ↓ 3K · ↺ 700")
+        const juniorStart = frame.indexOf("● Junior")
+        const reviewerStart = frame.indexOf("● Reviewer")
+        const footerStart = frame.indexOf("Estimated API spend")
+        expect(juniorStart).toBeGreaterThanOrEqual(0)
+        expect(reviewerStart).toBeGreaterThan(juniorStart)
+        expect(footerStart).toBeGreaterThan(reviewerStart)
+        expect(frame.slice(juniorStart, reviewerStart)).not.toContain("Tokens:")
+        expect(frame.slice(reviewerStart, footerStart)).not.toContain("Tokens:")
         expect(lines).toContain("Tokens: ↑ 2K · ↓ 3.2K · ↺ 1K")
-        expect(frame).toContain("Total reported spend: $0.0143")
-        const spend = frame.indexOf("Total reported spend: $0.0143")
+        expect(frame).not.toContain("Unattributed")
+        expect(frame).toContain("Estimated API spend: $0.0900")
+        expect(frame).not.toContain("(!)")
+        const spend = frame.indexOf("Estimated API spend")
         const tokens = frame.indexOf("Tokens: ↑ 2K · ↓ 3.2K · ↺ 1K")
         expect(tokens).toBeGreaterThan(spend)
       },
@@ -3024,6 +3950,7 @@ test("panel reports a reported zero token count as known usage", async () => {
     sessions: [rootSession(), zero],
     messages: {},
     models: DEFAULT_MODELS,
+    prices: [],
   })
   await withPlugin(fixture, async (render) => {
     await withPanel(
@@ -3036,8 +3963,16 @@ test("panel reports a reported zero token count as known usage", async () => {
           { maxPasses: 40 },
         )
         const lines: readonly string[] = trimmedLines(frame)
-        expect(lines).toContain("Spent: $0.0020 · ↑ 0 · ↓ 0 · ↺ 0")
-        expect(lines).toContain("Tokens: ↑ 0 · ↓ 0 · ↺ 0")
+        expect(lines).toContain(
+          "¤ $0.0000 · ↑ 0 · ↓ 0 · ↺ 0",
+        )
+        expect(lines.filter((line) => line.startsWith("Tokens:"))).toEqual([
+          "Tokens: ↑ 0 · ↓ 0 · ↺ 0",
+        ])
+        const card = frame.slice(frame.indexOf("● Junior"), frame.indexOf("Estimated API spend"))
+        expect(card).not.toContain("Tokens:")
+        expect(frame).toContain("Estimated API spend: $0.0000")
+        expect(frame).not.toContain("(!)")
         expect(frame).not.toContain("tokens unavailable")
         expect(frame).not.toContain("Tokens: unavailable")
         expectPlainTokenSymbols(frame)
@@ -3081,10 +4016,13 @@ test("panel marks tokens unavailable instead of inventing zero when a session om
           { maxPasses: 40 },
         )
         const agentLines: readonly string[] = trimmedLines(agents)
-        expect(agentLines).toContain("Spent: $0.0153 · tokens unavailable")
-        expect(agentLines).toContain("Spent: $0.0000 · ↑ 0 · ↓ 0 · ↺ 0")
         expect(agentLines).toContain("Tokens: unavailable")
-        expect(agents).not.toContain("Tokens: ↑")
+        expect(agents).not.toContain("Unattributed")
+        expect(agents).toContain("Estimated API spend: $0.0155 (recorded usage)")
+        expect(agents).not.toContain("(!)")
+        const juniorStart = agents.indexOf("● Junior")
+        const footerStart = agents.indexOf("Estimated API spend")
+        expect(agents.slice(juniorStart, footerStart)).not.toContain("Tokens: ↑")
 
         const sessionsTab = findCommand(
           fixture,
@@ -3100,9 +4038,9 @@ test("panel marks tokens unavailable instead of inventing zero when a session om
           { maxPasses: 40 },
         )
         const sessionsLines: readonly string[] = trimmedLines(sessions)
-        expect(sessionsLines).toContain("Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 300")
-        expect(sessionsLines).toContain("Spent: $0.0030 · tokens unavailable")
         expect(sessionsLines).toContain("Tokens: unavailable")
+        expect(sessions).not.toContain("Unattributed")
+        expect(sessions).toContain("Estimated API spend: $0.0155 (recorded usage)")
       },
     )
   })
@@ -3141,22 +4079,30 @@ test(
         { width: 120, height: 40 },
         async (setup) => {
           const before = await setup.waitForFrame(
-            (candidate) => candidate.includes("Spent: $0.0123 · ↑ 1K · ↓ 200 · ↺ 100"),
+            (candidate) =>
+              trimmedLines(candidate)
+                .filter((line) => line === "Tokens: ↑ 1K · ↓ 200 · ↺ 100").length === 1,
             { maxPasses: 40 },
           )
-          expect(trimmedLines(before)).toContain("Tokens: ↑ 1K · ↓ 200 · ↺ 100")
+          expect(before).not.toContain("Unattributed")
+          expect(
+            before.slice(before.indexOf("● Junior"), before.indexOf("Estimated API spend")),
+          ).not.toContain("Tokens:")
 
           fixture.setSessions([rootSession(), refreshed])
           await Bun.sleep(2200)
           const after = await setup.waitForFrame(
-            (candidate) => candidate.includes("Spent: $0.0200 · ↑ 3K · ↓ 500 · ↺ 300"),
+            (candidate) =>
+              trimmedLines(candidate)
+                .filter((line) => line === "Tokens: ↑ 3K · ↓ 500 · ↺ 300").length === 1,
             { maxPasses: 40 },
           )
-          const lines: readonly string[] = trimmedLines(after)
-          expect(lines).toContain("Tokens: ↑ 3K · ↓ 500 · ↺ 300")
           expect(after).not.toContain("↑ 4K")
           expect(after).not.toContain("↓ 700")
           expect(after).not.toContain("↺ 400")
+          expect(
+            after.slice(after.indexOf("● Junior"), after.indexOf("Estimated API spend")),
+          ).not.toContain("Tokens:")
           setup.renderer.destroy()
         },
       )
@@ -3205,12 +4151,593 @@ test("panel formats cumulative token counts compactly at rounding thresholds", a
           { maxPasses: 40 },
         )
         const lines: readonly string[] = trimmedLines(frame)
-        expect(lines).toContain("Spent: $0.0123 · ↑ 1.23M · ↓ 12.35K · ↺ 1.5M")
-        expect(lines).toContain("Spent: $0.0010 · ↑ 999 · ↓ 1K · ↺ 0")
+        expect(lines).not.toContain("Tokens: ↑ 1.23M · ↓ 12.35K · ↺ 1.5M")
+        expect(lines).not.toContain("Tokens: ↑ 999 · ↓ 1K · ↺ 0")
         expect(lines).toContain("Tokens: ↑ 1.24M · ↓ 13.35K · ↺ 1.5M")
+        expect(frame.slice(frame.indexOf("● Junior"), frame.indexOf("● Reviewer"))).not.toContain(
+          "Tokens:",
+        )
+        expect(frame.slice(frame.indexOf("● Reviewer"), frame.indexOf("Estimated API spend")))
+          .not.toContain("Tokens:")
+        expect(frame).not.toContain("Unattributed")
+        expect(frame).toContain("Estimated API spend: $58.5472")
+        expect(frame).not.toContain("(!)")
+        expect(frame).not.toContain("session usage includes tokens absent from retained messages")
         expect(frame).not.toContain("7.65M")
         expect(frame).not.toContain("7.65K")
         expectPlainTokenSymbols(frame)
+      },
+    )
+  })
+})
+
+test("panel prices subscription models from RPC and totals Orchestrator spend per model", async () => {
+  const glm = { providerID: "zhipu", id: "glm-5" }
+  const sol = { providerID: "openai", id: "gpt-6.1-sol" }
+  const root = sessionInfo({
+    id: ROOT_SESSION,
+    agent: "Orchestrator",
+    model: glm,
+  })
+  const child = sessionInfo({
+    id: "ses_orchestrator_models",
+    parentID: ROOT_SESSION,
+    agent: "Orchestrator",
+    model: glm,
+  })
+  const fixture = makeFixture({
+    sessions: [root, child],
+    messages: {
+      ses_orchestrator_models: [
+        assistantMessage(
+          "msg_orchestrator_glm",
+          { input: 1000, output: 100, reasoning: 0, cache: { read: 0, write: 0 } },
+          glm,
+          "Orchestrator",
+        ),
+        assistantMessage(
+          "msg_orchestrator_sol",
+          { input: 2000, output: 200, reasoning: 0, cache: { read: 0, write: 0 } },
+          sol,
+          "Orchestrator",
+        ),
+      ],
+    },
+    prices: [
+      ...DEFAULT_PRICES,
+      { providerID: "zhipu", id: "glm-5", cost: [BASIC_PRICE] },
+    ],
+    models: [
+      modelInfo("openai", "gpt-6.1-sol", 200000),
+      modelInfo("zhipu", "glm-5", 200000),
+    ],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 45 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Estimated total: $0.0360 (!)"),
+          { maxPasses: 40 },
+        )
+        const lines = trimmedLines(frame)
+        const glmHeading = lines.indexOf("Model: zhipu/glm-5")
+        const solHeading = lines.indexOf("Model: openai/gpt-6.1-sol")
+        const totalIndex = lines.indexOf("Estimated total: $0.0360 (!)")
+        expect(glmHeading).toBeGreaterThanOrEqual(0)
+        expect(solHeading).toBeGreaterThan(glmHeading)
+        expect(totalIndex).toBeGreaterThan(solHeading)
+        const glmSection = lines.slice(glmHeading, solHeading)
+        const solSection = lines.slice(solHeading, totalIndex)
+        expect(glmSection).toContain("¤ $0.0120 (!) · ↑ 1K · ↓ 100 · ↺ 0")
+        expect(glmSection).not.toContain("¤ $0.0240")
+        expect(solSection).toContain("¤ $0.0240 (!) · ↑ 2K · ↓ 200 · ↺ 0")
+        expect(solSection).not.toContain("¤ $0.0120")
+        expect(
+          lines.filter((line) => line.startsWith("¤")).every((line) => !line.includes("/")),
+        )
+          .toBe(true)
+        expect(frame).toContain("Estimated total: $0.0360 (!)")
+        expect(frame).toContain("Estimated API spend: $0.0360 (!)")
+      },
+    )
+  })
+})
+
+test("panel prices historical models across paginated pages with bounded cursor requests", async () => {
+  const glm = { providerID: "zhipu", id: "glm-5" }
+  const sol = { providerID: "openai", id: "gpt-6.1-sol" }
+  const history: SessionMessageInfo[] = [
+    assistantMessage(
+      "msg_history_glm",
+      { input: 1000, output: 100, reasoning: 0, cache: { read: 0, write: 0 } },
+      glm,
+      "Junior",
+    ),
+  ]
+  for (let index = 0; index < 140; index++) {
+    history.push(userMessage(`msg_history_${String(index).padStart(3, "0")}`, `step ${index}`))
+  }
+  history.push(
+    assistantMessage(
+      "msg_history_sol",
+      { input: 2000, output: 200, reasoning: 0, cache: { read: 0, write: 0 } },
+      sol,
+      "Junior",
+    ),
+  )
+  const child = sessionInfo({
+    id: CHILD_SESSION,
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    model: sol,
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: { [CHILD_SESSION]: history },
+    prices: [
+      ...DEFAULT_PRICES,
+      { providerID: "zhipu", id: "glm-5", cost: [BASIC_PRICE] },
+    ],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 50 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) =>
+            candidate.includes("¤ $0.0120 (!)")
+            && candidate.includes("¤ $0.0240 (!)"),
+          { maxPasses: 60 },
+        )
+        expect(frame).toContain("Estimated total: $0.0360 (!)")
+        expect(frame).toContain("Estimated API spend: $0.0360 (!)")
+        const lines = trimmedLines(frame)
+        const solHeading = lines.indexOf("Model: openai/gpt-6.1-sol")
+        const glmHeading = lines.indexOf("Model: zhipu/glm-5")
+        const totalIndex = lines.indexOf("Estimated total: $0.0360 (!)")
+        expect(solHeading).toBeGreaterThanOrEqual(0)
+        expect(glmHeading).toBeGreaterThan(solHeading)
+        expect(totalIndex).toBeGreaterThan(glmHeading)
+        const solSection = lines.slice(solHeading, glmHeading)
+        const glmSection = lines.slice(glmHeading, totalIndex)
+        expect(solSection).toContain("¤ $0.0240 (!) · ↑ 2K · ↓ 200 · ↺ 0")
+        expect(solSection).not.toContain("¤ $0.0120")
+        expect(glmSection).toContain("¤ $0.0120 (!) · ↑ 1K · ↓ 100 · ↺ 0")
+        expect(glmSection).not.toContain("◇")
+        expect(glmSection).not.toContain("Context data unavailable")
+        expect(glmSection).not.toContain("Tokens:")
+
+        const messageCalls: readonly ApiCall[] = fixture.calls.filter(
+          (call) => call.method === "message.list" && call.sessionID === CHILD_SESSION,
+        )
+        expect(messageCalls.length).toBe(2)
+        const first = messageCalls.at(0)
+        if (first === undefined) throw new Error("Expected a first message page")
+        expect(first.order).toBe("desc")
+        expect(first.cursor).toBeUndefined()
+        expect(first.limit).toBe(100)
+        for (const call of messageCalls.slice(1)) {
+          expect(call.cursor).toBeDefined()
+          expect(call.order).toBeUndefined()
+          expect(call.limit).toBe(100)
+        }
+        for (const call of fixture.calls) {
+          if (call.cursor !== undefined) {
+            expect(call.order).toBeUndefined()
+            expect(call.limit).toBe(call.method === "session.list" ? 200 : 100)
+          }
+        }
+      },
+    )
+  })
+})
+
+test(
+  "panel reports RPC price failures, malformed output, and a missing method without breaking context",
+  async () => {
+    interface PriceCase {
+      readonly name: string
+      readonly options: {
+        readonly priceFailures?: Readonly<Record<string, string>>
+        readonly missingPrices?: readonly string[]
+        readonly malformedPrices?: readonly string[]
+      }
+      readonly expected: string
+    }
+    const cases: readonly PriceCase[] = [
+      {
+        name: "failure",
+        options: { priceFailures: { [DIRECTORY]: "prices broke" } },
+        expected: "price data unavailable: prices broke",
+      },
+      {
+        name: "malformed",
+        options: { malformedPrices: [DIRECTORY] },
+        expected: "Price data malformed",
+      },
+      {
+        name: "missing",
+        options: { missingPrices: [DIRECTORY] },
+        expected: "price data unavailable: Price catalog method is unavailable",
+      },
+    ]
+
+    for (const priceCase of cases) {
+      const fixture = makeFixture(priceCase.options)
+      await withPlugin(fixture, async (render) => {
+        await withPanel(
+          render,
+          makePanelInput(PANEL_NAME),
+          { width: 120, height: 30 },
+          async (setup) => {
+            const frame = await setup.waitForFrame(
+              (candidate) => candidate.includes(priceCase.expected),
+              { maxPasses: 40 },
+            )
+            expect(frame).toContain("Junior")
+            expect(frame).toContain("◇ 1.65K / 10K tokens (17%)")
+            expect(frame).toContain("¤ unavailable")
+            expect(frame).toContain("Estimated API spend: unavailable")
+            expect(frame).not.toContain("Refresh failed")
+            setup.renderer.destroy()
+          },
+        )
+      })
+    }
+  },
+  20000,
+)
+
+test(
+  "panel retries failed price RPC responses on refresh and caches a successful catalog",
+  async () => {
+    const fixture = makeFixture({
+      priceFailures: { [DIRECTORY]: "transient price failure" },
+    })
+    const rpcCalls = (): number => fixture.calls.filter((call) => call.method === "rpc.call").length
+
+    await withPlugin(fixture, async (render) => {
+      await withPanel(
+        render,
+        makePanelInput(PANEL_NAME),
+        { width: 120, height: 40 },
+        async (setup) => {
+          const failed = await setup.waitForFrame(
+            (candidate) => candidate.includes("price data unavailable: transient price failure"),
+            { maxPasses: 40 },
+          )
+          expect(failed).toContain("Junior")
+          const beforeRecovery = rpcCalls()
+          expect(beforeRecovery).toBeGreaterThan(0)
+
+          fixture.setPriceFailure(DIRECTORY)
+          await Effect.runPromise(Effect.sleep(2200))
+          const recovered = await setup.waitForFrame(
+            (candidate) => candidate.includes("Estimated API spend: $0.0170"),
+            { maxPasses: 60 },
+          )
+          expect(recovered).toContain(
+            "¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300",
+          )
+          const cachedAt = rpcCalls()
+          expect(cachedAt).toBeGreaterThan(beforeRecovery)
+
+          await Effect.runPromise(Effect.sleep(2200))
+          await setup.renderOnce()
+          expect(setup.captureCharFrame()).toContain("Estimated API spend: $0.0170")
+          expect(rpcCalls()).toBe(cachedAt)
+        },
+      )
+    })
+  },
+  20000,
+)
+
+test("panel reconciles messages that exceed aggregate usage with a signed correction", async () => {
+  const child = sessionInfo({
+    id: "ses_spend_exceeds",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    model: DEEPSEEK,
+    tokens: { input: 1000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_spend_exceeds: [
+        assistantMessage(
+          "msg_spend_exceeds",
+          { input: 2000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          DEEPSEEK,
+          "Junior",
+        ),
+      ],
+    },
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 35 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Estimated API spend: $0.0100"),
+          { maxPasses: 40 },
+        )
+        expect(frame).toContain(
+          "¤ $0.0100 · ↑ 1K · ↓ 0 · ↺ 0",
+        )
+        expect(frame).toContain("Tokens: ↑ 1K · ↓ 0 · ↺ 0")
+        expect(frame).not.toContain("Spend incomplete")
+        expect(frame).not.toContain("Spend unavailable")
+        expect(frame).not.toContain("history may be duplicated or retried")
+        expect(frame).not.toContain("Estimated total:")
+        expect(frame).not.toContain("(!)")
+      },
+    )
+  })
+})
+
+test("panel prices an aggregate residual at the base rate without an unattributed remainder", async () => {
+  const child = sessionInfo({
+    id: "ses_spend_unmatched",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    model: DEEPSEEK,
+    tokens: { input: 1000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_spend_unmatched: [
+        assistantMessage(
+          "msg_spend_unmatched",
+          { input: 600, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          DEEPSEEK,
+          "Junior",
+        ),
+      ],
+    },
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 35 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Estimated API spend: $0.0100"),
+          { maxPasses: 40 },
+        )
+        expect(frame).toContain(
+          "¤ $0.0100 · ↑ 1K · ↓ 0 · ↺ 0",
+        )
+        expect(frame).toContain("Tokens: ↑ 1K · ↓ 0 · ↺ 0")
+        expect(frame).not.toContain("Unattributed")
+        expect(frame).not.toContain("Spend incomplete")
+        expect(frame).not.toContain("session usage includes tokens absent from retained messages")
+        expect(frame).not.toContain("Estimated total:")
+      },
+    )
+  })
+})
+
+test("panel applies tiers per request across sessions instead of repricing merged tokens", async () => {
+  const base: Price = {
+    input: 1,
+    output: 2,
+    cache: { read: 0.5, write: 0.25 },
+  }
+  const tiered: Price = {
+    input: 10,
+    output: 20,
+    cache: { read: 5, write: 5 },
+    tier: { type: "context", size: 272_000 },
+  }
+  const usage = { input: 200_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+  const first = sessionInfo({
+    id: "ses_tier_a",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    model: DEEPSEEK,
+  })
+  const second = sessionInfo({
+    id: "ses_tier_b",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    model: DEEPSEEK,
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), first, second],
+    messages: {
+      ses_tier_a: [assistantMessage("msg_tier_a", usage, DEEPSEEK, "Junior")],
+      ses_tier_b: [assistantMessage("msg_tier_b", usage, DEEPSEEK, "Junior")],
+    },
+    models: [modelInfo("opencode-go", "deepseek-v4.1-flash", 500000)],
+    prices: [
+      { providerID: "opencode-go", id: "deepseek-v4.1-flash", cost: [base, tiered] },
+    ],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 35 },
+      async (setup) => {
+        const frame = await setup.waitForFrame(
+          (candidate) => candidate.includes("Estimated API spend: $0.4000"),
+          { maxPasses: 40 },
+        )
+        expect(frame).toContain(
+          "¤ $0.4000 · ↑ 400K · ↓ 0 · ↺ 0",
+        )
+        expect(frame).not.toContain("$4.0000")
+        expect(frame).not.toContain("Estimated total:")
+      },
+    )
+  })
+})
+
+test("monochrome symbol context and spend labels render on both tabs without a bar", async () => {
+  const known = sessionInfo({
+    id: "ses_bar_known",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Known limit task",
+    model: DEEPSEEK,
+  })
+  const unknown = sessionInfo({
+    id: "ses_bar_unknown",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Unknown limit task",
+    model: { providerID: "anthropic", id: "claude-5-opus" },
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), known, unknown],
+    messages: {
+      ses_bar_known: [assistantMessage("msg_bar_known", CHILD_USAGE, DEEPSEEK, "Junior")],
+      ses_bar_unknown: [
+        assistantMessage(
+          "msg_bar_unknown",
+          CHILD_USAGE,
+          { providerID: "anthropic", id: "claude-5-opus" },
+          "Junior",
+        ),
+      ],
+    },
+    models: [modelInfo("opencode-go", "deepseek-v4.1-flash", 10000)],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 40 },
+      async (setup) => {
+        const agents = await setup.waitForFrame(
+          (candidate) =>
+            candidate.includes("◇ 1.65K / 10K tokens (17%)")
+            && candidate.includes("◇ 1.65K tokens (limit unknown)"),
+          { maxPasses: 40 },
+        )
+        expect(agents).not.toContain("━")
+        expect(agents).not.toContain("╌")
+        expect(agents).toContain("0 running · 2 sessions")
+        expect(agents).toContain("¤ $0.0000 · ↑ 0 · ↓ 0 · ↺ 0")
+        expect(agents).toContain("¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(agents).toContain("¤ $0.0340 · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(agents).not.toContain("Spent:")
+        expect(agents).not.toContain("Peak context:")
+        expect(agents).not.toContain("💡")
+        expect(agents).not.toContain("💸")
+
+        const sessionsTab = findCommand(
+          fixture,
+          (candidate) => candidate.bind === "s",
+        )
+        if (sessionsTab === undefined) {
+          throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
+        }
+        await sessionsTab.run()
+        const sessions = await setup.waitForFrame(
+          (candidate) =>
+            candidate.includes("● Known limit task")
+            && candidate.includes("● Unknown limit task")
+            && candidate.includes("◇ 1.65K / 10K tokens (17%)")
+            && candidate.includes("◇ 1.65K tokens (limit unknown)"),
+          { maxPasses: 40 },
+        )
+        expect(sessions).not.toContain("━")
+        expect(sessions).not.toContain("╌")
+        expect(sessions).not.toContain("Spent:")
+        expect(sessions).not.toContain("Peak context:")
+        expect(sessions).not.toContain("💡")
+        expect(sessions).not.toContain("💸")
+        expect(sessions).toContain("◇ 1.65K / 10K tokens (17%)")
+        expect(sessions).toContain("¤ $0.0170 · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(sessions).toContain("¤ $0.0340 · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(sessions).not.toContain("Estimated total:")
+      },
+    )
+  })
+})
+
+test("estimated total follows exactly one blank row after the last spend row on both tabs", async () => {
+  const anthropic = { providerID: "anthropic", id: "claude-5-opus" }
+  const child = sessionInfo({
+    id: "ses_before_total",
+    parentID: ROOT_SESSION,
+    agent: "Junior",
+    title: "Multi model task",
+    model: anthropic,
+  })
+  const fixture = makeFixture({
+    sessions: [rootSession(), child],
+    messages: {
+      ses_before_total: [
+        assistantMessage("msg_before_total_deepseek", CHILD_USAGE, DEEPSEEK, "Junior"),
+        assistantMessage(
+          "msg_before_total_anthropic",
+          { input: 4000, output: 500, reasoning: 100, cache: { read: 300, write: 100 } },
+          anthropic,
+          "Junior",
+        ),
+      ],
+    },
+    models: [...DEFAULT_MODELS, modelInfo("anthropic", "claude-5-opus", 20000)],
+  })
+  await withPlugin(fixture, async (render) => {
+    await withPanel(
+      render,
+      makePanelInput(PANEL_NAME),
+      { width: 120, height: 45 },
+      async (setup) => {
+        const assertTotalSpacing = (frame: string, position: string): void => {
+          const lines: readonly string[] = trimmedLines(frame)
+          const totalIndex = lines.findIndex((line) => line.startsWith("Estimated total:"))
+          const spentIndex = lines.findLastIndex((line) => line.startsWith("¤"))
+          if (totalIndex < 0) throw new Error(`${position}: expected an Estimated total row`)
+          if (spentIndex < 0) throw new Error(`${position}: expected a spend row`)
+          expect([position, spentIndex]).toEqual([position, totalIndex - 2])
+          expect(lines[totalIndex - 1]).toBe("")
+        }
+        const agents = await setup.waitForFrame(
+          (candidate) => candidate.includes("● Junior") && candidate.includes("Estimated total:"),
+          { maxPasses: 40 },
+        )
+        assertTotalSpacing(agents, "agents")
+        expect(agents).toContain("◇")
+        expect(agents).not.toContain("Spent:")
+        expect(agents).not.toContain("Peak context:")
+        expect(agents).toContain("¤ $0.0170 (!) · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(agents).toContain("¤ $0.1080 (!) · ↑ 4K · ↓ 500 · ↺ 300")
+        expect(agents).toContain("Estimated total: $0.1250")
+
+        const sessionsTab = findCommand(
+          fixture,
+          (candidate) => candidate.bind === "s",
+        )
+        if (sessionsTab === undefined) {
+          throw new Error("Expected the focused panel to bind 's' to the Sessions tab")
+        }
+        await sessionsTab.run()
+        const sessions = await setup.waitForFrame(
+          (candidate) =>
+            candidate.includes("● Multi model task") && candidate.includes("Estimated total:"),
+          { maxPasses: 40 },
+        )
+        assertTotalSpacing(sessions, "sessions")
+        expect(sessions).toContain("◇")
+        expect(sessions).not.toContain("Spent:")
+        expect(sessions).not.toContain("Peak context:")
+        expect(sessions).toContain("¤ $0.0170 (!) · ↑ 1K · ↓ 200 · ↺ 300")
+        expect(sessions).toContain("¤ $0.1080 (!) · ↑ 4K · ↓ 500 · ↺ 300")
+        expect(sessions).toContain("Estimated total: $0.1250")
       },
     )
   })
