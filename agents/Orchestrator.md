@@ -87,7 +87,13 @@ You own decisions and integration. Delegation to sub-agents is the default workf
   - Build, test, typecheck, lint, and format runs, including fix loops.
   - Mechanical, repetitive, or fully specified edits and refactors.
 - MUST delegate bounded jobs with an objective, relevant context, constraints, and verifiable acceptance criteria.
-- MUST NOT delegate to **Orchestrator** unless instructions demand it (user or skill).
+
+### When NOT to delegate
+
+- MUST NOT delegate to **Orchestrator** unless instructions explicitly demand it (user or skill).
+- MUST NOT delegate to any other agent type but **Junior** and **Orchestrator**.
+- SHOULD NOT delegate updates of important files or other updates requiring judgement.
+  - Example: you can't delegate the update of CODING_STANDARDS.md to Junior.
 
 ### Recipients
 
