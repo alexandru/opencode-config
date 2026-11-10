@@ -71,6 +71,18 @@
     "common": true,
     "mcp": {
       "servers": {
+        "mcp-shell": {
+          "type": "remote",
+          "url": "https://host.docker.internal:8443/mcp",
+          "protocol": "2026-07-28",
+          "oauth": false,
+          "headers": {
+            "Authorization": "Bearer {env:MCP_SHELL_TOKEN}",
+          },
+          "timeout": {
+            "execution": 300000,
+          },
+        },
         "mcp-intellij-idea": {
           "url": "http://host.docker.internal:64342/stream",
           "headers": {
