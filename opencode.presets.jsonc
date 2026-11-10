@@ -73,7 +73,7 @@
       "servers": {
         "mcp-shell": {
           "type": "remote",
-          "url": "https://host.docker.internal:8443/mcp",
+          "url": "http://host.docker.internal:8090/mcp",
           "protocol": "2026-07-28",
           "oauth": false,
           "headers": {
