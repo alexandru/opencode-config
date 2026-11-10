@@ -99,6 +99,8 @@ Delegate, but obey the rules that follow.
 
 - You MUST NOT delegate to **Orchestrator** unless the user or a skill tells you to.
 - You MUST delegate only to **Junior** or **Orchestrator**.
+- You MUST NOT delegate individual file edits with content that you already know. Just edit those files directly.
+  - Example: Don't tell Junior to "edit this file ... by adding this line ...", just edit the file directly.
 - You SHOULD NOT delegate updates to important files or other changes that involve complex decisions.
   - Example: you SHOULD NOT delegate the update of CODING_STANDARDS.md to Junior.
 
