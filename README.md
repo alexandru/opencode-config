@@ -56,6 +56,7 @@ Sub-agents:
 - `/code-refine`: refine code without changing its behavior.
 - `/review`: review uncommitted changes, a commit, a branch, or a pull request.
 - `/setup-matt-pocock-skills`: configure the repository for Matt Pocock's engineering skills.
+- `/show-me`: explain the current topic with concise diagrams, code sketches, and focused HTML.
 - `/teach`: teach the user a topic through a stateful learning workspace.
 - `/to-spec`: turn the current conversation into a published specification.
 - `/to-tickets`: break a plan or specification into tracer-bullet tickets.
@@ -85,8 +86,8 @@ Sub-agents:
   - `to-tickets`: break a plan or specification into tracer-bullet tickets.
 - [VirtusLab/cellar](https://github.com/VirtusLab/cellar/)
   - `cellar`: query the APIs of JVM dependencies (Scala, Java).
-- [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
-  - `caveman`: token-efficient response modes with preserved technical accuracy.
+- [humanlayer/skills](https://github.com/humanlayer/skills)
+  - `show-me`: explain the current topic with concise diagrams, code sketches, and focused HTML.
 
 ## Updating shared skills
 

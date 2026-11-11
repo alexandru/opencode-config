@@ -100,7 +100,7 @@ install-skills:
 		to-spec \
 		to-tickets
 	npx skills add https://github.com/VirtusLab/cellar/ $(SKILLS_INSTALL_FLAGS)
-	npx skills add https://github.com/JuliusBrussee/caveman $(SKILLS_INSTALL_FLAGS) --skill caveman
+	npx skills add https://github.com/humanlayer/skills $(SKILLS_INSTALL_FLAGS) --skill show-me
 	@echo "Shared skills installed in ~/.agents/skills."
 
 update-skills: check-mattpocock-skills-tag
